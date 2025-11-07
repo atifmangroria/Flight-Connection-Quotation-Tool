@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Agent Login - Flight Connection</title>
+<style>
+  :root{--accent:#0b76d1;--muted:#666;--success:#28a745;--warning:#f39c12;--danger:#e74c3c;--info:#17a2b8}
+  body{font-family:Arial,Helvetica,sans-serif;background:#f3f6fb;margin:0;padding:0;display:flex;justify-content:center;align-items:center;min-height:100vh;color:#111}
+  .login-container{background:#fff;padding:40px;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.1);width:100%;max-width:400px}
+  .logo{text-align:center;margin-bottom:30px}
+  .logo img{max-height:80px;margin-bottom:10px}
+  .logo h1{margin:0;font-size:24px;color:var(--accent)}
+  .logo p{margin:5px 0 0 0;color:var(--muted);font-size:14px}
+  .form-group{margin-bottom:20px}
+  .form-group label{display:block;margin-bottom:8px;font-weight:600;color:#333}
+  .form-group input{width:100%;padding:12px;border:1px solid #ddd;border-radius:6px;font-size:16px;box-sizing:border-box}
+  .form-group input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(11,118,209,0.1)}
+  .btn{width:100%;padding:12px;border:none;border-radius:6px;font-size:16px;font-weight:600;cursor:pointer;transition:all 0.3s}
+  .btn-primary{background:var(--accent);color:white}
+  .btn-primary:hover{background:#085ea3;transform:translateY(-1px);box-shadow:0 4px 12px rgba(11,118,209,0.3)}
+  .btn-secondary{background:#6c757d;color:white;margin-top:10px}
+  .btn-secondary:hover{background:#5a6268}
+  .error{color:var(--danger);font-size:14px;margin-top:5px;display:none}
+  .success{color:var(--success);font-size:14px;margin-top:5px;display:none}
+  .tabs{display:flex;margin-bottom:30px;border-bottom:1px solid #eee}
+  .tab{flex:1;padding:10px;text-align:center;cursor:pointer;border-bottom:2px solid transparent;font-weight:600}
+  .tab.active{border-bottom-color:var(--accent);color:var(--accent)}
+  .tab-content{display:none}
+  .tab-content.active{display:block}
+  .register-link{text-align:center;margin-top:20px}
+  .register-link a{color:var(--accent);text-decoration:none;font-weight:600}
+  .register-link a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="login-container">
+  <div class="logo">
+    <img src="https://flightconnection.net.pk/wp-content/uploads/2018/09/cropped-cropped-Flight-Connection-Travel-1.png" alt="Flight Connection">
+    <h1>Flight Connection</h1>
+    <p>Agent Portal</p>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('login')">Login</div>
+    <div class="tab" onclick="switchTab('register')">Register</div>
+  </div>
+
+  <!-- Login Tab -->
+  <div id="loginTab" class="tab-content active">
+    <form id="loginForm" onsubmit="return false;">
+      <div class="form-group">
+        <label for="agentId">Agent ID</label>
+        <input type="text" id="agentId" placeholder="e.g. atif@fc" required>
+      </div>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" placeholder="Enter password" required>
+      </div>
+      <div id="loginError" class="error"></div>
+      <div id="loginSuccess" class="success"></div>
+      <button type="submit" class="btn btn-primary">Login</button>
+    </form>
+  </div>
+
+  <!-- Register Tab -->
+  <div id="registerTab" class="tab-content">
+    <form id="registerForm" onsubmit="return false;">
+      <div class="form-group">
+        <label for="regAgentId">Agent ID</label>
+        <input type="text" id="regAgentId" placeholder="e.g. newagent@fc" required>
+      </div>
+      <div class="form-group">
+        <label for="regName">Full Name</label>
+        <input type="text" id="regName" placeholder="Enter full name" required>
+      </div>
+      <div class="form-group">
+        <label for="regPhone">Phone Number</label>
+        <input type="text" id="regPhone" placeholder="e.g. 03001234567" required>
+      </div>
+      <div class="form-group">
+        <label for="regPassword">Password</label>
+        <input type="password" id="regPassword" placeholder="Enter password" required>
+      </div>
+      <div class="form-group">
+        <label for="regConfirmPassword">Confirm Password</label>
+        <input type="password" id="regConfirmPassword" placeholder="Confirm password" required>
+      </div>
+      <div id="registerError" class="error"></div>
+      <div id="registerSuccess" class="success"></div>
+      <button type="submit" class="btn btn-primary">Register</button>
+    </form>
+  </div>
+
+  <div class="register-link">
+    <p>Need help? Contact support at <a href="mailto:info@flightconnection.net.pk">info@flightconnection.net.pk</a></p>
+  </div>
+</div>
+
+<script>
+// Predefined agents
+const agents = [
+  { id: "atif@fc", name: "Muhammad Atif", phone: "03002022713", password: "atif123" },
+  { id: "owais@fc", name: "Owais Shah", phone: "0300202992", password: "owais123" }
+];
+
+// Switch between tabs
+function switchTab(tab) {
+  // Update tab buttons
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
+  
+  // Update tab content
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById(tab + 'Tab').classList.add('active');
+  
+  // Clear messages
+  document.getElementById('loginError').style.display = 'none';
+  document.getElementById('loginSuccess').style.display = 'none';
+  document.getElementById('registerError').style.display = 'none';
+  document.getElementById('registerSuccess').style.display = 'none';
+}
+
+// Show message
+function showMessage(elementId, message, isError = false) {
+  const element = document.getElementById(elementId);
+  element.textContent = message;
+  element.style.display = 'block';
+  
+  if (isError) {
+    element.className = 'error';
+  } else {
+    element.className = 'success';
+  }
+  
+  // Hide after 5 seconds
+  setTimeout(() => {
+    element.style.display = 'none';
+  }, 5000);
+}
+
+// Login form submission
+document.getElementById('loginForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+  
+  const agentId = document.getElementById('agentId').value.trim();
+  const password = document.getElementById('password').value;
+  
+  // Check predefined agents first
+  let agent = agents.find(a => a.id === agentId && a.password === password);
+  
+  // If not found in predefined, check registered agents
+  if (!agent) {
+    const registeredAgents = JSON.parse(localStorage.getItem("registeredAgents")) || [];
+    agent = registeredAgents.find(a => a.id === agentId && a.password === password);
+  }
+  
+  if (!agent) {
+    showMessage('loginError', 'Invalid Agent ID or password', true);
+    return;
+  }
+  
+  // Store agent data
+  localStorage.setItem("loggedInAgent", JSON.stringify(agent));
+  localStorage.setItem("agentLoggedIn", "true");
+  localStorage.setItem("loginTime", new Date().toISOString());
+  
+  showMessage('loginSuccess', 'Login successful! Redirecting to dashboard...');
+  
+  // Redirect to dashboard after 2 seconds
+  setTimeout(() => {
+    window.location.href = 'dashboard.html';
+  }, 2000);
+});
+
+// Register form submission
+document.getElementById('registerForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+  
+  const agentId = document.getElementById('regAgentId').value.trim();
+  const name = document.getElementById('regName').value.trim();
+  const phone = document.getElementById('regPhone').value.trim();
+  const password = document.getElementById('regPassword').value;
+  const confirmPassword = document.getElementById('regConfirmPassword').value;
+  
+  // Validation
+  if (!agentId || !name || !phone || !password || !confirmPassword) {
+    showMessage('registerError', 'All fields are required', true);
+    return;
+  }
+  
+  if (!agentId.includes("@fc")) {
+    showMessage('registerError', 'Agent ID must contain @fc at the end', true);
+    return;
+  }
+  
+  if (password.length < 6) {
+    showMessage('registerError', 'Password must be at least 6 characters long', true);
+    return;
+  }
+  
+  if (password !== confirmPassword) {
+    showMessage('registerError', 'Passwords do not match', true);
+    return;
+  }
+  
+  if (!/^03\d{9}$/.test(phone)) {
+    showMessage('registerError', 'Please enter a valid Pakistani phone number (e.g., 03001234567)', true);
+    return;
+  }
+  
+  // Get existing registered agents
+  let registeredAgents = JSON.parse(localStorage.getItem("registeredAgents")) || [];
+  
+  // Check if agent ID already exists
+  const existingAgent = registeredAgents.find(a => a.id === agentId);
+  if (existingAgent) {
+    showMessage('registerError', 'Agent ID already exists', true);
+    return;
+  }
+  
+  // Add new agent
+  const newAgent = {
+    id: agentId,
+    name: name,
+    phone: phone,
+    password: password,
+    registeredAt: new Date().toISOString()
+  };
+  
+  registeredAgents.push(newAgent);
+  localStorage.setItem("registeredAgents", JSON.stringify(registeredAgents));
+  
+  showMessage('registerSuccess', 'Registration successful! You can now login.');
+  
+  // Clear form
+  document.getElementById('registerForm').reset();
+  
+  // Switch to login tab after 2 seconds
+  setTimeout(() => {
+    switchTab('login');
+  }, 2000);
+});
+
+// Check if user is already logged in
+document.addEventListener('DOMContentLoaded', function() {
+  const agent = JSON.parse(localStorage.getItem("loggedInAgent"));
+  if (agent) {
+    // Check if login is recent (within 24 hours)
+    const loginTime = localStorage.getItem("loginTime");
+    if (loginTime) {
+      const hoursSinceLogin = (new Date() - new Date(loginTime)) / (1000 * 60 * 60);
+      if (hoursSinceLogin < 24) {
+        // Redirect to dashboard
+        window.location.href = 'dashboard.html';
+        return;
+      }
+    }
+  }
+});
+</script>
+</body>
+</html>
