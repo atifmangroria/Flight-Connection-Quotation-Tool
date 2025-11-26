@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Umrah Quotation Tool — Flight Connection</title>
+<title>Umrah Quotation Generator — Flight Connection</title>
 
 <!-- Libraries for PDF/Image/Excel -->
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
@@ -616,7 +616,7 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus, 
 <!-- HEADER -->
 <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
   <div>
-    <h1>Umrah Quotation</h1>
+    <h1>Umrah Package Quotation Generator</h1>
     <div class="small">Use Chrome/Edge.</div>
   </div>
   <div style="display:flex;gap:8px;align-items:center" class="no-print">
@@ -688,22 +688,176 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus, 
         });
     }
     
-    // --- SIMPLE AUTHENTICATION CHECK ---
-function checkAuthentication() {
-  const agent = JSON.parse(localStorage.getItem("loggedInAgent"));
-  if (!agent) {
-    showNotification("Please login to access the quotation tool", "error");
-    setTimeout(() => {
-      window.location.href = 'dashboard.html';
-    }, 2000);
-    return null;
-  }
-  return agent;
+    // --- FIREBASE AUTHENTICATION CHECK ---
+let currentAgent = null;
+
+async function checkAuthentication() {
+  return new Promise(async (resolve) => {
+    try {
+      const { onAuthStateChanged } = await import('https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js');
+      const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js');
+      
+      // Use the singleton Firebase instance
+      const { auth, db } = await getFirebaseInstance();
+      
+      onAuthStateChanged(auth, async (user) => {
+        if (!user) {
+          showNotification("Please login to access the quotation tool", "error");
+          setTimeout(() => {
+            window.location.href = 'login.html';
+          }, 2000);
+          resolve(null);
+          return;
+        }
+        
+        try {
+          // Load agent profile from Firestore
+          const userDoc = await getDoc(doc(db, "users", user.uid));
+          if (userDoc.exists()) {
+            currentAgent = userDoc.data();
+            resolve(currentAgent);
+          } else {
+            showNotification("Agent profile not found. Please login again.", "error");
+            setTimeout(() => {
+              window.location.href = 'login.html';
+            }, 2000);
+            resolve(null);
+          }
+        } catch (error) {
+          console.error('Error loading profile:', error);
+          showNotification("Error loading profile. Please login again.", "error");
+          setTimeout(() => {
+            window.location.href = 'login.html';
+          }, 2000);
+          resolve(null);
+        }
+      });
+    } catch (error) {
+      console.error('Error in checkAuthentication:', error);
+      resolve(null);
+    }
+  });
 }
 
-// Add these missing helper functions
+// Helper function for getting current agent
 function getCurrentAgent() {
-  return JSON.parse(localStorage.getItem("loggedInAgent"));
+  return currentAgent;
+}
+
+// Firebase singleton instance
+let firebaseInstance = null;
+
+async function getFirebaseInstance() {
+  if (firebaseInstance) return firebaseInstance;
+  
+  const { initializeApp } = await import('https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js');
+  const { getAuth } = await import('https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js');
+  const { getFirestore } = await import('https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js');
+  
+  const firebaseConfig = {
+    apiKey: "AIzaSyDx3Qxt84vJlz_-mXuxiC0W2flaLadr9Ws",
+    authDomain: "fc-quotation-tool.firebaseapp.com",
+    projectId: "fc-quotation-tool",
+    storageBucket: "fc-quotation-tool.appspot.com",
+    messagingSenderId: "370566945624",
+    appId: "1:370566945624:web:a84b20d5a8f99d20a6e32d"
+  };
+  
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  
+  firebaseInstance = { app, auth, db };
+  return firebaseInstance;
+}
+
+// Firebase Firestore helper functions for quotations
+async function saveToFirebaseFirestore(quotationData) {
+  try {
+    const { doc, setDoc, getDoc } = await import('https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js');
+    const { auth, db } = await getFirebaseInstance();
+    
+    const user = auth.currentUser;
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+    
+    // Save quotation to user's quotations collection
+    const quotationRef = doc(db, "quotations", user.uid);
+    const quotationDoc = await getDoc(quotationRef);
+    
+    let quotations = {};
+    if (quotationDoc.exists()) {
+      quotations = quotationDoc.data().quotations || {};
+    }
+    
+    // Add/update the quotation
+    quotations[quotationData.id] = quotationData;
+    
+    // Save back to Firestore
+    await setDoc(quotationRef, { quotations }, { merge: true });
+  } catch (error) {
+    throw error;
+  }
+}
+
+async function loadFromFirebaseFirestore(quotationId) {
+  try {
+    const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js');
+    const { auth, db } = await getFirebaseInstance();
+    
+    const user = auth.currentUser;
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+    
+    // Load quotations from user's collection
+    const quotationRef = doc(db, "quotations", user.uid);
+    const quotationDoc = await getDoc(quotationRef);
+    
+    if (!quotationDoc.exists()) {
+      throw new Error('No quotations found');
+    }
+    
+    const quotations = quotationDoc.data().quotations || {};
+    const quotation = quotations[quotationId];
+    
+    if (!quotation) {
+      throw new Error('Quotation not found');
+    }
+    
+    console.log('Quotation loaded from Firebase:', quotationId);
+    return quotation;
+  } catch (error) {
+    console.error('Error loading from Firebase:', error);
+    throw error;
+  }
+}
+
+async function loadAllFirebaseQuotations() {
+  try {
+    const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js');
+    const { auth, db } = await getFirebaseInstance();
+    
+    const user = auth.currentUser;
+    if (!user) {
+      return [];
+    }
+    
+    // Load all quotations from user's collection
+    const quotationRef = doc(db, "quotations", user.uid);
+    const quotationDoc = await getDoc(quotationRef);
+    
+    if (!quotationDoc.exists()) {
+      return [];
+    }
+    
+    const quotations = quotationDoc.data().quotations || {};
+    return Object.values(quotations);
+  } catch (error) {
+    console.error('Error loading all quotations from Firebase:', error);
+    return [];
+  }
 }
 
 function saveToLocalStorage(key, data) {
@@ -735,7 +889,7 @@ function formatDateToDMY(dateStr) {
 
 // --- AGENT UI UPDATE ---
 function updateAgentUI() {
-  const agent = JSON.parse(localStorage.getItem("loggedInAgent"));
+  const agent = getCurrentAgent();
   const agentInfoDisplay = document.getElementById("agentInfoDisplay");
   const agentNameDisplay = document.getElementById("agentNameDisplay");
   const agentPhoneDisplay = document.getElementById("agentPhoneDisplay");
@@ -763,15 +917,45 @@ document.getElementById('btnDashboard').addEventListener('click', () => {
 });
 
 // --- INITIALIZATION ---
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
   // Check authentication on page load
-  const agent = checkAuthentication();
+  const agent = await checkAuthentication();
   if (agent) {
     updateAgentUI();
     
     // Clear any old quotation IDs to prevent errors
     localStorage.removeItem('selectedQuotationId');
     localStorage.removeItem('umrahSelectedQuotationId');
+    
+    // Set default values for localhost testing
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      const clientName = document.getElementById('clientName');
+      const clientPhone = document.getElementById('clientPhone');
+      const dateFrom = document.getElementById('dateFrom');
+      const dateTo = document.getElementById('dateTo');
+      const makkahNights = document.getElementById('makkahNights');
+      const madinaNights = document.getElementById('madinaNights');
+      const adults = document.getElementById('adults');
+      
+      if (clientName && !clientName.value) clientName.value = 'Test Client';
+      if (clientPhone && !clientPhone.value) clientPhone.value = '03001234567';
+      if (adults && !adults.value) adults.value = '2';
+      if (makkahNights && !makkahNights.value) makkahNights.value = '4';
+      if (madinaNights && !madinaNights.value) madinaNights.value = '2';
+      
+      // Set default dates (next week for 7 days)
+      if (dateFrom && !dateFrom.value) {
+        const nextWeek = new Date();
+        nextWeek.setDate(nextWeek.getDate() + 7);
+        dateFrom.value = nextWeek.toISOString().split('T')[0];
+      }
+      
+      if (dateTo && !dateTo.value) {
+        const twoWeeksLater = new Date();
+        twoWeeksLater.setDate(twoWeeksLater.getDate() + 14);
+        dateTo.value = twoWeeksLater.toISOString().split('T')[0];
+      }
+    }
     
     // Show status section
     showStatusSection();
@@ -4853,7 +5037,7 @@ Website: www.flightconnection.net.pk`;
 // --- EXPORT TO EXCEL ---
 btnExportExcel.addEventListener("click", exportToExcel);
 
-function exportToExcel() {
+async function exportToExcel() {
   try {
     // Get the table element
     const table = document.getElementById("calcSummaryTable");
@@ -4904,18 +5088,37 @@ function exportToExcel() {
 }
 
 // --- SAVE/LOAD QUOTATION ---
-document.getElementById('btnSaveQuotation').addEventListener('click', () => {
-  saveQuotation();
+document.getElementById('btnSaveQuotation').addEventListener('click', async () => {
+  try {
+    // Check if authentication is ready
+    const { auth } = await getFirebaseInstance();
+    const user = auth.currentUser;
+    
+    if (!user) {
+      showNotification('Please wait for authentication to complete, then try again.', 'warning');
+      return;
+    }
+    
+    if (!currentAgent) {
+      showNotification('Agent profile not loaded. Please refresh the page and try again.', 'warning');
+      return;
+    }
+    
+    await saveQuotation();
+  } catch (error) {
+    showNotification('Failed to save quotation: ' + error.message, 'error');
+  }
 });
 
-document.getElementById('btnLoadQuotation').addEventListener('click', () => {
-  // Get all quotations
-  const allSavedQuotations = JSON.parse(localStorage.getItem('savedQuotations')) || [];
-  
-  if (allSavedQuotations.length === 0) {
-    showAlert("No saved quotations found.");
-    return;
-  }
+document.getElementById('btnLoadQuotation').addEventListener('click', async () => {
+  try {
+    // Get all quotations
+    const allSavedQuotations = await loadAllFirebaseQuotations();
+    
+    if (allSavedQuotations.length === 0) {
+      showAlert("No saved quotations found.");
+      return;
+    }
 
   // Create modal content
   const modal = document.getElementById('custom-modal');
@@ -5004,7 +5207,7 @@ setTimeout(() => {
         modal.classList.remove('visible');
         
         // Load the quotation
-        loadQuotation(quotationId);
+        await loadQuotation(quotationId);
       } catch (error) {
         console.error('Error loading quotation:', error);
         showAlert("Failed to load quotation. Please try again.", "error");
@@ -5015,7 +5218,7 @@ setTimeout(() => {
 });
 
 // Function to save the current quotation
-function saveQuotation() {
+async function saveQuotation() {
   try {
     // Check if client data is saved
     if (!isClientDataSaved) {
@@ -5251,27 +5454,21 @@ function saveQuotation() {
       addons: addonsData
     };
     
-    // Get ALL existing quotations from localStorage
-    let allQuotations = JSON.parse(localStorage.getItem('savedQuotations')) || [];
+    // Double-check authentication before saving
+    const { auth } = await getFirebaseInstance();
+    const currentUser = auth.currentUser;
     
-    // Add or update the quotation
-    if (currentQuotationId) {
-      // Update existing
-      const index = allQuotations.findIndex(q => q.id === currentQuotationId);
-      if (index !== -1) {
-        allQuotations[index] = quotationData;
-      }
-    } else {
-      // Add new
-      allQuotations.push(quotationData);
-      currentQuotationId = quotationData.id;
+    if (!currentUser) {
+      throw new Error('User not authenticated. Please login again.');
     }
     
-    // Save to localStorage
-    localStorage.setItem('savedQuotations', JSON.stringify(allQuotations));
+    // Save to Firebase Firestore
+    await saveToFirebaseFirestore(quotationData);
     
-    // Update the global variable
-    savedQuotations = allQuotations;
+    // Set current quotation ID if it's a new quotation
+    if (!currentQuotationId) {
+      currentQuotationId = quotationData.id;
+    }
     
     showNotification("Quotation saved successfully!", "success");
     showStatusSection();
@@ -5284,16 +5481,12 @@ function saveQuotation() {
 }
 
 // Function to load a quotation
-function loadQuotation(quotationId) {
+async function loadQuotation(quotationId) {
   try {
     console.log("Loading quotation with ID:", quotationId);
     
-    // Get all saved quotations
-    const savedQuotations = JSON.parse(localStorage.getItem('savedQuotations')) || [];
-    console.log("Found quotations:", savedQuotations.length);
-    
-    // Find the quotation
-    const quotation = savedQuotations.find(q => q.id === quotationId);
+    // Load quotation from Firebase Firestore
+    const quotation = await loadFromFirebaseFirestore(quotationId);
     
     if (!quotation) {
       console.error("Quotation not found with ID:", quotationId);
@@ -5694,13 +5887,13 @@ function loadQuotation(quotationId) {
 }
 
 // Function to check how many quotations are saved
-function checkSavedQuotations() {
-  const allQuotations = JSON.parse(localStorage.getItem('savedQuotations')) || [];
+async function checkSavedQuotations() {
+  const allQuotations = await loadAllFirebaseQuotations();
   const agent = getCurrentAgent();
   
   if (agent) {
     const agentQuotations = allQuotations.filter(q => q.agentData && q.agentData.id === agent.id);
-    console.log(`Total quotations in localStorage: ${allQuotations.length}`);
+    console.log(`Total quotations in Firebase: ${allQuotations.length}`);
     console.log(`Quotations for current agent (${agent.name}): ${agentQuotations.length}`);
     
     agentQuotations.forEach((q, index) => {
@@ -5710,10 +5903,11 @@ function checkSavedQuotations() {
 }
 
 // Function to show the load quotation dialog
-function showLoadQuotationDialog() {
+async function showLoadQuotationDialog() {
   try {
-    // Get all saved quotations
-    savedQuotations = JSON.parse(localStorage.getItem('savedQuotations')) || [];
+    // Get all saved quotations from Firebase
+    const allQuotations = await loadAllFirebaseQuotations();
+    savedQuotations = allQuotations;
     
     if (savedQuotations.length === 0) {
       showNotification("No saved quotations found.", "warning");
@@ -5804,7 +5998,7 @@ document.querySelectorAll('.load-quotation-btn').forEach(btn => {
     modal.classList.remove('visible');
     
     // Load the quotation
-    loadQuotation(quotationId);
+    await loadQuotation(quotationId);
   });
 });
       
@@ -6507,9 +6701,9 @@ function handleUrlParameters() {
     console.log('Loading quotation:', quotationIdToLoad); // Debug log
     
     // Wait for page to fully load
-    setTimeout(() => {
+    setTimeout(async () => {
       // Load the quotation
-      loadQuotation(quotationIdToLoad);
+      await loadQuotation(quotationIdToLoad);
       
       // If viewing, show quotation modal after loading
       if (viewId) {

@@ -97,165 +97,138 @@
   </div>
 </div>
 
-<script>
-// Predefined agents
-const agents = [
-  { id: "atif@fc", name: "Muhammad Atif", phone: "03002022713", password: "atif123" },
-  { id: "owais@fc", name: "Owais Shah", phone: "0300202992", password: "owais123" }
-];
+<script type="module">
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
+import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+
+// Firebase config (same as in firebase.js)
+const firebaseConfig = {
+  apiKey: "AIzaSyDx3Qxt84vJlz_-mXuxiC0W2flaLadr9Ws",
+  authDomain: "fc-quotation-tool.firebaseapp.com",
+  projectId: "fc-quotation-tool",
+  storageBucket: "fc-quotation-tool.appspot.com",
+  messagingSenderId: "370566945624",
+  appId: "1:370566945624:web:a84b20d5a8f99d20a6e32d"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
 
 // Switch between tabs
-function switchTab(tab) {
-  // Update tab buttons
+window.switchTab = function(tab) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   event.target.classList.add('active');
-  
-  // Update tab content
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
   document.getElementById(tab + 'Tab').classList.add('active');
-  
-  // Clear messages
   document.getElementById('loginError').style.display = 'none';
   document.getElementById('loginSuccess').style.display = 'none';
   document.getElementById('registerError').style.display = 'none';
   document.getElementById('registerSuccess').style.display = 'none';
 }
 
-// Show message
 function showMessage(elementId, message, isError = false) {
   const element = document.getElementById(elementId);
   element.textContent = message;
   element.style.display = 'block';
-  
   if (isError) {
     element.className = 'error';
   } else {
     element.className = 'success';
   }
-  
-  // Hide after 5 seconds
   setTimeout(() => {
     element.style.display = 'none';
   }, 5000);
 }
 
-// Login form submission
-document.getElementById('loginForm').addEventListener('submit', function(e) {
+// Login form submission (Firebase Auth)
+document.getElementById('loginForm').addEventListener('submit', async function(e) {
   e.preventDefault();
-  
   const agentId = document.getElementById('agentId').value.trim();
   const password = document.getElementById('password').value;
-  
-  // Check predefined agents first
-  let agent = agents.find(a => a.id === agentId && a.password === password);
-  
-  // If not found in predefined, check registered agents
-  if (!agent) {
-    const registeredAgents = JSON.parse(localStorage.getItem("registeredAgents")) || [];
-    agent = registeredAgents.find(a => a.id === agentId && a.password === password);
-  }
-  
-  if (!agent) {
-    showMessage('loginError', 'Invalid Agent ID or password', true);
+  if (!agentId || !password) {
+    showMessage('loginError', 'Please enter Agent ID and password', true);
     return;
   }
-  
-  // Store agent data
-  localStorage.setItem("loggedInAgent", JSON.stringify(agent));
-  localStorage.setItem("agentLoggedIn", "true");
-  localStorage.setItem("loginTime", new Date().toISOString());
-  
-  showMessage('loginSuccess', 'Login successful! Redirecting to dashboard...');
-  
-  // Redirect to dashboard after 2 seconds
-  setTimeout(() => {
-    window.location.href = 'dashboard.html';
-  }, 2000);
+  // Use agentId as email for Firebase Auth
+  const email = agentId;
+  try {
+    await signInWithEmailAndPassword(auth, email, password);
+    showMessage('loginSuccess', 'Login successful! Redirecting to dashboard...');
+    setTimeout(() => {
+      window.location.href = 'dashboard.html';
+    }, 2000);
+  } catch (error) {
+    showMessage('loginError', error.message, true);
+  }
 });
 
-// Register form submission
-document.getElementById('registerForm').addEventListener('submit', function(e) {
+// Register form submission (Firebase Auth + Firestore)
+document.getElementById('registerForm').addEventListener('submit', async function(e) {
   e.preventDefault();
-  
   const agentId = document.getElementById('regAgentId').value.trim();
   const name = document.getElementById('regName').value.trim();
   const phone = document.getElementById('regPhone').value.trim();
   const password = document.getElementById('regPassword').value;
   const confirmPassword = document.getElementById('regConfirmPassword').value;
-  
-  // Validation
   if (!agentId || !name || !phone || !password || !confirmPassword) {
     showMessage('registerError', 'All fields are required', true);
     return;
   }
-  
   if (!agentId.includes("@fc")) {
     showMessage('registerError', 'Agent ID must contain @fc at the end', true);
     return;
   }
-  
   if (password.length < 6) {
     showMessage('registerError', 'Password must be at least 6 characters long', true);
     return;
   }
-  
   if (password !== confirmPassword) {
     showMessage('registerError', 'Passwords do not match', true);
     return;
   }
-  
   if (!/^03\d{9}$/.test(phone)) {
     showMessage('registerError', 'Please enter a valid Pakistani phone number (e.g., 03001234567)', true);
     return;
   }
-  
-  // Get existing registered agents
-  let registeredAgents = JSON.parse(localStorage.getItem("registeredAgents")) || [];
-  
-  // Check if agent ID already exists
-  const existingAgent = registeredAgents.find(a => a.id === agentId);
-  if (existingAgent) {
-    showMessage('registerError', 'Agent ID already exists', true);
-    return;
+  const email = agentId;
+  try {
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    console.log('User created with UID:', userCredential.user.uid);
+    
+    try {
+      // Save profile in Firestore
+      const profileData = {
+        id: agentId,
+        name: name,
+        phone: phone,
+        registeredAt: new Date().toISOString()
+      };
+      console.log('Saving profile data:', profileData);
+      await setDoc(doc(db, "users", userCredential.user.uid), profileData);
+      console.log('Profile saved successfully');
+      showMessage('registerSuccess', 'Registration successful! You can now login.');
+      document.getElementById('registerForm').reset();
+      setTimeout(() => {
+        switchTab('login');
+      }, 2000);
+    } catch (profileError) {
+      console.error('Failed to save profile:', profileError);
+      // Delete the user account if profile save fails
+      await userCredential.user.delete();
+      throw new Error('Failed to save profile. Please try again.');
+    }
+  } catch (error) {
+    console.error('Registration error:', error);
+    showMessage('registerError', error.message, true);
   }
-  
-  // Add new agent
-  const newAgent = {
-    id: agentId,
-    name: name,
-    phone: phone,
-    password: password,
-    registeredAt: new Date().toISOString()
-  };
-  
-  registeredAgents.push(newAgent);
-  localStorage.setItem("registeredAgents", JSON.stringify(registeredAgents));
-  
-  showMessage('registerSuccess', 'Registration successful! You can now login.');
-  
-  // Clear form
-  document.getElementById('registerForm').reset();
-  
-  // Switch to login tab after 2 seconds
-  setTimeout(() => {
-    switchTab('login');
-  }, 2000);
 });
 
 // Check if user is already logged in
-document.addEventListener('DOMContentLoaded', function() {
-  const agent = JSON.parse(localStorage.getItem("loggedInAgent"));
-  if (agent) {
-    // Check if login is recent (within 24 hours)
-    const loginTime = localStorage.getItem("loginTime");
-    if (loginTime) {
-      const hoursSinceLogin = (new Date() - new Date(loginTime)) / (1000 * 60 * 60);
-      if (hoursSinceLogin < 24) {
-        // Redirect to dashboard
-        window.location.href = 'dashboard.html';
-        return;
-      }
-    }
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
+onAuthStateChanged(auth, (user) => {
+  if (user) {
+    window.location.href = 'dashboard.html';
   }
 });
 </script>
