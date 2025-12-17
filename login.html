@@ -147,7 +147,7 @@
     <form id="loginForm" onsubmit="return false;">
       <div class="form-group">
         <label for="email">Email</label>
-        <input type="email" id="email" placeholder="e.g. atif@fc.com" required>
+        <input type="email" id="email" placeholder="Enter your email" required>
       </div>
       <div class="form-group">
         <label for="password">Password</label>
@@ -164,7 +164,7 @@
     <form id="registerForm" onsubmit="return false;">
       <div class="form-group">
         <label for="regEmail">Email</label>
-        <input type="email" id="regEmail" placeholder="e.g. newagent@fc.com" required>
+        <input type="email" id="regEmail" placeholder="e.g. user@example.com" required>
       </div>
       <div class="form-group">
         <label for="regName">Full Name</label>
@@ -323,11 +323,6 @@ document.getElementById('registerForm').addEventListener('submit', function(e) {
   // Validation
   if (!email || !name || !phone || !password || !confirmPassword) {
     showMessage('registerError', 'All fields are required', true);
-    return;
-  }
-  
-  if (!email.includes("@fc")) {
-    showMessage('registerError', 'Email must contain @fc at the end', true);
     return;
   }
   
