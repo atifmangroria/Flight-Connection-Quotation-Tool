@@ -608,10 +608,14 @@ async function loadAllQuotations() {
   
   // Load only from Firebase (no localStorage fallback)
   const firebaseData = await loadQuotationsFromFirebase(agent);
+  console.log('Loaded firebaseData:', firebaseData);
   
   allUmrahQuotations = firebaseData.umrah.map(q => ({...q, type: 'umrah'}));
   
   allInternationalQuotations = firebaseData.international.map(q => ({...q, type: 'international'}));
+  
+  console.log('allUmrahQuotations:', allUmrahQuotations);
+  console.log('allInternationalQuotations:', allInternationalQuotations);
   
   // Auto-mark expired quotations and save back to Firebase
   const now = new Date();
