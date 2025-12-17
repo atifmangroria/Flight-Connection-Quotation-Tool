@@ -3,12 +3,108 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Umrah Quotation Generator — Flight Connection</title>
+<title>Umrah Quotation Tool — Flight Connection</title>
 
 <!-- Libraries for PDF/Image/Excel -->
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<!-- Firebase SDK -->
+<script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+  import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+
+  // Your web app's Firebase configuration
+  const firebaseConfig = {
+    apiKey: "AIzaSyDx3Qxt84vJlz_-mXuxiC0W2flaLadr9Ws",
+    authDomain: "fc-quotation-tool.firebaseapp.com",
+    projectId: "fc-quotation-tool",
+    storageBucket: "fc-quotation-tool.firebasestorage.app",
+    messagingSenderId: "370566945624",
+    appId: "1:370566945624:web:a84b20d5a8f99d20a6e32d"
+  };
+
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const auth = getAuth(app);
+
+  // Make db and auth global
+  window.db = db;
+  window.auth = auth;
+
+  // ========== Firebase Cloud Storage Utility Functions ==========
+  window.firebaseDB = {
+    // Save data to Firestore
+    async saveData(collection_name, docId, data) {
+      try {
+        await setDoc(doc(db, collection_name, docId), data, { merge: true });
+        return true;
+      } catch (error) {
+        console.error(`Error saving to ${collection_name}:`, error);
+        return false;
+      }
+    },
+
+    // Get data from Firestore
+    async getData(collection_name, docId) {
+      try {
+        const docSnap = await getDoc(doc(db, collection_name, docId));
+        return docSnap.exists() ? docSnap.data() : null;
+      } catch (error) {
+        console.error(`Error getting from ${collection_name}:`, error);
+        return null;
+      }
+    },
+
+    // Get all documents from a collection
+    async getAll(collection_name) {
+      try {
+        const snapshot = await getDocs(collection(db, collection_name));
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      } catch (error) {
+        console.error(`Error getting all from ${collection_name}:`, error);
+        return [];
+      }
+    },
+
+    // Delete data from Firestore
+    async deleteData(collection_name, docId) {
+      try {
+        await deleteDoc(doc(db, collection_name, docId));
+        return true;
+      } catch (error) {
+        console.error(`Error deleting from ${collection_name}:`, error);
+        return false;
+      }
+    },
+
+    // Update specific fields
+    async updateData(collection_name, docId, updates) {
+      try {
+        await updateDoc(doc(db, collection_name, docId), updates);
+        return true;
+      } catch (error) {
+        console.error(`Error updating ${collection_name}:`, error);
+        return false;
+      }
+    }
+  };
+
+  // Make collection functions available
+  window.collection = collection;
+  window.doc = doc;
+  window.deleteDoc = deleteDoc;
+  window.updateDoc = updateDoc;
+</script>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 
 <style>
   :root{--accent:#0b76d1;--muted:#666;--success-bg:#d4edda;--success-text:#155724;--error-bg:#f8d7da;--error-text:#721c24}
@@ -594,6 +690,12 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus, 
   }
 }
 
+@media print {
+  button[onclick*="toggle"] {
+    display: none !important;
+  }
+}
+
 </style>
 </head>
 <body>
@@ -616,7 +718,7 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus, 
 <!-- HEADER -->
 <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
   <div>
-    <h1>Umrah Package Quotation Generator</h1>
+    <h1>Umrah Quotation</h1>
     <div class="small">Use Chrome/Edge.</div>
   </div>
   <div style="display:flex;gap:8px;align-items:center" class="no-print">
@@ -628,7 +730,6 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus, 
 </div>
 
   <script>
-
     // --- Custom UI functions for Notifications and Modals ---
     const tempNotificationOverlay = document.getElementById("temp-notification-overlay");
     const tempNotification = document.getElementById("temp-notification");
@@ -688,179 +789,69 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus, 
         });
     }
     
-    // --- FIREBASE AUTHENTICATION CHECK ---
-let currentAgent = null;
-
-async function checkAuthentication() {
-  return new Promise(async (resolve) => {
-    try {
-      const { onAuthStateChanged } = await import('https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js');
-      const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js');
-      
-      // Use the singleton Firebase instance
-      const { auth, db } = await getFirebaseInstance();
-      
-      onAuthStateChanged(auth, async (user) => {
-        if (!user) {
-          showNotification("Please login to access the quotation tool", "error");
-          setTimeout(() => {
-            window.location.href = 'login.html';
-          }, 2000);
-          resolve(null);
-          return;
-        }
-        
-        try {
-          // Load agent profile from Firestore
-          const userDoc = await getDoc(doc(db, "users", user.uid));
-          if (userDoc.exists()) {
-            currentAgent = userDoc.data();
-            resolve(currentAgent);
-          } else {
-            showNotification("Agent profile not found. Please login again.", "error");
-            setTimeout(() => {
-              window.location.href = 'login.html';
-            }, 2000);
-            resolve(null);
-          }
-        } catch (error) {
-          console.error('Error loading profile:', error);
-          showNotification("Error loading profile. Please login again.", "error");
-          setTimeout(() => {
-            window.location.href = 'login.html';
-          }, 2000);
-          resolve(null);
-        }
-      });
-    } catch (error) {
-      console.error('Error in checkAuthentication:', error);
-      resolve(null);
+    // --- SIMPLE AUTHENTICATION CHECK ---
+function checkAuthentication() {
+  let agent = null;
+  const user = auth.currentUser;
+  if (user) {
+    // Get agent data from Firestore
+    return db.collection('agents').doc(user.uid).get().then(doc => {
+      if (doc.exists) {
+        agent = { uid: user.uid, ...doc.data() };
+        return agent;
+      } else {
+        showNotification("Agent data not found", "error");
+        return null;
+      }
+    });
+  } else {
+    // Check localStorage for predefined
+    agent = JSON.parse(localStorage.getItem("loggedInAgent"));
+    if (!agent) {
+      showNotification("Please login to access the quotation tool", "error");
+      setTimeout(() => {
+        window.location.href = 'dashboard.html';
+      }, 2000);
+      return null;
     }
-  });
+    return agent;
+  }
 }
 
-// Helper function for getting current agent
+// Add these missing helper functions
 function getCurrentAgent() {
-  return currentAgent;
+  const agentData = localStorage.getItem("loggedInAgent");
+  return agentData ? JSON.parse(agentData) : null;
 }
 
-// Firebase singleton instance
-let firebaseInstance = null;
-
-async function getFirebaseInstance() {
-  if (firebaseInstance) return firebaseInstance;
-  
-  const { initializeApp } = await import('https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js');
-  const { getAuth } = await import('https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js');
-  const { getFirestore } = await import('https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js');
-  
-  const firebaseConfig = {
-    apiKey: "AIzaSyDx3Qxt84vJlz_-mXuxiC0W2flaLadr9Ws",
-    authDomain: "fc-quotation-tool.firebaseapp.com",
-    projectId: "fc-quotation-tool",
-    storageBucket: "fc-quotation-tool.appspot.com",
-    messagingSenderId: "370566945624",
-    appId: "1:370566945624:web:a84b20d5a8f99d20a6e32d"
-  };
-  
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  const db = getFirestore(app);
-  
-  firebaseInstance = { app, auth, db };
-  return firebaseInstance;
-}
-
-// Firebase Firestore helper functions for quotations
-async function saveToFirebaseFirestore(quotationData) {
+// Save data to Firebase Cloud (async)
+async function saveToFirebase(key, data) {
   try {
-    const { doc, setDoc, getDoc } = await import('https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js');
-    const { auth, db } = await getFirebaseInstance();
-    
-    const user = auth.currentUser;
-    if (!user) {
-      throw new Error('User not authenticated');
+    const agent = getCurrentAgent();
+    if (!agent || !agent.uid) {
+      console.warn('User not authenticated, falling back to localStorage');
+      localStorage.setItem(key, JSON.stringify(data));
+      return true;
     }
     
-    // Save quotation to user's quotations collection
-    const quotationRef = doc(db, "quotations", user.uid);
-    const quotationDoc = await getDoc(quotationRef);
-    
-    let quotations = {};
-    if (quotationDoc.exists()) {
-      quotations = quotationDoc.data().quotations || {};
-    }
-    
-    // Add/update the quotation
-    quotations[quotationData.id] = quotationData;
-    
-    // Save back to Firestore
-    await setDoc(quotationRef, { quotations }, { merge: true });
+    // Save to Firestore under user's data collection
+    await window.firebaseDB.saveData('agents/' + agent.uid + '/data', key, { value: data, updatedAt: new Date() });
+    return true;
   } catch (error) {
-    throw error;
+    console.error('Error saving to Firebase:', error);
+    // Fallback to localStorage
+    localStorage.setItem(key, JSON.stringify(data));
+    return false;
   }
 }
 
-async function loadFromFirebaseFirestore(quotationId) {
-  try {
-    const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js');
-    const { auth, db } = await getFirebaseInstance();
-    
-    const user = auth.currentUser;
-    if (!user) {
-      throw new Error('User not authenticated');
-    }
-    
-    // Load quotations from user's collection
-    const quotationRef = doc(db, "quotations", user.uid);
-    const quotationDoc = await getDoc(quotationRef);
-    
-    if (!quotationDoc.exists()) {
-      throw new Error('No quotations found');
-    }
-    
-    const quotations = quotationDoc.data().quotations || {};
-    const quotation = quotations[quotationId];
-    
-    if (!quotation) {
-      throw new Error('Quotation not found');
-    }
-    
-    console.log('Quotation loaded from Firebase:', quotationId);
-    return quotation;
-  } catch (error) {
-    console.error('Error loading from Firebase:', error);
-    throw error;
-  }
-}
-
-async function loadAllFirebaseQuotations() {
-  try {
-    const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js');
-    const { auth, db } = await getFirebaseInstance();
-    
-    const user = auth.currentUser;
-    if (!user) {
-      return [];
-    }
-    
-    // Load all quotations from user's collection
-    const quotationRef = doc(db, "quotations", user.uid);
-    const quotationDoc = await getDoc(quotationRef);
-    
-    if (!quotationDoc.exists()) {
-      return [];
-    }
-    
-    const quotations = quotationDoc.data().quotations || {};
-    return Object.values(quotations);
-  } catch (error) {
-    console.error('Error loading all quotations from Firebase:', error);
-    return [];
-  }
-}
-
+// Synchronous wrapper for compatibility
 function saveToLocalStorage(key, data) {
+  // This now tries Firebase first, falls back to localStorage
+  saveToFirebase(key, data).catch(err => {
+    console.error('Failed to save:', err);
+  });
+  // Also keep in localStorage for immediate access
   try {
     localStorage.setItem(key, JSON.stringify(data));
     return true;
@@ -889,7 +880,7 @@ function formatDateToDMY(dateStr) {
 
 // --- AGENT UI UPDATE ---
 function updateAgentUI() {
-  const agent = getCurrentAgent();
+  const agent = JSON.parse(localStorage.getItem("loggedInAgent"));
   const agentInfoDisplay = document.getElementById("agentInfoDisplay");
   const agentNameDisplay = document.getElementById("agentNameDisplay");
   const agentPhoneDisplay = document.getElementById("agentPhoneDisplay");
@@ -917,45 +908,15 @@ document.getElementById('btnDashboard').addEventListener('click', () => {
 });
 
 // --- INITIALIZATION ---
-document.addEventListener('DOMContentLoaded', async function() {
+document.addEventListener('DOMContentLoaded', function() {
   // Check authentication on page load
-  const agent = await checkAuthentication();
+  const agent = checkAuthentication();
   if (agent) {
     updateAgentUI();
     
     // Clear any old quotation IDs to prevent errors
     localStorage.removeItem('selectedQuotationId');
     localStorage.removeItem('umrahSelectedQuotationId');
-    
-    // Set default values for localhost testing
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      const clientName = document.getElementById('clientName');
-      const clientPhone = document.getElementById('clientPhone');
-      const dateFrom = document.getElementById('dateFrom');
-      const dateTo = document.getElementById('dateTo');
-      const makkahNights = document.getElementById('makkahNights');
-      const madinaNights = document.getElementById('madinaNights');
-      const adults = document.getElementById('adults');
-      
-      if (clientName && !clientName.value) clientName.value = 'Test Client';
-      if (clientPhone && !clientPhone.value) clientPhone.value = '03001234567';
-      if (adults && !adults.value) adults.value = '2';
-      if (makkahNights && !makkahNights.value) makkahNights.value = '4';
-      if (madinaNights && !madinaNights.value) madinaNights.value = '2';
-      
-      // Set default dates (next week for 7 days)
-      if (dateFrom && !dateFrom.value) {
-        const nextWeek = new Date();
-        nextWeek.setDate(nextWeek.getDate() + 7);
-        dateFrom.value = nextWeek.toISOString().split('T')[0];
-      }
-      
-      if (dateTo && !dateTo.value) {
-        const twoWeeksLater = new Date();
-        twoWeeksLater.setDate(twoWeeksLater.getDate() + 14);
-        dateTo.value = twoWeeksLater.toISOString().split('T')[0];
-      }
-    }
     
     // Show status section
     showStatusSection();
@@ -1684,8 +1645,31 @@ function isHotelFilled(index, prefix){
   return valid;
 }
 
+async function saveToFirebaseHotel(key, data) {
+    try {
+        const agent = getCurrentAgent();
+        if (!agent || !agent.uid) {
+            console.warn('User not authenticated, using localStorage');
+            localStorage.setItem(key, JSON.stringify(data));
+            return true;
+        }
+        // Save to Firestore
+        await window.firebaseDB.saveData('agents/' + agent.uid + '/data', key, { value: data, updatedAt: new Date() });
+        return true;
+    } catch (error) {
+        console.error('Error saving to Firebase:', error);
+        // Fallback
+        localStorage.setItem(key, JSON.stringify(data));
+        return false;
+    }
+}
+
 function saveToLocalStorage(key, data) {
     try {
+        saveToFirebaseHotel(key, data).catch(err => {
+            console.error('Firebase save failed:', err);
+        });
+        // Keep in localStorage for immediate access
         localStorage.setItem(key, JSON.stringify(data));
         return true;
     } catch (error) {
@@ -2841,8 +2825,24 @@ const defaultTerms = `
 </ol>
 `;
 
-// Store custom terms in localStorage
+// Store custom terms in Firebase Cloud / localStorage
 let customTerms = localStorage.getItem('customTerms') || defaultTerms;
+
+// Load custom terms from Firebase on startup
+async function loadCustomTermsFromFirebase() {
+  try {
+    const agent = getCurrentAgent();
+    if (agent && agent.uid) {
+      const data = await window.firebaseDB.getData('agents/' + agent.uid + '/data', 'customTerms');
+      if (data && data.value) {
+        customTerms = data.value;
+        localStorage.setItem('customTerms', data.value);
+      }
+    }
+  } catch (error) {
+    console.log('Could not load custom terms from Firebase, using local:', error);
+  }
+}
 
 function fmt(num) {
   return num.toLocaleString("en-PK", { maximumFractionDigits: 0 });
@@ -3769,6 +3769,24 @@ function printQuotation() {
     }
     
     setTimeout(() => {
+      let clonedContent = modalContent.cloneNode(true);
+      // Remove toggle buttons
+      const buttons = clonedContent.querySelectorAll('button[onclick*="toggle"]');
+      buttons.forEach(btn => btn.remove());
+      // Remove hidden sections
+      const sectionIds = ['calculationSummarySection', 'flightSection', 'hotelSection', 'addonSection', 'priceBreakupSection'];
+      sectionIds.forEach(id => {
+        const div = clonedContent.querySelector('#' + id);
+        if (div && div.style.display === 'none') {
+          div.remove();
+        }
+      });
+      let html = clonedContent.innerHTML;
+      // Make PDF more compact by reducing margins
+      html = html.replace(/margin-bottom:\s*20px/g, 'margin-bottom: 15px');
+      html = html.replace(/padding:\s*15px/g, 'padding: 10px');
+      html = html.replace(/margin:\s*15px/g, 'margin: 10px');
+      
       const printWindow = window.open('', '_blank');
       
       const printHTML = `
@@ -3785,35 +3803,48 @@ function printQuotation() {
             }
             
             body { 
-              font-family: Arial, Helvetica, sans-serif;
-              margin: 15px;
+              font-family: 'Calibri', Arial, sans-serif;
+              margin: 0px;
               color: #111;
               background: white !important;
+              font-size: 12px;
+              line-height: 1.4;
+            }
+            
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
             }
             
             /* Headers - no blue background, just color */
             h1, h2, h3 { 
               color: #0b76d1 !important;
-              padding: 5px 0 !important;
-              margin: 10px 0 !important;
+              padding: 0px 0 !important;
+              margin: 0px 0 10px 0 !important;
               display: block !important;
+              font-size: 16px !important;
               page-break-after: avoid !important;
               page-break-inside: avoid !important;
+              page-break-before: avoid !important;
             }
             
             /* Tables - keep exactly as original */
             table { 
               width: 100%;
               border-collapse: collapse;
-              margin-bottom: 20px;
-              border: 1px solid #ddd !important;
+              margin: 10px 0 15px 0;
+              border: 0.5px solid #ddd !important;
               page-break-inside: avoid !important;
+              page-break-before: avoid !important;
+              page-break-after: avoid !important;
             }
             
             th, td { 
-              border: 1px solid #ddd !important;
-              padding: 8px;
+              border: 0.5px solid #ddd !important;
+              padding: 6px 8px;
               text-align: left;
+              font-size: 11px;
             }
             
             th { 
@@ -3822,26 +3853,23 @@ function printQuotation() {
               font-weight: bold;
             }
             
+            p {
+              margin: 5px 0;
+            }
+            
             /* Sections - NO blue background or borders */
-            .section { 
-              margin-bottom: 20px;
-              border: 1px solid #ddd !important;
-              padding: 15px;
-              border-radius: 8px;
+            div[style*="border: 1px solid #eee"],
+            div[style*="border: 1px solid #ddd"] {
+              margin: 0px 0 15px 0 !important;
+              padding: 10px !important;
+              border: none !important;
+              border-radius: 0px !important;
               background: white !important;
-              page-break-inside: avoid !important;
+              page-break-inside: auto !important;
               page-break-after: auto !important;
               page-break-before: auto !important;
               display: block !important;
               position: relative !important;
-            }
-            
-            /* Force section containers to stay together */
-            div[style*="border: 1px solid #eee"],
-            div[style*="border: 1px solid #ddd"] {
-              page-break-inside: avoid !important;
-              page-break-after: auto !important;
-              page-break-before: auto !important;
             }
             
             /* Keep green sections */
@@ -3894,14 +3922,14 @@ function printQuotation() {
                 size: A4;
                 
                 /* Header and Footer */
-                @top-left {
+                @top-center {
                   content: "Flight Connection Travel & Tours";
-                  font-size: 8px;
+                  font-size: 12px;
                   color: #0b76d1;
                   font-weight: bold;
                 }
                 
-                @bottom-right {
+                @bottom-center {
                   content: "Page " counter(page);
                   font-size: 10px;
                   color: #666;
@@ -3922,7 +3950,7 @@ function printQuotation() {
               
               /* Additional print-specific break prevention */
               div {
-                page-break-inside: avoid !important;
+                page-break-inside: auto !important;
               }
               
               /* Ensure no orphans */
@@ -3933,7 +3961,7 @@ function printQuotation() {
           </style>
         </head>
         <body>
-          ${modalContent.innerHTML}
+          ${html}
         </body>
         </html>
       `;
@@ -4265,7 +4293,8 @@ console.log("Total package amount:", totalPackageAmount);
   </div>` : ''}
 </div>
   
-  <div style="margin-bottom: 20px;">
+  <button onclick="toggleCalculationSummary()" style="margin-bottom: 10px; padding: 5px 10px; background: #0b76d1; color: white; border: none; border-radius: 4px; cursor: pointer;">Show/Hide Calculation Summary</button>
+  <div id="calculationSummarySection" style="margin-bottom: 20px;">
     <h3 style="color: #0b76d1; text-align: center; margin-bottom: 15px; font-size: 18px;">Package Price</h3>
     <table style="width:100%; border-collapse: collapse; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden;">
       <thead>
@@ -4852,7 +4881,46 @@ quotationHTML += `
   </div>
 `;
 
-// Store default content if not already stored
+// Store default content in Firebase if not already stored
+async function initializeVisaRequirements() {
+  const defaultVisaRequirements = `
+<ul style="padding-left: 20px; margin: 0; text-align: left;">
+  <li>Passport (valid for at least 6 months with 2 blank pages)</li>
+  <li>CNIC Copy</li>
+  <li>Passport-Sized Photograph (white background)</li>
+  <li>NADRA B-Form (for children)</li>
+  <li>Biometric Registration via Saudi Visa Bio App (mandatory)</li>
+</ul>
+
+<div style="margin-top: 15px; margin-bottom: 10px; font-weight: 600;">For Solo Female Travelers:</div>
+<ul style="padding-left: 20px; margin: 0 0 15px 0; text-align: left;">
+  <li>Affidavit of Consent from Mahram required</li>
+</ul>
+
+<ul style="padding-left: 20px; margin: 0; text-align: left;">
+  <li>Visa Validity: 15 Days from date of issue</li>
+  <li>Stay Validity: 20 days from entry into Saudi Arabia</li>
+  <li>Processing Time: 4–7 working days (subject to change)</li>
+  <li>Note: In some cases, visa status may change to "Send to Embassy" — the total processing cost will be PKR 17,000 per person, and it will be completed by us.</li>
+</ul>`;
+  
+  try {
+    const agent = getCurrentAgent();
+    if (agent && agent.uid) {
+      const existing = await window.firebaseDB.getData('agents/' + agent.uid + '/data', 'visaRequirements');
+      if (!existing) {
+        await window.firebaseDB.saveData('agents/' + agent.uid + '/data', 'visaRequirements', { value: defaultVisaRequirements, updatedAt: new Date() });
+      }
+    }
+  } catch (error) {
+    console.log('Visa requirements initialization:', error);
+  }
+  
+  if (!localStorage.getItem('visaRequirements')) {
+    localStorage.setItem('visaRequirements', defaultVisaRequirements);
+  }
+}
+
 if (!localStorage.getItem('visaRequirements')) {
   const defaultVisaRequirements = `
 <ul style="padding-left: 20px; margin: 0; text-align: left;">
@@ -4875,6 +4943,7 @@ if (!localStorage.getItem('visaRequirements')) {
   <li>Note: In some cases, visa status may change to "Send to Embassy" — the total processing cost will be PKR 17,000 per person, and it will be completed by us.</li>
 </ul>`;
   localStorage.setItem('visaRequirements', defaultVisaRequirements);
+  initializeVisaRequirements();
 }
 
 if (!localStorage.getItem('biometricProcess')) {
@@ -4995,6 +5064,16 @@ document.getElementById('editContentBtn').onclick = function() {
   // Show modal
   modal.classList.add('visible');
 }
+
+function toggleCalculationSummary() {
+  const div = document.getElementById('calculationSummarySection');
+  if (div.style.display === 'none') {
+    div.style.display = 'block';
+  } else {
+    div.style.display = 'none';
+  }
+}
+
 function shareOnWhatsApp() {
   try {
     const clientData = getClientData();
@@ -5037,7 +5116,7 @@ Website: www.flightconnection.net.pk`;
 // --- EXPORT TO EXCEL ---
 btnExportExcel.addEventListener("click", exportToExcel);
 
-async function exportToExcel() {
+function exportToExcel() {
   try {
     // Get the table element
     const table = document.getElementById("calcSummaryTable");
@@ -5088,37 +5167,18 @@ async function exportToExcel() {
 }
 
 // --- SAVE/LOAD QUOTATION ---
-document.getElementById('btnSaveQuotation').addEventListener('click', async () => {
-  try {
-    // Check if authentication is ready
-    const { auth } = await getFirebaseInstance();
-    const user = auth.currentUser;
-    
-    if (!user) {
-      showNotification('Please wait for authentication to complete, then try again.', 'warning');
-      return;
-    }
-    
-    if (!currentAgent) {
-      showNotification('Agent profile not loaded. Please refresh the page and try again.', 'warning');
-      return;
-    }
-    
-    await saveQuotation();
-  } catch (error) {
-    showNotification('Failed to save quotation: ' + error.message, 'error');
-  }
+document.getElementById('btnSaveQuotation').addEventListener('click', () => {
+  saveQuotation();
 });
 
-document.getElementById('btnLoadQuotation').addEventListener('click', async () => {
-  try {
-    // Get all quotations
-    const allSavedQuotations = await loadAllFirebaseQuotations();
-    
-    if (allSavedQuotations.length === 0) {
-      showAlert("No saved quotations found.");
-      return;
-    }
+document.getElementById('btnLoadQuotation').addEventListener('click', () => {
+  // Get all quotations
+  const allSavedQuotations = JSON.parse(localStorage.getItem('savedQuotations')) || [];
+  
+  if (allSavedQuotations.length === 0) {
+    showAlert("No saved quotations found.");
+    return;
+  }
 
   // Create modal content
   const modal = document.getElementById('custom-modal');
@@ -5207,7 +5267,7 @@ setTimeout(() => {
         modal.classList.remove('visible');
         
         // Load the quotation
-        await loadQuotation(quotationId);
+        loadQuotation(quotationId);
       } catch (error) {
         console.error('Error loading quotation:', error);
         showAlert("Failed to load quotation. Please try again.", "error");
@@ -5218,7 +5278,7 @@ setTimeout(() => {
 });
 
 // Function to save the current quotation
-async function saveQuotation() {
+function saveQuotation() {
   try {
     // Check if client data is saved
     if (!isClientDataSaved) {
@@ -5259,7 +5319,7 @@ async function saveQuotation() {
     
     // Calculate expiry date (7 days from creation)
     const expiryDate = new Date();
-    expiryDate.setDate(expiryDate.getDate() + 7);
+    expiryDate.setDate(expiryDate.getDate() + 30);
     
     // Collect flight data
     const flightsData = [];
@@ -5454,21 +5514,27 @@ async function saveQuotation() {
       addons: addonsData
     };
     
-    // Double-check authentication before saving
-    const { auth } = await getFirebaseInstance();
-    const currentUser = auth.currentUser;
+    // Get ALL existing quotations from localStorage
+    let allQuotations = JSON.parse(localStorage.getItem('savedQuotations')) || [];
     
-    if (!currentUser) {
-      throw new Error('User not authenticated. Please login again.');
-    }
-    
-    // Save to Firebase Firestore
-    await saveToFirebaseFirestore(quotationData);
-    
-    // Set current quotation ID if it's a new quotation
-    if (!currentQuotationId) {
+    // Add or update the quotation
+    if (currentQuotationId) {
+      // Update existing
+      const index = allQuotations.findIndex(q => q.id === currentQuotationId);
+      if (index !== -1) {
+        allQuotations[index] = quotationData;
+      }
+    } else {
+      // Add new
+      allQuotations.push(quotationData);
       currentQuotationId = quotationData.id;
     }
+    
+    // Save to localStorage
+    localStorage.setItem('savedQuotations', JSON.stringify(allQuotations));
+    
+    // Update the global variable
+    savedQuotations = allQuotations;
     
     showNotification("Quotation saved successfully!", "success");
     showStatusSection();
@@ -5481,12 +5547,16 @@ async function saveQuotation() {
 }
 
 // Function to load a quotation
-async function loadQuotation(quotationId) {
+function loadQuotation(quotationId) {
   try {
     console.log("Loading quotation with ID:", quotationId);
     
-    // Load quotation from Firebase Firestore
-    const quotation = await loadFromFirebaseFirestore(quotationId);
+    // Get all saved quotations
+    const savedQuotations = JSON.parse(localStorage.getItem('savedQuotations')) || [];
+    console.log("Found quotations:", savedQuotations.length);
+    
+    // Find the quotation
+    const quotation = savedQuotations.find(q => q.id === quotationId);
     
     if (!quotation) {
       console.error("Quotation not found with ID:", quotationId);
@@ -5887,13 +5957,13 @@ async function loadQuotation(quotationId) {
 }
 
 // Function to check how many quotations are saved
-async function checkSavedQuotations() {
-  const allQuotations = await loadAllFirebaseQuotations();
+function checkSavedQuotations() {
+  const allQuotations = JSON.parse(localStorage.getItem('savedQuotations')) || [];
   const agent = getCurrentAgent();
   
   if (agent) {
     const agentQuotations = allQuotations.filter(q => q.agentData && q.agentData.id === agent.id);
-    console.log(`Total quotations in Firebase: ${allQuotations.length}`);
+    console.log(`Total quotations in localStorage: ${allQuotations.length}`);
     console.log(`Quotations for current agent (${agent.name}): ${agentQuotations.length}`);
     
     agentQuotations.forEach((q, index) => {
@@ -5903,11 +5973,10 @@ async function checkSavedQuotations() {
 }
 
 // Function to show the load quotation dialog
-async function showLoadQuotationDialog() {
+function showLoadQuotationDialog() {
   try {
-    // Get all saved quotations from Firebase
-    const allQuotations = await loadAllFirebaseQuotations();
-    savedQuotations = allQuotations;
+    // Get all saved quotations
+    savedQuotations = JSON.parse(localStorage.getItem('savedQuotations')) || [];
     
     if (savedQuotations.length === 0) {
       showNotification("No saved quotations found.", "warning");
@@ -5998,7 +6067,7 @@ document.querySelectorAll('.load-quotation-btn').forEach(btn => {
     modal.classList.remove('visible');
     
     // Load the quotation
-    await loadQuotation(quotationId);
+    loadQuotation(quotationId);
   });
 });
       
@@ -6519,10 +6588,23 @@ saveBtn.addEventListener('click', (e) => {
     tab.style.background === 'var(--accent)'
   );
   
+  // Helper function to save to Firebase and localStorage
+  async function saveContentToFirebaseAndLocal(key, content) {
+    try {
+      const agent = getCurrentAgent();
+      if (agent && agent.uid) {
+        await window.firebaseDB.saveData('agents/' + agent.uid + '/data', key, { value: content, updatedAt: new Date() });
+      }
+    } catch (error) {
+      console.error('Error saving to Firebase:', error);
+    }
+    localStorage.setItem(key, content);
+  }
+  
   // Save the content based on the active tab
   if (activeTabIndex === 0) { // Terms & Conditions
     customTerms = `<h3 style="margin-top: 0; color: #0b76d1; text-align: center;">Terms and Conditions</h3>${editors[0].innerHTML}`;
-    localStorage.setItem('customTerms', customTerms);
+    saveContentToFirebaseAndLocal('customTerms', customTerms);
     showNotification('Terms & Conditions updated successfully!', 'success');
   } else if (activeTabIndex === 1) { // Section 1
     const section1Heading = headingInputs[1] ? headingInputs[1].value : '';
@@ -6537,10 +6619,10 @@ saveBtn.addEventListener('click', (e) => {
       } else {
         section1Content = editors[1].innerHTML;
       }
-      localStorage.setItem('visaRequirements', section1Content);
+      saveContentToFirebaseAndLocal('visaRequirements', section1Content);
     } else {
       // Save empty content if section is disabled
-      localStorage.setItem('visaRequirements', '<!-- SECTION 1 HIDDEN BY USER -->');
+      saveContentToFirebaseAndLocal('visaRequirements', '<!-- SECTION 1 HIDDEN BY USER -->');
     }
     showNotification('Section 1 updated successfully!', 'success');
   } else if (activeTabIndex === 2) { // Section 2
@@ -6556,10 +6638,10 @@ saveBtn.addEventListener('click', (e) => {
       } else {
         section2Content = editors[2].innerHTML;
       }
-      localStorage.setItem('biometricProcess', section2Content);
+      saveContentToFirebaseAndLocal('biometricProcess', section2Content);
     } else {
       // Save empty content if section is disabled
-      localStorage.setItem('biometricProcess', '<!-- SECTION 2 HIDDEN BY USER -->');
+      saveContentToFirebaseAndLocal('biometricProcess', '<!-- SECTION 2 HIDDEN BY USER -->');
     }
     showNotification('Section 2 updated successfully!', 'success');
   }
@@ -6701,9 +6783,9 @@ function handleUrlParameters() {
     console.log('Loading quotation:', quotationIdToLoad); // Debug log
     
     // Wait for page to fully load
-    setTimeout(async () => {
+    setTimeout(() => {
       // Load the quotation
-      await loadQuotation(quotationIdToLoad);
+      loadQuotation(quotationIdToLoad);
       
       // If viewing, show quotation modal after loading
       if (viewId) {

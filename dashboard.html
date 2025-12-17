@@ -4,6 +4,98 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Agent Dashboard - Flight Connection</title>
+
+<!-- Firebase SDK -->
+<script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+  import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+
+  // Your web app's Firebase configuration
+  const firebaseConfig = {
+    apiKey: "AIzaSyDx3Qxt84vJlz_-mXuxiC0W2flaLadr9Ws",
+    authDomain: "fc-quotation-tool.firebaseapp.com",
+    projectId: "fc-quotation-tool",
+    storageBucket: "fc-quotation-tool.firebasestorage.app",
+    messagingSenderId: "370566945624",
+    appId: "1:370566945624:web:a84b20d5a8f99d20a6e32d"
+  };
+
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const auth = getAuth(app);
+
+  // Make db and auth global
+  window.db = db;
+  window.auth = auth;
+
+  // ========== Firebase Cloud Storage Utility Functions ==========
+  window.firebaseDB = {
+    // Save data to Firestore
+    async saveData(collection_name, docId, data) {
+      try {
+        await setDoc(doc(db, collection_name, docId), data, { merge: true });
+        return true;
+      } catch (error) {
+        console.error(`Error saving to ${collection_name}:`, error);
+        return false;
+      }
+    },
+
+    // Get data from Firestore
+    async getData(collection_name, docId) {
+      try {
+        const docSnap = await getDoc(doc(db, collection_name, docId));
+        return docSnap.exists() ? docSnap.data() : null;
+      } catch (error) {
+        console.error(`Error getting from ${collection_name}:`, error);
+        return null;
+      }
+    },
+
+    // Get all documents from a collection
+    async getAll(collection_name) {
+      try {
+        const snapshot = await getDocs(collection(db, collection_name));
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      } catch (error) {
+        console.error(`Error getting all from ${collection_name}:`, error);
+        return [];
+      }
+    },
+
+    // Delete data from Firestore
+    async deleteData(collection_name, docId) {
+      try {
+        await deleteDoc(doc(db, collection_name, docId));
+        return true;
+      } catch (error) {
+        console.error(`Error deleting from ${collection_name}:`, error);
+        return false;
+      }
+    },
+
+    // Update specific fields
+    async updateData(collection_name, docId, updates) {
+      try {
+        await updateDoc(doc(db, collection_name, docId), updates);
+        return true;
+      } catch (error) {
+        console.error(`Error updating ${collection_name}:`, error);
+        return false;
+      }
+    }
+  };
+
+  // Make collection functions available
+  window.collection = collection;
+  window.doc = doc;
+  window.deleteDoc = deleteDoc;
+  window.updateDoc = updateDoc;
+  window.signOut = signOut;
+</script>
 <style>
   :root{--accent:#0b76d1;--muted:#666;--success:#28a745;--warning:#f39c12;--danger:#e74c3c;--info:#17a2b8}
   body{font-family:Arial,Helvetica,sans-serif;background:#f3f6fb;margin:10px;color:#111}
@@ -257,6 +349,10 @@
       <div class="stat-label">Cancelled</div>
       <div class="stat-value" id="cancelledQuotations">0</div>
     </div>
+    <div class="stat-card danger">
+      <div class="stat-label">Expired</div>
+      <div class="stat-value" id="expiredQuotations">0</div>
+    </div>
     <div class="stat-card info">
       <div class="stat-label">Expiring Soon</div>
       <div class="stat-value" id="expiringQuotations">0</div>
@@ -275,6 +371,7 @@
       <option value="followup">Follow-up Required</option>
       <option value="booked">Booked</option>
       <option value="cancelled">Cancelled</option>
+      <option value="expired">Expired</option>
     </select>
     <select id="typeFilter">
       <option value="">All Types</option>
@@ -328,9 +425,7 @@
   </div>
 </div>
 
-
-<!-- Quotation Type Selection Modal (moved to end of body for proper overlay) -->
-</div> <!-- close .wrap -->
+<!-- Quotation Type Selection Modal -->
 <div id="quotationTypeModal" class="modal-overlay no-print">
   <div class="modal-content">
     <div class="modal-header">
@@ -351,136 +446,71 @@
   </div>
 </div>
 
-<script type="module">
+<script>
 // Dashboard JavaScript
-import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
-
 let currentPage = 1;
 const itemsPerPage = 10;
 let filteredAllQuotations = [];
 let allUmrahQuotations = [];
 let allInternationalQuotations = [];
 
-// Make functions globally accessible immediately
-window.showQuotationTypeModal = function() {
-  document.getElementById('quotationTypeModal').classList.add('visible');
+// Check if agent is logged in
+function checkAgentLogin() {
+  const agent = JSON.parse(localStorage.getItem("loggedInAgent"));
+  if (!agent) {
+    showNotification("Please login to access dashboard", "error");
+    setTimeout(() => {
+      window.location.href = "index.html";
+    }, 2000);
+    return null;
+  }
+  return agent;
 }
 
-window.closeQuotationTypeModal = function() {
-  document.getElementById('quotationTypeModal').classList.remove('visible');
-}
-
-window.createUmrahQuotation = function() {
-  window.closeQuotationTypeModal();
-  localStorage.removeItem('selectedQuotationId');
-  window.open('index.html', '_blank');
-}
-
-window.createInternationalQuotation = function() {
-  window.closeQuotationTypeModal();
-  localStorage.removeItem('selectedQuotationId');
-  window.open('International Quotation Tool.html', '_blank');
-}
-
-const firebaseConfig = {
-  apiKey: "AIzaSyDx3Qxt84vJlz_-mXuxiC0W2flaLadr9Ws",
-  authDomain: "fc-quotation-tool.firebaseapp.com",
-  projectId: "fc-quotation-tool",
-  storageBucket: "fc-quotation-tool.appspot.com",
-  messagingSenderId: "370566945624",
-  appId: "1:370566945624:web:a84b20d5a8f99d20a6e32d"
-};
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-
-let agentProfile = null;
-
-function checkAgentLogin(callback) {
-  onAuthStateChanged(auth, async (user) => {
-    if (!user) {
-      showNotification("Please login to access dashboard", "error");
-      setTimeout(() => {
-        window.location.href = "login.html";
-      }, 2000);
-      return;
+// Helper function to save quotations to Firebase
+async function saveQuotationsToFirebase(agent, umrahQuotations, internationalQuotations) {
+  try {
+    if (!agent || !agent.id) return;
+    
+    // Save Umrah quotations
+    if (umrahQuotations && umrahQuotations.length > 0) {
+      await window.firebaseDB.saveData('quotations/umrah', agent.id, { 
+        quotations: umrahQuotations, 
+        updatedAt: new Date(),
+        agentId: agent.id 
+      });
     }
-    // Load agent profile from Firestore
-    console.log('Loading profile for UID:', user.uid);
-    console.log('User email:', user.email);
-    try {
-      const userDocRef = doc(db, "users", user.uid);
-      console.log('Document reference:', userDocRef.path);
-      
-      const userDoc = await getDoc(userDocRef);
-      console.log('User document exists:', userDoc.exists());
-      
-      if (userDoc.exists()) {
-        agentProfile = userDoc.data();
-        console.log('Loaded agent profile:', agentProfile);
-        
-        // Ensure agentProfile has the necessary fields for matching
-        if (!agentProfile.id && agentProfile.agentId) {
-          agentProfile.id = agentProfile.agentId;
-        }
-        if (!agentProfile.agentId && agentProfile.id) {
-          agentProfile.agentId = agentProfile.id;
-        }
-        
-        console.log('Final agent profile for matching:', {
-          id: agentProfile.id,
-          agentId: agentProfile.agentId,
-          name: agentProfile.name
-        });
-        
-        callback(agentProfile);
-      } else {
-        console.error('No profile found for UID:', user.uid);
-        console.error('Document path checked:', userDocRef.path);
-        
-        // Try to create a temporary profile from user data
-        const tempProfile = {
-          id: user.email,
-          name: user.email.split('@')[0],
-          phone: 'Not provided',
-          registeredAt: new Date().toISOString()
-        };
-        
-        console.log('Creating temporary profile:', tempProfile);
-        await setDoc(userDocRef, tempProfile);
-        
-        agentProfile = tempProfile;
-        showNotification("Profile created from login data. Please update your details.", "warning");
-        callback(agentProfile);
-      }
-    } catch (error) {
-      console.error('Error loading profile:', error);
-      console.error('Error details:', error.code, error.message);
-      showNotification("Error loading profile: " + error.message, "error");
-      setTimeout(() => {
-        window.location.href = "login.html";
-      }, 2000);
+    
+    // Save International quotations
+    if (internationalQuotations && internationalQuotations.length > 0) {
+      await window.firebaseDB.saveData('quotations/international', agent.id, { 
+        quotations: internationalQuotations, 
+        updatedAt: new Date(),
+        agentId: agent.id 
+      });
     }
-  });
+  } catch (error) {
+    console.error('Error saving quotations to Firebase:', error);
+  }
 }
 
-// Make other functions globally accessible for HTML onclick handlers
-window.applyFilter = function() { applyFilter(); };
-window.resetFilter = function() { resetFilter(); };
-window.updateStatusFromTable = function(quotationId, quotationType, newStatus) { 
-  updateStatusFromTable(quotationId, quotationType, newStatus); 
-};
-window.viewQuotation = function(quotationId, quotationType) { 
-  viewQuotation(quotationId, quotationType); 
-};
-window.editQuotation = function(quotationId, quotationType) { 
-  editQuotation(quotationId, quotationType); 
-};
-window.deleteQuotation = function(quotationId, quotationType) { 
-  deleteQuotation(quotationId, quotationType); 
-};
+// Helper function to load quotations from Firebase
+async function loadQuotationsFromFirebase(agent) {
+  try {
+    if (!agent || !agent.id) return { umrah: [], international: [] };
+    
+    const umrahData = await window.firebaseDB.getData('quotations/umrah', agent.id);
+    const internationalData = await window.firebaseDB.getData('quotations/international', agent.id);
+    
+    return {
+      umrah: umrahData?.quotations || [],
+      international: internationalData?.quotations || []
+    };
+  } catch (error) {
+    console.error('Error loading quotations from Firebase:', error);
+    return { umrah: [], international: [] };
+  }
+}
 
 // Show notification function
 function showNotification(message, type = 'info') {
@@ -543,134 +573,65 @@ function createInternationalQuotation() {
 }
 
 // Load agent information
-
 function loadAgentInfo() {
-  if (agentProfile) {
-    document.getElementById("agentInfo").textContent = `Logged in as: ${agentProfile.name} (${agentProfile.phone})`;
+  const agent = checkAgentLogin();
+  if (agent) {
+    document.getElementById("agentInfo").textContent = `Logged in as: ${agent.name} (${agent.phone})`;
   }
 }
 
 // Load all quotations
-
 async function loadAllQuotations() {
-  if (!agentProfile) {
-    console.log('No agent profile loaded yet');
-    return;
-  }
+  const agent = checkAgentLogin();
+  if (!agent) return;
   
-  // Show loading indicator
-  const tableBody = document.getElementById('allQuotationsTableBody');
-  tableBody.innerHTML = `<tr><td colspan="8" style="text-align:center;">Loading quotations...</td></tr>`;
+  // Try to load from Firebase first
+  const firebaseData = await loadQuotationsFromFirebase(agent);
   
-  try {
-    // Load quotations from Firebase Firestore
-    const user = auth.currentUser;
-    if (!user) {
-      console.error('No authenticated user');
-      return;
-    }
-    
-    const quotationRef = doc(db, "quotations", user.uid);
-    const quotationDoc = await getDoc(quotationRef);
-    
-    let allFirebaseQuotations = [];
-    if (quotationDoc.exists()) {
-      const data = quotationDoc.data();
-      console.log('Quotations document data:', data);
-      
-      if (data.quotations) {
-        allFirebaseQuotations = Object.values(data.quotations);
-        console.log('Found quotations:', allFirebaseQuotations.length);
-        
-        // Log each quotation for debugging
-        allFirebaseQuotations.forEach((q, index) => {
-          console.log(`Quote ${index + 1}:`, {
-            id: q.id,
-            client: q.clientData?.name,
-            agentId: q.agentData?.agentId,
-            agentDataId: q.agentData?.id
-          });
-        });
-      } else {
-        console.log('No quotations field in document');
+  // Fall back to localStorage if Firebase is empty
+  let savedUmrahQuotations = firebaseData.umrah.length > 0 ? firebaseData.umrah : JSON.parse(localStorage.getItem('savedQuotations')) || [];
+  let savedInternationalQuotations = firebaseData.international.length > 0 ? firebaseData.international : JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
+  
+  allUmrahQuotations = savedUmrahQuotations.filter(q => {
+    return q.agentData && q.agentData.id === agent.id;
+  }).map(q => ({...q, type: 'umrah'}));
+  
+  allInternationalQuotations = savedInternationalQuotations.filter(q => {
+    return q.agentData && q.agentData.id === agent.id;
+  }).map(q => ({...q, type: 'international'}));
+  
+  // Auto-mark expired quotations
+  const now = new Date();
+  allUmrahQuotations.forEach(q => {
+    if (new Date(q.expiresAt) < now && q.status !== 'booked' && q.status !== 'cancelled') {
+      q.status = 'expired';
+      // Update in localStorage and Firebase
+      const saved = JSON.parse(localStorage.getItem('savedQuotations')) || [];
+      const index = saved.findIndex(sq => sq.id === q.id);
+      if (index !== -1) {
+        saved[index].status = 'expired';
+        localStorage.setItem('savedQuotations', JSON.stringify(saved));
+        // Also save to Firebase
+        saveQuotationsToFirebase(agent, saved, savedInternationalQuotations).catch(err => console.error('Firebase update error:', err));
       }
-    } else {
-      console.log('No quotations document found for user');
     }
-    
-    // Filter quotations for the current agent and add type
-    console.log('Filtering quotations for agent:', {
-      profileId: agentProfile.id,
-      profileAgentId: agentProfile.agentId,
-      profileEmail: agentProfile.email
-    });
-    
-    allUmrahQuotations = allFirebaseQuotations.filter(q => {
-      if (!q.agentData) return false;
-      
-      // More flexible agent matching
-      const agentIds = [
-        agentProfile.id,
-        agentProfile.agentId, 
-        agentProfile.email,
-        agentProfile.name
-      ].filter(Boolean);
-      
-      const quoteIds = [
-        q.agentData.id,
-        q.agentData.agentId,
-        q.agentData.email,
-        q.agentData.name
-      ].filter(Boolean);
-      
-      // Check if any profile ID matches any quote ID
-      const match = agentIds.some(profileId => 
-        quoteIds.some(quoteId => 
-          profileId && quoteId && profileId.toString().toLowerCase() === quoteId.toString().toLowerCase()
-        )
-      );
-      
-      console.log('Quote match check:', {
-        quoteId: q.id,
-        match: match,
-        profileIds: agentIds,
-        quoteIds: quoteIds
-      });
-      return match;
-    }).map(q => ({...q, type: 'umrah'}));
-    
-    console.log('Filtered umrah quotations:', allUmrahQuotations.length);
-    
-    // If no quotations match the agent filter, show all quotations as fallback
-    if (allUmrahQuotations.length === 0 && allFirebaseQuotations.length > 0) {
-      console.log('No agent matches found, showing all quotations as fallback');
-      allUmrahQuotations = allFirebaseQuotations.map(q => ({...q, type: 'umrah'}));
+  });
+  allInternationalQuotations.forEach(q => {
+    if (new Date(q.expiresAt) < now && q.status !== 'booked' && q.status !== 'cancelled') {
+      q.status = 'expired';
+      // Update in localStorage and Firebase
+      const saved = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
+      const index = saved.findIndex(sq => sq.id === q.id);
+      if (index !== -1) {
+        saved[index].status = 'expired';
+        localStorage.setItem('savedQuotations_international', JSON.stringify(saved));
+        // Also save to Firebase
+        saveQuotationsToFirebase(agent, savedUmrahQuotations, saved).catch(err => console.error('Firebase update error:', err));
+      }
     }
-    
-    // For now, all quotations are treated as umrah type
-    // You can add logic later to distinguish between umrah and international
-    allInternationalQuotations = [];
-    
-    console.log('About to apply filters and update display...');
-    applyFilter();
-    console.log('Filters applied, updating stats and table...');
-    updateStatistics();
-    renderQuotationsTable();
-    console.log('Dashboard update complete');
-    
-  } catch (error) {
-    console.error('Error loading quotations from Firebase:', error);
-    // Fallback to localStorage if Firebase fails
-    const savedUmrahQuotations = JSON.parse(localStorage.getItem('savedQuotations')) || [];
-    const savedInternationalQuotations = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
-    allUmrahQuotations = savedUmrahQuotations.filter(q => {
-      return q.agentData && q.agentData.id === agentProfile.id;
-    }).map(q => ({...q, type: 'umrah'}));
-    allInternationalQuotations = savedInternationalQuotations.filter(q => {
-      return q.agentData && q.agentData.id === agentProfile.id;
-    }).map(q => ({...q, type: 'international'}));
-    applyFilter();
-  }
+  });
+  
+  applyFilter();
 }
 
 // Apply filters
@@ -764,6 +725,7 @@ function updateStatistics() {
   const pending = filteredAllQuotations.filter(q => q.status === 'pending').length;
   const followup = filteredAllQuotations.filter(q => q.status === 'followup').length;
   const cancelled = filteredAllQuotations.filter(q => q.status === 'cancelled').length;
+  const expired = filteredAllQuotations.filter(q => q.status === 'expired').length;
   
   // Calculate expiring soon (within 5 days)
   const today = new Date();
@@ -780,6 +742,7 @@ function updateStatistics() {
   document.getElementById('pendingQuotations').textContent = pending;
   document.getElementById('followupQuotations').textContent = followup;
   document.getElementById('cancelledQuotations').textContent = cancelled;
+  document.getElementById('expiredQuotations').textContent = expired;
   document.getElementById('expiringQuotations').textContent = expiring;
 }
 
@@ -847,6 +810,7 @@ function renderQuotationsTable() {
           <option value="followup" ${quotation.status === 'followup' ? 'selected' : ''}>Follow-up Required</option>
           <option value="booked" ${quotation.status === 'booked' ? 'selected' : ''}>Booked</option>
           <option value="cancelled" ${quotation.status === 'cancelled' ? 'selected' : ''}>Cancelled</option>
+          <option value="expired" ${quotation.status === 'expired' ? 'selected' : ''}>Expired</option>
         </select>
       </td>
       <td>
@@ -911,36 +875,27 @@ function renderPagination(totalPages) {
 }
 
 // Update status from table
-async function updateStatusFromTable(quotationId, quotationType, newStatus) {
-  try {
-    const user = auth.currentUser;
-    if (!user) {
-      showNotification('Please login to update quotation status', 'error');
-      return;
+function updateStatusFromTable(quotationId, quotationType, newStatus) {
+  let savedQuotations;
+  if (quotationType === 'umrah') {
+    savedQuotations = JSON.parse(localStorage.getItem('savedQuotations')) || [];
+  } else {
+    savedQuotations = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
+  }
+  
+  const quotationIndex = savedQuotations.findIndex(q => q.id === quotationId);
+  if (quotationIndex !== -1) {
+    savedQuotations[quotationIndex].status = newStatus;
+    savedQuotations[quotationIndex].updatedAt = new Date().toISOString();
+    
+    if (quotationType === 'umrah') {
+      localStorage.setItem('savedQuotations', JSON.stringify(savedQuotations));
+    } else {
+      localStorage.setItem('savedQuotations_international', JSON.stringify(savedQuotations));
     }
     
-    const quotationRef = doc(db, "quotations", user.uid);
-    const quotationDoc = await getDoc(quotationRef);
-    
-    if (quotationDoc.exists()) {
-      const data = quotationDoc.data();
-      const quotations = data.quotations || {};
-      
-      if (quotations[quotationId]) {
-        quotations[quotationId].status = newStatus;
-        quotations[quotationId].updatedAt = new Date().toISOString();
-        
-        await setDoc(quotationRef, { quotations }, { merge: true });
-        
-        loadAllQuotations();
-        showNotification('Status updated successfully', 'success');
-      } else {
-        showNotification('Quotation not found', 'error');
-      }
-    }
-  } catch (error) {
-    console.error('Error updating quotation status:', error);
-    showNotification('Failed to update status', 'error');
+    loadAllQuotations();
+    showNotification('Status updated successfully', 'success');
   }
 }
 
@@ -964,36 +919,25 @@ function editQuotation(quotationId, quotationType) {
   }
 }
 
-async function deleteQuotation(quotationId, quotationType) {
+function deleteQuotation(quotationId, quotationType) {
   if (confirm('Are you sure you want to delete this quotation?')) {
-    try {
-      const user = auth.currentUser;
-      if (!user) {
-        showNotification('Please login to delete quotations', 'error');
-        return;
-      }
-      
-      const quotationRef = doc(db, "quotations", user.uid);
-      const quotationDoc = await getDoc(quotationRef);
-      
-      if (quotationDoc.exists()) {
-        const data = quotationDoc.data();
-        const quotations = data.quotations || {};
-        
-        if (quotations[quotationId]) {
-          delete quotations[quotationId];
-          await setDoc(quotationRef, { quotations }, { merge: true });
-          
-          loadAllQuotations();
-          showNotification('Quotation deleted successfully', 'success');
-        } else {
-          showNotification('Quotation not found', 'error');
-        }
-      }
-    } catch (error) {
-      console.error('Error deleting quotation:', error);
-      showNotification('Failed to delete quotation', 'error');
+    let savedQuotations;
+    if (quotationType === 'umrah') {
+      savedQuotations = JSON.parse(localStorage.getItem('savedQuotations')) || [];
+    } else {
+      savedQuotations = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
     }
+    
+    savedQuotations = savedQuotations.filter(q => q.id !== quotationId);
+    
+    if (quotationType === 'umrah') {
+      localStorage.setItem('savedQuotations', JSON.stringify(savedQuotations));
+    } else {
+      localStorage.setItem('savedQuotations_international', JSON.stringify(savedQuotations));
+    }
+    
+    loadAllQuotations();
+    showNotification('Quotation deleted successfully', 'success');
   }
 }
 
@@ -1013,30 +957,43 @@ document.getElementById('typeFilter').addEventListener('change', applyFilter);
 
 document.getElementById('btnLogout').addEventListener('click', function() {
   if (confirm('Are you sure you want to logout?')) {
-    signOut(auth).then(() => {
-      localStorage.removeItem("selectedQuotationId");
-      showNotification('Logged out successfully', 'success');
-      setTimeout(() => {
-        window.location.href = "login.html";
-      }, 1000);
-    });
+    if (window.auth.currentUser) {
+      window.signOut(window.auth);
+    }
+    localStorage.removeItem("loggedInAgent");
+    localStorage.removeItem("agentLoggedIn");
+    localStorage.removeItem("loginTime");
+    localStorage.removeItem("selectedQuotationId");
+    
+    showNotification('Logged out successfully', 'success');
+    
+    setTimeout(() => {
+      window.location.href = "login.html";
+    }, 1000);
   }
 });
 
+// Make functions global for inline onclick
+window.showQuotationTypeModal = showQuotationTypeModal;
+window.closeQuotationTypeModal = closeQuotationTypeModal;
+window.createUmrahQuotation = createUmrahQuotation;
+window.createInternationalQuotation = createInternationalQuotation;
+window.applyFilter = applyFilter;
+window.resetFilter = resetFilter;
+window.viewQuotation = viewQuotation;
+window.editQuotation = editQuotation;
+window.deleteQuotation = deleteQuotation;
 
-// Initialize dashboard with Firebase Auth session
-document.addEventListener('DOMContentLoaded', function() {
-  checkAgentLogin(() => {
-    loadAgentInfo();
-    loadAllQuotations();
-    if (sessionStorage.getItem('refreshDashboard')) {
-      sessionStorage.removeItem('refreshDashboard');
-      loadAllQuotations();
-    }
-  });
+// Initialize dashboard
+document.addEventListener('DOMContentLoaded', async function() {
+  loadAgentInfo();
+  await loadAllQuotations();
+  
+  if (sessionStorage.getItem('refreshDashboard')) {
+    sessionStorage.removeItem('refreshDashboard');
+    await loadAllQuotations();
+  }
 });
 </script>
 </body>
-
 </html>
-

@@ -4,6 +4,102 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Agent Login - Flight Connection</title>
+
+<!-- Firebase SDK -->
+<script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+  import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+
+  // Your web app's Firebase configuration
+  const firebaseConfig = {
+    apiKey: "AIzaSyDx3Qxt84vJlz_-mXuxiC0W2flaLadr9Ws",
+    authDomain: "fc-quotation-tool.firebaseapp.com",
+    projectId: "fc-quotation-tool",
+    storageBucket: "fc-quotation-tool.firebasestorage.app",
+    messagingSenderId: "370566945624",
+    appId: "1:370566945624:web:a84b20d5a8f99d20a6e32d"
+  };
+
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const auth = getAuth(app);
+
+  // Make db and auth global
+  window.db = db;
+  window.auth = auth;
+  window.signInWithEmailAndPassword = signInWithEmailAndPassword;
+  window.createUserWithEmailAndPassword = createUserWithEmailAndPassword;
+  window.signOut = signOut;
+  window.collection = collection;
+  window.doc = doc;
+  window.setDoc = setDoc;
+  window.getDoc = getDoc;
+  window.getDocs = getDocs;
+  window.updateDoc = updateDoc;
+  window.deleteDoc = deleteDoc;
+
+  // ========== Firebase Cloud Storage Utility Functions ==========
+  window.firebaseDB = {
+    // Save data to Firestore
+    async saveData(collection_name, docId, data) {
+      try {
+        await setDoc(doc(db, collection_name, docId), data, { merge: true });
+        return true;
+      } catch (error) {
+        console.error(`Error saving to ${collection_name}:`, error);
+        return false;
+      }
+    },
+
+    // Get data from Firestore
+    async getData(collection_name, docId) {
+      try {
+        const docSnap = await getDoc(doc(db, collection_name, docId));
+        return docSnap.exists() ? docSnap.data() : null;
+      } catch (error) {
+        console.error(`Error getting from ${collection_name}:`, error);
+        return null;
+      }
+    },
+
+    // Get all documents from a collection
+    async getAll(collection_name) {
+      try {
+        const snapshot = await getDocs(collection(db, collection_name));
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      } catch (error) {
+        console.error(`Error getting all from ${collection_name}:`, error);
+        return [];
+      }
+    },
+
+    // Delete data from Firestore
+    async deleteData(collection_name, docId) {
+      try {
+        await deleteDoc(doc(db, collection_name, docId));
+        return true;
+      } catch (error) {
+        console.error(`Error deleting from ${collection_name}:`, error);
+        return false;
+      }
+    },
+
+    // Update specific fields
+    async updateData(collection_name, docId, updates) {
+      try {
+        await updateDoc(doc(db, collection_name, docId), updates);
+        return true;
+      } catch (error) {
+        console.error(`Error updating ${collection_name}:`, error);
+        return false;
+      }
+    }
+  };
+</script>
+<!-- Firebase -->
 <style>
   :root{--accent:#0b76d1;--muted:#666;--success:#28a745;--warning:#f39c12;--danger:#e74c3c;--info:#17a2b8}
   body{font-family:Arial,Helvetica,sans-serif;background:#f3f6fb;margin:0;padding:0;display:flex;justify-content:center;align-items:center;min-height:100vh;color:#111}
@@ -42,16 +138,16 @@
   </div>
 
   <div class="tabs">
-    <div class="tab active" onclick="switchTab('login')">Login</div>
-    <div class="tab" onclick="switchTab('register')">Register</div>
+    <div class="tab active" onclick="switchTab('login', event)">Login</div>
+<div class="tab" onclick="switchTab('register', event)">Register</div>
   </div>
 
   <!-- Login Tab -->
   <div id="loginTab" class="tab-content active">
     <form id="loginForm" onsubmit="return false;">
       <div class="form-group">
-        <label for="agentId">Agent ID</label>
-        <input type="text" id="agentId" placeholder="e.g. atif@fc" required>
+        <label for="email">Email</label>
+        <input type="email" id="email" placeholder="e.g. atif@fc.com" required>
       </div>
       <div class="form-group">
         <label for="password">Password</label>
@@ -67,8 +163,8 @@
   <div id="registerTab" class="tab-content">
     <form id="registerForm" onsubmit="return false;">
       <div class="form-group">
-        <label for="regAgentId">Agent ID</label>
-        <input type="text" id="regAgentId" placeholder="e.g. newagent@fc" required>
+        <label for="regEmail">Email</label>
+        <input type="email" id="regEmail" placeholder="e.g. newagent@fc.com" required>
       </div>
       <div class="form-group">
         <label for="regName">Full Name</label>
@@ -97,138 +193,189 @@
   </div>
 </div>
 
-<script type="module">
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
-import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
-
-// Firebase config (same as in firebase.js)
-const firebaseConfig = {
-  apiKey: "AIzaSyDx3Qxt84vJlz_-mXuxiC0W2flaLadr9Ws",
-  authDomain: "fc-quotation-tool.firebaseapp.com",
-  projectId: "fc-quotation-tool",
-  storageBucket: "fc-quotation-tool.appspot.com",
-  messagingSenderId: "370566945624",
-  appId: "1:370566945624:web:a84b20d5a8f99d20a6e32d"
-};
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+<script>
+// Predefined agents
+const predefinedAgents = [
+  { email: "atif@fc.com", name: "Muhammad Atif", phone: "03002022713", password: "atif123" },
+  { email: "owais@fc.com", name: "Owais Shah", phone: "0300202992", password: "owais123" }
+];
 
 // Switch between tabs
-window.switchTab = function(tab) {
+function switchTab(tabName) {
+  // Update tab buttons
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   event.target.classList.add('active');
+  
+  // Update tab content
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-  document.getElementById(tab + 'Tab').classList.add('active');
+  document.getElementById(tabName + 'Tab').classList.add('active');
+  
+  // Clear messages
   document.getElementById('loginError').style.display = 'none';
   document.getElementById('loginSuccess').style.display = 'none';
   document.getElementById('registerError').style.display = 'none';
   document.getElementById('registerSuccess').style.display = 'none';
 }
 
+// Show message
 function showMessage(elementId, message, isError = false) {
   const element = document.getElementById(elementId);
   element.textContent = message;
   element.style.display = 'block';
+  
   if (isError) {
     element.className = 'error';
   } else {
     element.className = 'success';
   }
+  
+  // Hide after 5 seconds
   setTimeout(() => {
     element.style.display = 'none';
   }, 5000);
 }
 
-// Login form submission (Firebase Auth)
-document.getElementById('loginForm').addEventListener('submit', async function(e) {
+// Login form submission
+document.getElementById('loginForm').addEventListener('submit', function(e) {
   e.preventDefault();
-  const agentId = document.getElementById('agentId').value.trim();
+  
+  const email = document.getElementById('email').value.trim();
   const password = document.getElementById('password').value;
-  if (!agentId || !password) {
-    showMessage('loginError', 'Please enter Agent ID and password', true);
-    return;
-  }
-  // Use agentId as email for Firebase Auth
-  const email = agentId;
-  try {
-    await signInWithEmailAndPassword(auth, email, password);
+  
+  // Try Firebase Auth first
+  window.signInWithEmailAndPassword(window.auth, email, password)
+  .then((userCredential) => {
+    // Signed in
+    const user = userCredential.user;
     showMessage('loginSuccess', 'Login successful! Redirecting to dashboard...');
+    
+    // Redirect to dashboard after 2 seconds
     setTimeout(() => {
       window.location.href = 'dashboard.html';
     }, 2000);
-  } catch (error) {
-    showMessage('loginError', error.message, true);
-  }
+  })
+  .catch((error) => {
+    // Check predefined agents
+    let agent = predefinedAgents.find(a => a.email === email && a.password === password);
+    
+    if (agent) {
+      // Add uid and timestamp for Firebase
+      agent.uid = agent.email.replace('@', '_').replace('.', '_');
+      agent.id = agent.uid;
+      
+      // Store agent data to Firebase
+      window.firebaseDB.saveData('agents', agent.uid, {
+        ...agent,
+        loginTime: new Date().toISOString(),
+        updatedAt: new Date()
+      }).catch(err => console.error('Firebase save error:', err));
+      
+      // Also keep in localStorage for instant access
+      localStorage.setItem("loggedInAgent", JSON.stringify(agent));
+      localStorage.setItem("agentLoggedIn", "true");
+      localStorage.setItem("loginTime", new Date().toISOString());
+      
+      showMessage('loginSuccess', 'Login successful! Redirecting to dashboard...');
+      
+      // Redirect to dashboard after 2 seconds
+      setTimeout(() => {
+        window.location.href = 'dashboard.html';
+      }, 2000);
+    } else {
+      showMessage('loginError', 'Invalid email or password', true);
+    }
+  });
 });
 
-// Register form submission (Firebase Auth + Firestore)
-document.getElementById('registerForm').addEventListener('submit', async function(e) {
+// Register form submission
+document.getElementById('registerForm').addEventListener('submit', function(e) {
   e.preventDefault();
-  const agentId = document.getElementById('regAgentId').value.trim();
+  
+  const email = document.getElementById('regEmail').value.trim();
   const name = document.getElementById('regName').value.trim();
   const phone = document.getElementById('regPhone').value.trim();
   const password = document.getElementById('regPassword').value;
   const confirmPassword = document.getElementById('regConfirmPassword').value;
-  if (!agentId || !name || !phone || !password || !confirmPassword) {
+  
+  // Validation
+  if (!email || !name || !phone || !password || !confirmPassword) {
     showMessage('registerError', 'All fields are required', true);
     return;
   }
-  if (!agentId.includes("@fc")) {
-    showMessage('registerError', 'Agent ID must contain @fc at the end', true);
+  
+  if (!email.includes("@fc")) {
+    showMessage('registerError', 'Email must contain @fc at the end', true);
     return;
   }
+  
   if (password.length < 6) {
     showMessage('registerError', 'Password must be at least 6 characters long', true);
     return;
   }
+  
   if (password !== confirmPassword) {
     showMessage('registerError', 'Passwords do not match', true);
     return;
   }
+  
   if (!/^03\d{9}$/.test(phone)) {
     showMessage('registerError', 'Please enter a valid Pakistani phone number (e.g., 03001234567)', true);
     return;
   }
-  const email = agentId;
-  try {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    console.log('User created with UID:', userCredential.user.uid);
+  
+  // Create user with Firebase Auth
+  window.createUserWithEmailAndPassword(window.auth, email, password)
+  .then((userCredential) => {
+    // Signed in 
+    const user = userCredential.user;
     
-    try {
-      // Save profile in Firestore
-      const profileData = {
-        id: agentId,
-        name: name,
-        phone: phone,
-        registeredAt: new Date().toISOString()
-      };
-      console.log('Saving profile data:', profileData);
-      await setDoc(doc(db, "users", userCredential.user.uid), profileData);
-      console.log('Profile saved successfully');
-      showMessage('registerSuccess', 'Registration successful! You can now login.');
-      document.getElementById('registerForm').reset();
-      setTimeout(() => {
-        switchTab('login');
-      }, 2000);
-    } catch (profileError) {
-      console.error('Failed to save profile:', profileError);
-      // Delete the user account if profile save fails
-      await userCredential.user.delete();
-      throw new Error('Failed to save profile. Please try again.');
-    }
-  } catch (error) {
-    console.error('Registration error:', error);
+    // Add agent data to Firestore
+    window.setDoc(window.doc(window.db, 'agents', user.uid), {
+      email: email,
+      name: name,
+      phone: phone,
+      registeredAt: new Date().toISOString()
+    });
+    
+    showMessage('registerSuccess', 'Registration successful! You can now login.');
+    
+    // Clear form
+    document.getElementById('registerForm').reset();
+    
+    // Switch to login tab after 2 seconds
+    setTimeout(() => {
+      switchTab('login');
+    }, 2000);
+  })
+  .catch((error) => {
     showMessage('registerError', error.message, true);
-  }
+  });
 });
 
 // Check if user is already logged in
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
-onAuthStateChanged(auth, (user) => {
-  if (user) {
-    window.location.href = 'dashboard.html';
+document.addEventListener('DOMContentLoaded', function() {
+  // Check Firebase Auth
+  auth.onAuthStateChanged((user) => {
+    if (user) {
+      // Redirect to dashboard
+      window.location.href = 'dashboard.html';
+      return;
+    }
+  });
+  
+  // Check predefined login
+  const agent = JSON.parse(localStorage.getItem("loggedInAgent"));
+  if (agent) {
+    // Check if login is recent (within 24 hours)
+    const loginTime = localStorage.getItem("loginTime");
+    if (loginTime) {
+      const hoursSinceLogin = (new Date() - new Date(loginTime)) / (1000 * 60 * 60);
+      if (hoursSinceLogin < 24) {
+        // Redirect to dashboard
+        window.location.href = 'dashboard.html';
+        return;
+      }
+    }
   }
 });
 </script>
