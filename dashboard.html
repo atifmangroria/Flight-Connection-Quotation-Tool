@@ -485,6 +485,7 @@ function checkAgentLogin() {
 }
 
 // Helper function to save quotations to Firebase
+console.log('Saving quotations', agent, umrahQuotations, internationalQuotations);
 async function saveQuotationsToFirebase(agent, umrahQuotations, internationalQuotations) {
   try {
     if (!agent || !agent.id) return;
