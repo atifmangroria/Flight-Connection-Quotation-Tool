@@ -491,7 +491,7 @@ async function saveQuotationsToFirebase(agent, umrahQuotations, internationalQuo
     
     // Save Umrah quotations
     if (umrahQuotations && umrahQuotations.length > 0) {
-      const success = await window.firebaseDB.saveData('quotations/umrah', agent.id, { 
+      const success = await window.firebaseDB.saveData('umrah_quotations', agent.id, { 
         quotations: umrahQuotations, 
         updatedAt: new Date(),
         agentId: agent.id 
@@ -501,7 +501,7 @@ async function saveQuotationsToFirebase(agent, umrahQuotations, internationalQuo
     
     // Save International quotations
     if (internationalQuotations && internationalQuotations.length > 0) {
-      const success = await window.firebaseDB.saveData('quotations/international', agent.id, { 
+      const success = await window.firebaseDB.saveData('international_quotations', agent.id, { 
         quotations: internationalQuotations, 
         updatedAt: new Date(),
         agentId: agent.id 
@@ -519,8 +519,8 @@ async function loadQuotationsFromFirebase(agent) {
   try {
     if (!agent || !agent.id) return { umrah: [], international: [] };
     
-    const umrahData = await window.firebaseDB.getData('quotations/umrah', agent.id);
-    const internationalData = await window.firebaseDB.getData('quotations/international', agent.id);
+    const umrahData = await window.firebaseDB.getData('umrah_quotations', agent.id);
+    const internationalData = await window.firebaseDB.getData('international_quotations', agent.id);
     
     return {
       umrah: umrahData?.quotations || [],
