@@ -5604,6 +5604,16 @@ function saveQuotation() {
     // Save to localStorage
     localStorage.setItem('savedQuotations', JSON.stringify(allQuotations));
     
+    // Save to Firebase
+    const agent = getCurrentAgent();
+    if (agent && agent.id) {
+      window.firebaseDB.saveData('umrah_quotations', agent.id, { 
+        quotations: allQuotations, 
+        updatedAt: new Date(),
+        agentId: agent.id 
+      }).catch(err => console.error('Firebase save error:', err));
+    }
+    
     // Update the global variable
     savedQuotations = allQuotations;
     
@@ -6756,6 +6766,16 @@ function updateQuotationStatus(quotationId, newStatus) {
       
       // Save back to localStorage
       localStorage.setItem('savedQuotations_umrah', JSON.stringify(savedQuotations));
+      
+      // Save to Firebase
+      const agent = getCurrentAgent();
+      if (agent && agent.id) {
+        window.firebaseDB.saveData('umrah_quotations', agent.id, { 
+          quotations: savedQuotations, 
+          updatedAt: new Date(),
+          agentId: agent.id 
+        }).catch(err => console.error('Firebase update error:', err));
+      }
       
       // Trigger dashboard refresh
       sessionStorage.setItem('refreshDashboard_umrah', 'true');

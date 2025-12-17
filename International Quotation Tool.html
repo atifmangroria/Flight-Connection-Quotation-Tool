@@ -3223,7 +3223,7 @@ function updateQuotationStatus(quotationId, newStatus) {
       
       // Also save to Firebase
       const agent = getCurrentAgent();
-      if (agent && agent.uid) {
+      if (agent && agent.id) {
         window.firebaseDB.saveData('international_quotations', agent.id, { 
           quotations: savedQuotations, 
           updatedAt: new Date(),
@@ -4831,7 +4831,7 @@ const customSectionsData = {
     localStorage.setItem('savedQuotations_international', JSON.stringify(allQuotations));
     
     // Save to Firebase
-    if (agent && agent.uid) {
+    if (agent && agent.id) {
       window.firebaseDB.saveData('international_quotations', agent.id, { 
         quotations: allQuotations, 
         updatedAt: new Date(),

@@ -999,8 +999,10 @@ document.addEventListener('DOMContentLoaded', async function() {
   loadAgentInfo();
   await loadAllQuotations();
   
-  if (sessionStorage.getItem('refreshDashboard')) {
+  if (sessionStorage.getItem('refreshDashboard') || sessionStorage.getItem('refreshDashboard_umrah') || sessionStorage.getItem('refreshDashboard_international')) {
     sessionStorage.removeItem('refreshDashboard');
+    sessionStorage.removeItem('refreshDashboard_umrah');
+    sessionStorage.removeItem('refreshDashboard_international');
     await loadAllQuotations();
   }
 });
