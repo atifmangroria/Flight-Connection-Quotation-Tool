@@ -244,9 +244,20 @@ document.getElementById('loginForm').addEventListener('submit', function(e) {
   
   // Try Firebase Auth first
   window.signInWithEmailAndPassword(window.auth, email, password)
-  .then((userCredential) => {
+  .then(async (userCredential) => {
     // Signed in
     const user = userCredential.user;
+    
+    // Fetch agent data from Firestore
+    const agentDoc = await window.getDoc(window.doc(window.db, 'agents', user.uid));
+    if (agentDoc.exists()) {
+      const agent = agentDoc.data();
+      // Also keep in localStorage for instant access
+      localStorage.setItem("loggedInAgent", JSON.stringify(agent));
+      localStorage.setItem("agentLoggedIn", "true");
+      localStorage.setItem("loginTime", new Date().toISOString());
+    }
+    
     showMessage('loginSuccess', 'Login successful! Redirecting to dashboard...');
     
     // Redirect to dashboard after 2 seconds
@@ -337,14 +348,23 @@ document.getElementById('registerForm').addEventListener('submit', function(e) {
       registeredAt: new Date().toISOString()
     });
     
-    showMessage('registerSuccess', 'Registration successful! You can now login.');
+    // Set localStorage for instant access
+    const agent = {
+      uid: user.uid,
+      email: email,
+      name: name,
+      phone: phone,
+      id: user.uid
+    };
+    localStorage.setItem("loggedInAgent", JSON.stringify(agent));
+    localStorage.setItem("agentLoggedIn", "true");
+    localStorage.setItem("loginTime", new Date().toISOString());
     
-    // Clear form
-    document.getElementById('registerForm').reset();
+    showMessage('registerSuccess', 'Registration successful! Redirecting to dashboard...');
     
-    // Switch to login tab after 2 seconds
+    // Redirect to dashboard after 2 seconds
     setTimeout(() => {
-      switchTab('login');
+      window.location.href = 'dashboard.html';
     }, 2000);
   })
   .catch((error) => {
@@ -355,8 +375,16 @@ document.getElementById('registerForm').addEventListener('submit', function(e) {
 // Check if user is already logged in
 document.addEventListener('DOMContentLoaded', function() {
   // Check Firebase Auth
-  auth.onAuthStateChanged((user) => {
+  auth.onAuthStateChanged(async (user) => {
     if (user) {
+      // Fetch agent data and set localStorage
+      const agentDoc = await window.getDoc(window.doc(window.db, 'agents', user.uid));
+      if (agentDoc.exists()) {
+        const agent = agentDoc.data();
+        localStorage.setItem("loggedInAgent", JSON.stringify(agent));
+        localStorage.setItem("agentLoggedIn", "true");
+        localStorage.setItem("loginTime", new Date().toISOString());
+      }
       // Redirect to dashboard
       window.location.href = 'dashboard.html';
       return;
