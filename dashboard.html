@@ -36,10 +36,13 @@
     // Save data to Firestore
     async saveData(collection_name, docId, data) {
       try {
+        console.log('Attempting to save to Firebase:', collection_name, docId, data);  // Added logging
         await setDoc(doc(db, collection_name, docId), data, { merge: true });
+        console.log('Successfully saved to Firebase:', collection_name, docId);  // Added logging
         return true;
       } catch (error) {
-        console.error(`Error saving to ${collection_name}:`, error);
+        console.error(`Error saving to ${collection_name}:`, error);  // Existing, but ensure it's visible
+        showNotification(`Failed to save to Firebase: ${error.message}`, 'error');  // Added user notification
         return false;
       }
     },
@@ -47,10 +50,14 @@
     // Get data from Firestore
     async getData(collection_name, docId) {
       try {
+        console.log('Attempting to get from Firebase:', collection_name, docId);  // Added logging
         const docSnap = await getDoc(doc(db, collection_name, docId));
-        return docSnap.exists() ? docSnap.data() : null;
+        const result = docSnap.exists() ? docSnap.data() : null;
+        console.log('Successfully retrieved from Firebase:', collection_name, docId, result);  // Added logging
+        return result;
       } catch (error) {
-        console.error(`Error getting from ${collection_name}:`, error);
+        console.error(`Error getting from ${collection_name}:`, error);  // Existing
+        showNotification(`Failed to load from Firebase: ${error.message}`, 'error');  // Added user notification
         return null;
       }
     },
@@ -58,10 +65,14 @@
     // Get all documents from a collection
     async getAll(collection_name) {
       try {
+        console.log('Attempting to get all from Firebase:', collection_name);  // Added logging
         const snapshot = await getDocs(collection(db, collection_name));
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const result = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        console.log('Successfully retrieved all from Firebase:', collection_name, result);  // Added logging
+        return result;
       } catch (error) {
-        console.error(`Error getting all from ${collection_name}:`, error);
+        console.error(`Error getting all from ${collection_name}:`, error);  // Existing
+        showNotification(`Failed to load all from Firebase: ${error.message}`, 'error');  // Added user notification
         return [];
       }
     },
@@ -69,10 +80,13 @@
     // Delete data from Firestore
     async deleteData(collection_name, docId) {
       try {
+        console.log('Attempting to delete from Firebase:', collection_name, docId);  // Added logging
         await deleteDoc(doc(db, collection_name, docId));
+        console.log('Successfully deleted from Firebase:', collection_name, docId);  // Added logging
         return true;
       } catch (error) {
-        console.error(`Error deleting from ${collection_name}:`, error);
+        console.error(`Error deleting from ${collection_name}:`, error);  // Existing
+        showNotification(`Failed to delete from Firebase: ${error.message}`, 'error');  // Added user notification
         return false;
       }
     },
@@ -80,10 +94,13 @@
     // Update specific fields
     async updateData(collection_name, docId, updates) {
       try {
+        console.log('Attempting to update in Firebase:', collection_name, docId, updates);  // Added logging
         await updateDoc(doc(db, collection_name, docId), updates);
+        console.log('Successfully updated in Firebase:', collection_name, docId);  // Added logging
         return true;
       } catch (error) {
-        console.error(`Error updating ${collection_name}:`, error);
+        console.error(`Error updating ${collection_name}:`, error);  // Existing
+        showNotification(`Failed to update in Firebase: ${error.message}`, 'error');  // Added user notification
         return false;
       }
     }
@@ -474,23 +491,26 @@ async function saveQuotationsToFirebase(agent, umrahQuotations, internationalQuo
     
     // Save Umrah quotations
     if (umrahQuotations && umrahQuotations.length > 0) {
-      await window.firebaseDB.saveData('quotations/umrah', agent.id, { 
+      const success = await window.firebaseDB.saveData('quotations/umrah', agent.id, { 
         quotations: umrahQuotations, 
         updatedAt: new Date(),
         agentId: agent.id 
       });
+      if (!success) throw new Error('Failed to save Umrah quotations to Firebase');
     }
     
     // Save International quotations
     if (internationalQuotations && internationalQuotations.length > 0) {
-      await window.firebaseDB.saveData('quotations/international', agent.id, { 
+      const success = await window.firebaseDB.saveData('quotations/international', agent.id, { 
         quotations: internationalQuotations, 
         updatedAt: new Date(),
         agentId: agent.id 
       });
+      if (!success) throw new Error('Failed to save International quotations to Firebase');
     }
   } catch (error) {
     console.error('Error saving quotations to Firebase:', error);
+    showNotification('Failed to save quotations to Firebase. Please check your connection and try again.', 'error');
   }
 }
 
@@ -508,6 +528,7 @@ async function loadQuotationsFromFirebase(agent) {
     };
   } catch (error) {
     console.error('Error loading quotations from Firebase:', error);
+    showNotification('Failed to load quotations from Firebase. Please check your connection.', 'error');
     return { umrah: [], international: [] };
   }
 }
@@ -585,51 +606,40 @@ async function loadAllQuotations() {
   const agent = checkAgentLogin();
   if (!agent) return;
   
-  // Try to load from Firebase first
+  // Load only from Firebase (no localStorage fallback)
   const firebaseData = await loadQuotationsFromFirebase(agent);
   
-  // Fall back to localStorage if Firebase is empty
-  let savedUmrahQuotations = firebaseData.umrah.length > 0 ? firebaseData.umrah : JSON.parse(localStorage.getItem('savedQuotations')) || [];
-  let savedInternationalQuotations = firebaseData.international.length > 0 ? firebaseData.international : JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
-  
-  allUmrahQuotations = savedUmrahQuotations.filter(q => {
+  allUmrahQuotations = firebaseData.umrah.filter(q => {
     return q.agentData && q.agentData.id === agent.id;
   }).map(q => ({...q, type: 'umrah'}));
   
-  allInternationalQuotations = savedInternationalQuotations.filter(q => {
+  allInternationalQuotations = firebaseData.international.filter(q => {
     return q.agentData && q.agentData.id === agent.id;
   }).map(q => ({...q, type: 'international'}));
   
-  // Auto-mark expired quotations
+  // Auto-mark expired quotations and save back to Firebase
   const now = new Date();
+  let updatedUmrah = false;
+  let updatedInternational = false;
+  
   allUmrahQuotations.forEach(q => {
     if (new Date(q.expiresAt) < now && q.status !== 'booked' && q.status !== 'cancelled') {
       q.status = 'expired';
-      // Update in localStorage and Firebase
-      const saved = JSON.parse(localStorage.getItem('savedQuotations')) || [];
-      const index = saved.findIndex(sq => sq.id === q.id);
-      if (index !== -1) {
-        saved[index].status = 'expired';
-        localStorage.setItem('savedQuotations', JSON.stringify(saved));
-        // Also save to Firebase
-        saveQuotationsToFirebase(agent, saved, savedInternationalQuotations).catch(err => console.error('Firebase update error:', err));
-      }
+      updatedUmrah = true;
     }
   });
+  
   allInternationalQuotations.forEach(q => {
     if (new Date(q.expiresAt) < now && q.status !== 'booked' && q.status !== 'cancelled') {
       q.status = 'expired';
-      // Update in localStorage and Firebase
-      const saved = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
-      const index = saved.findIndex(sq => sq.id === q.id);
-      if (index !== -1) {
-        saved[index].status = 'expired';
-        localStorage.setItem('savedQuotations_international', JSON.stringify(saved));
-        // Also save to Firebase
-        saveQuotationsToFirebase(agent, savedUmrahQuotations, saved).catch(err => console.error('Firebase update error:', err));
-      }
+      updatedInternational = true;
     }
   });
+  
+  // Save updates to Firebase if any changes
+  if (updatedUmrah || updatedInternational) {
+    await saveQuotationsToFirebase(agent, allUmrahQuotations, allInternationalQuotations);
+  }
   
   applyFilter();
 }
@@ -875,27 +885,25 @@ function renderPagination(totalPages) {
 }
 
 // Update status from table
-function updateStatusFromTable(quotationId, quotationType, newStatus) {
-  let savedQuotations;
-  if (quotationType === 'umrah') {
-    savedQuotations = JSON.parse(localStorage.getItem('savedQuotations')) || [];
-  } else {
-    savedQuotations = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
-  }
+async function updateStatusFromTable(quotationId, quotationType, newStatus) {
+  const agent = checkAgentLogin();
+  if (!agent) return;
   
-  const quotationIndex = savedQuotations.findIndex(q => q.id === quotationId);
+  // Load current data from Firebase
+  const firebaseData = await loadQuotationsFromFirebase(agent);
+  let quotations = quotationType === 'umrah' ? firebaseData.umrah : firebaseData.international;
+  
+  const quotationIndex = quotations.findIndex(q => q.id === quotationId);
   if (quotationIndex !== -1) {
-    savedQuotations[quotationIndex].status = newStatus;
-    savedQuotations[quotationIndex].updatedAt = new Date().toISOString();
+    quotations[quotationIndex].status = newStatus;
+    quotations[quotationIndex].updatedAt = new Date().toISOString();
     
-    if (quotationType === 'umrah') {
-      localStorage.setItem('savedQuotations', JSON.stringify(savedQuotations));
-    } else {
-      localStorage.setItem('savedQuotations_international', JSON.stringify(savedQuotations));
+    // Save updated data to Firebase
+    const success = await saveQuotationsToFirebase(agent, quotationType === 'umrah' ? quotations : firebaseData.umrah, quotationType === 'international' ? quotations : firebaseData.international);
+    if (success) {
+      await loadAllQuotations(); // Reload to reflect changes
+      showNotification('Status updated successfully', 'success');
     }
-    
-    loadAllQuotations();
-    showNotification('Status updated successfully', 'success');
   }
 }
 
@@ -919,24 +927,22 @@ function editQuotation(quotationId, quotationType) {
   }
 }
 
-function deleteQuotation(quotationId, quotationType) {
-  if (confirm('Are you sure you want to delete this quotation?')) {
-    let savedQuotations;
-    if (quotationType === 'umrah') {
-      savedQuotations = JSON.parse(localStorage.getItem('savedQuotations')) || [];
-    } else {
-      savedQuotations = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
-    }
-    
-    savedQuotations = savedQuotations.filter(q => q.id !== quotationId);
-    
-    if (quotationType === 'umrah') {
-      localStorage.setItem('savedQuotations', JSON.stringify(savedQuotations));
-    } else {
-      localStorage.setItem('savedQuotations_international', JSON.stringify(savedQuotations));
-    }
-    
-    loadAllQuotations();
+async function deleteQuotation(quotationId, quotationType) {
+  if (!confirm('Are you sure you want to delete this quotation?')) return;
+  
+  const agent = checkAgentLogin();
+  if (!agent) return;
+  
+  // Load current data from Firebase
+  const firebaseData = await loadQuotationsFromFirebase(agent);
+  let quotations = quotationType === 'umrah' ? firebaseData.umrah : firebaseData.international;
+  
+  quotations = quotations.filter(q => q.id !== quotationId);
+  
+  // Save updated data to Firebase
+  const success = await saveQuotationsToFirebase(agent, quotationType === 'umrah' ? quotations : firebaseData.umrah, quotationType === 'international' ? quotations : firebaseData.international);
+  if (success) {
+    await loadAllQuotations(); // Reload to reflect changes
     showNotification('Quotation deleted successfully', 'success');
   }
 }

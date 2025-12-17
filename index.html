@@ -3821,12 +3821,12 @@ function printQuotation() {
             h1, h2, h3 { 
               color: #0b76d1 !important;
               padding: 0px 0 !important;
-              margin: 0px 0 10px 0 !important;
+              margin: 15px 0 10px 0 !important;
               display: block !important;
               font-size: 16px !important;
               page-break-after: avoid !important;
               page-break-inside: avoid !important;
-              page-break-before: avoid !important;
+              page-break-before: auto !important;
             }
             
             /* Tables - keep exactly as original */
@@ -3835,9 +3835,9 @@ function printQuotation() {
               border-collapse: collapse;
               margin: 10px 0 15px 0;
               border: 0.5px solid #ddd !important;
-              page-break-inside: avoid !important;
-              page-break-before: avoid !important;
-              page-break-after: avoid !important;
+              page-break-inside: auto !important;
+              page-break-before: auto !important;
+              page-break-after: auto !important;
             }
             
             th, td { 
@@ -3845,6 +3845,7 @@ function printQuotation() {
               padding: 6px 8px;
               text-align: left;
               font-size: 11px;
+              page-break-inside: avoid !important;
             }
             
             th { 
@@ -3855,21 +3856,22 @@ function printQuotation() {
             
             p {
               margin: 5px 0;
+              page-break-inside: avoid !important;
+              orphans: 2;
+              widows: 2;
             }
             
             /* Sections - NO blue background or borders */
             div[style*="border: 1px solid #eee"],
             div[style*="border: 1px solid #ddd"] {
-              margin: 0px 0 15px 0 !important;
+              margin: 10px 0 15px 0 !important;
               padding: 10px !important;
               border: none !important;
               border-radius: 0px !important;
               background: white !important;
-              page-break-inside: auto !important;
-              page-break-after: auto !important;
+              page-break-inside: avoid !important;
               page-break-before: auto !important;
-              display: block !important;
-              position: relative !important;
+              page-break-after: auto !important;
             }
             
             /* Keep green sections */
@@ -3900,6 +3902,7 @@ function printQuotation() {
               background: #e3f2fd !important;
               color: #0b76d1 !important;
               font-weight: bold !important;
+              page-break-inside: avoid !important;
             }
             
             /* Remove blue from package total section */
@@ -3913,6 +3916,24 @@ function printQuotation() {
               max-width: 100% !important;
               height: auto !important;
               page-break-inside: avoid !important;
+              page-break-before: auto !important;
+              page-break-after: auto !important;
+            }
+            
+            /* Specific page break controls for important sections */
+            .section-header {
+              page-break-after: avoid !important;
+              page-break-inside: avoid !important;
+            }
+            
+            .section-content {
+              page-break-inside: avoid !important;
+            }
+            
+            .table-container {
+              page-break-inside: avoid !important;
+              page-break-before: auto !important;
+              page-break-after: auto !important;
             }
             
             /* Print settings */
@@ -3943,19 +3964,69 @@ function printQuotation() {
                 print-color-adjust: exact !important;
               }
               
-              /* Prevent breaks */
-              .section, table, h1, h2, h3, h4, img {
+              /* Page break controls for different elements */
+              h1, h2, h3, h4 {
+                page-break-after: avoid !important;
+                page-break-inside: avoid !important;
+                page-break-before: auto !important;
+              }
+              
+              table {
+                page-break-inside: auto !important;
+                page-break-before: auto !important;
+                page-break-after: auto !important;
+              }
+              
+              tr {
+                page-break-inside: avoid !important;
+                page-break-after: auto !important;
+              }
+              
+              td, th {
                 page-break-inside: avoid !important;
               }
               
-              /* Additional print-specific break prevention */
               div {
                 page-break-inside: auto !important;
               }
               
-              /* Ensure no orphans */
               p, li {
                 page-break-inside: avoid !important;
+                orphans: 2;
+                widows: 2;
+              }
+              
+              img {
+                page-break-inside: avoid !important;
+                page-break-before: auto !important;
+                page-break-after: auto !important;
+              }
+              
+              /* Specific section controls */
+              .section, .section-entry {
+                page-break-inside: avoid !important;
+                page-break-before: auto !important;
+                page-break-after: auto !important;
+              }
+              
+              /* Prevent breaks inside important content */
+              .client-info, .travel-info, .package-price, .service-details {
+                page-break-inside: avoid !important;
+              }
+              
+              /* Table specific controls */
+              .cost-table {
+                page-break-inside: auto !important;
+              }
+              
+              .cost-table thead {
+                page-break-inside: avoid !important;
+                page-break-after: auto !important;
+              }
+              
+              .cost-table tfoot {
+                page-break-inside: avoid !important;
+                page-break-before: auto !important;
               }
             }
           </style>
