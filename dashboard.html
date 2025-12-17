@@ -606,6 +606,8 @@ async function loadAllQuotations() {
   const agent = checkAgentLogin();
   if (!agent) return;
   
+  console.log('Agent ID:', agent.id);
+  
   // Load only from Firebase (no localStorage fallback)
   const firebaseData = await loadQuotationsFromFirebase(agent);
   console.log('Loaded firebaseData:', firebaseData);
@@ -712,6 +714,8 @@ function applyFilter() {
   
   // Sort by creation date (newest first)
   filteredAllQuotations.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  
+  console.log('filteredAllQuotations:', filteredAllQuotations);
   
   updateStatistics();
   currentPage = 1;
