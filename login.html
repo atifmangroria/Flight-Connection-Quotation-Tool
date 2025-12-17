@@ -252,6 +252,8 @@ document.getElementById('loginForm').addEventListener('submit', function(e) {
     const agentDoc = await window.getDoc(window.doc(window.db, 'agents', user.uid));
     if (agentDoc.exists()) {
       const agent = agentDoc.data();
+      agent.id = user.uid;  // Ensure id is set
+      agent.uid = user.uid;  // Ensure uid is set
       // Also keep in localStorage for instant access
       localStorage.setItem("loggedInAgent", JSON.stringify(agent));
       localStorage.setItem("agentLoggedIn", "true");
@@ -381,6 +383,8 @@ document.addEventListener('DOMContentLoaded', function() {
       const agentDoc = await window.getDoc(window.doc(window.db, 'agents', user.uid));
       if (agentDoc.exists()) {
         const agent = agentDoc.data();
+        agent.id = user.uid;
+        agent.uid = user.uid;
         localStorage.setItem("loggedInAgent", JSON.stringify(agent));
         localStorage.setItem("agentLoggedIn", "true");
         localStorage.setItem("loginTime", new Date().toISOString());
