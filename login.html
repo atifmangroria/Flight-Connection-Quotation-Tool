@@ -250,15 +250,25 @@ document.getElementById('loginForm').addEventListener('submit', function(e) {
     
     // Fetch agent data from Firestore
     const agentDoc = await window.getDoc(window.doc(window.db, 'agents', user.uid));
+    let agent;
     if (agentDoc.exists()) {
-      const agent = agentDoc.data();
-      agent.id = user.uid;  // Ensure id is set
-      agent.uid = user.uid;  // Ensure uid is set
-      // Also keep in localStorage for instant access
-      localStorage.setItem("loggedInAgent", JSON.stringify(agent));
-      localStorage.setItem("agentLoggedIn", "true");
-      localStorage.setItem("loginTime", new Date().toISOString());
+      agent = agentDoc.data();
+    } else {
+      // Create agent doc if it doesn't exist (for existing Firebase users)
+      agent = {
+        email: user.email,
+        name: user.displayName || user.email.split('@')[0],  // Fallback name
+        phone: '',  // Can be updated later
+        registeredAt: new Date().toISOString()
+      };
+      await window.setDoc(window.doc(window.db, 'agents', user.uid), agent);
     }
+    agent.id = user.uid;  // Ensure id is set
+    agent.uid = user.uid;  // Ensure uid is set
+    // Also keep in localStorage for instant access
+    localStorage.setItem("loggedInAgent", JSON.stringify(agent));
+    localStorage.setItem("agentLoggedIn", "true");
+    localStorage.setItem("loginTime", new Date().toISOString());
     
     showMessage('loginSuccess', 'Login successful! Redirecting to dashboard...');
     
@@ -381,14 +391,24 @@ document.addEventListener('DOMContentLoaded', function() {
     if (user) {
       // Fetch agent data and set localStorage
       const agentDoc = await window.getDoc(window.doc(window.db, 'agents', user.uid));
+      let agent;
       if (agentDoc.exists()) {
-        const agent = agentDoc.data();
-        agent.id = user.uid;
-        agent.uid = user.uid;
-        localStorage.setItem("loggedInAgent", JSON.stringify(agent));
-        localStorage.setItem("agentLoggedIn", "true");
-        localStorage.setItem("loginTime", new Date().toISOString());
+        agent = agentDoc.data();
+      } else {
+        // Create agent doc if it doesn't exist
+        agent = {
+          email: user.email,
+          name: user.displayName || user.email.split('@')[0],
+          phone: '',
+          registeredAt: new Date().toISOString()
+        };
+        await window.setDoc(window.doc(window.db, 'agents', user.uid), agent);
       }
+      agent.id = user.uid;
+      agent.uid = user.uid;
+      localStorage.setItem("loggedInAgent", JSON.stringify(agent));
+      localStorage.setItem("agentLoggedIn", "true");
+      localStorage.setItem("loginTime", new Date().toISOString());
       // Redirect to dashboard
       window.location.href = 'dashboard.html';
       return;
