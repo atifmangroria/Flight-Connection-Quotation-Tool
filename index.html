@@ -6746,7 +6746,7 @@ saveBtn.addEventListener('click', (e) => {
 function updateQuotationStatus(quotationId, newStatus) {
   try {
     // Get all quotations
-    let savedQuotations = JSON.parse(localStorage.getItem('savedQuotations_umrah')) || [];
+    let savedQuotations = JSON.parse(localStorage.getItem('savedQuotations')) || [];
     
     // Find and update the quotation
     const quotationIndex = savedQuotations.findIndex(q => q.id === quotationId);
@@ -6755,7 +6755,7 @@ function updateQuotationStatus(quotationId, newStatus) {
       savedQuotations[quotationIndex].updatedAt = new Date().toISOString();
       
       // Save back to localStorage
-      localStorage.setItem('savedQuotations_umrah', JSON.stringify(savedQuotations));
+      localStorage.setItem('savedQuotations', JSON.stringify(savedQuotations));
       
       // Save to Firebase
       const agent = getCurrentAgent();
