@@ -791,31 +791,15 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus, 
     
     // --- SIMPLE AUTHENTICATION CHECK ---
 function checkAuthentication() {
-  let agent = null;
-  const user = auth.currentUser;
-  if (user) {
-    // Get agent data from Firestore
-    return db.collection('agents').doc(user.uid).get().then(doc => {
-      if (doc.exists) {
-        agent = { uid: user.uid, ...doc.data() };
-        return agent;
-      } else {
-        showNotification("Agent data not found", "error");
-        return null;
-      }
-    });
-  } else {
-    // Check localStorage for predefined
-    agent = JSON.parse(localStorage.getItem("loggedInAgent"));
-    if (!agent) {
-      showNotification("Please login to access the quotation tool", "error");
-      setTimeout(() => {
-        window.location.href = 'dashboard.html';
-      }, 2000);
-      return null;
-    }
-    return agent;
+  const agent = JSON.parse(localStorage.getItem("loggedInAgent"));
+  if (!agent) {
+    showNotification("Please login to access the quotation tool", "error");
+    setTimeout(() => {
+      window.location.href = 'dashboard.html';
+    }, 2000);
+    return null;
   }
+  return agent;
 }
 
 // Add these missing helper functions
@@ -909,28 +893,24 @@ document.getElementById('btnDashboard').addEventListener('click', () => {
 
 // --- INITIALIZATION ---
 document.addEventListener('DOMContentLoaded', function() {
-  checkAuthentication().then(agent => {
-    if (agent) {
-      // Ensure localStorage has agent
-      localStorage.setItem("loggedInAgent", JSON.stringify(agent));
-      updateAgentUI();
-      
-      // Load quotations from Firebase
-      window.firebaseDB.getData('umrah_quotations', agent.id).then(firebaseData => {
-        if (firebaseData && firebaseData.quotations) {
-          localStorage.setItem('savedQuotations', JSON.stringify(firebaseData.quotations));
-          savedQuotations = firebaseData.quotations;
-        }
-      }).catch(err => console.error('Load error:', err));
-      
-      // Clear any old quotation IDs to prevent errors
-      localStorage.removeItem('selectedQuotationId');
-      localStorage.removeItem('umrahSelectedQuotationId');
-      
-      // Show status section
-      showStatusSection();
-    }
-  });
+  const agent = checkAuthentication();
+  if (agent) {
+    updateAgentUI();
+    // Load quotations from Firebase
+    window.firebaseDB.getData('umrah_quotations', agent.id).then(firebaseData => {
+      if (firebaseData && firebaseData.quotations) {
+        localStorage.setItem('savedQuotations', JSON.stringify(firebaseData.quotations));
+        savedQuotations = firebaseData.quotations;
+      }
+    }).catch(err => console.error('Load error:', err));
+    
+    // Clear any old quotation IDs to prevent errors
+    localStorage.removeItem('selectedQuotationId');
+    localStorage.removeItem('umrahSelectedQuotationId');
+    
+    // Show status section
+    showStatusSection();
+  }
 });
 
   </script>
