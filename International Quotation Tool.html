@@ -924,7 +924,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <script>
   let isClientDataSaved = false;
-  let savedQuotations = [];
+  let savedQuotations = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
   let currentQuotationId = null;
   let lastSavedPax = {};
   let lastSavedDates = {};

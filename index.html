@@ -1049,7 +1049,7 @@ document.addEventListener('DOMContentLoaded', function() {
   let lastSavedDates = {};
   let lastSavedClientInfo = {};
   let currentQuotationId = null;
-  let savedQuotations = [];
+  let savedQuotations = JSON.parse(localStorage.getItem('savedQuotations')) || [];
 
   // Format date to DD/MM/YYYY
   function formatDateToDMY(dateStr) {
