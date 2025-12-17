@@ -909,18 +909,28 @@ document.getElementById('btnDashboard').addEventListener('click', () => {
 
 // --- INITIALIZATION ---
 document.addEventListener('DOMContentLoaded', function() {
-  // Check authentication on page load
-  const agent = checkAuthentication();
-  if (agent) {
-    updateAgentUI();
-    
-    // Clear any old quotation IDs to prevent errors
-    localStorage.removeItem('selectedQuotationId');
-    localStorage.removeItem('umrahSelectedQuotationId');
-    
-    // Show status section
-    showStatusSection();
-  }
+  checkAuthentication().then(agent => {
+    if (agent) {
+      // Ensure localStorage has agent
+      localStorage.setItem("loggedInAgent", JSON.stringify(agent));
+      updateAgentUI();
+      
+      // Load quotations from Firebase
+      window.firebaseDB.getData('umrah_quotations', agent.id).then(firebaseData => {
+        if (firebaseData && firebaseData.quotations) {
+          localStorage.setItem('savedQuotations', JSON.stringify(firebaseData.quotations));
+          savedQuotations = firebaseData.quotations;
+        }
+      }).catch(err => console.error('Load error:', err));
+      
+      // Clear any old quotation IDs to prevent errors
+      localStorage.removeItem('selectedQuotationId');
+      localStorage.removeItem('umrahSelectedQuotationId');
+      
+      // Show status section
+      showStatusSection();
+    }
+  });
 });
 
   </script>
@@ -1039,7 +1049,7 @@ document.addEventListener('DOMContentLoaded', function() {
   let lastSavedDates = {};
   let lastSavedClientInfo = {};
   let currentQuotationId = null;
-  let savedQuotations = JSON.parse(localStorage.getItem('savedQuotations')) || [];
+  let savedQuotations = [];
 
   // Format date to DD/MM/YYYY
   function formatDateToDMY(dateStr) {

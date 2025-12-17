@@ -815,7 +815,13 @@ document.addEventListener('DOMContentLoaded', function() {
   const agent = checkAuthentication();
   if (agent) {
     updateAgentUI();
-    // Continue with your existing initialization code
+    // Load quotations from Firebase
+    window.firebaseDB.getData('international_quotations', agent.id).then(firebaseData => {
+      if (firebaseData && firebaseData.quotations) {
+        localStorage.setItem('savedQuotations_international', JSON.stringify(firebaseData.quotations));
+        savedQuotations = firebaseData.quotations;
+      }
+    }).catch(err => console.error('Load error:', err));
   }
 });
 
@@ -918,7 +924,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <script>
   let isClientDataSaved = false;
-  let savedQuotations = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
+  let savedQuotations = [];
   let currentQuotationId = null;
   let lastSavedPax = {};
   let lastSavedDates = {};
