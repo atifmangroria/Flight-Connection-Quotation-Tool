@@ -101,11 +101,6 @@
   window.updateDoc = updateDoc;
 </script>
 
-<!-- Firebase -->
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-
 <style>
   :root{--accent:#0b76d1;--muted:#666;--success-bg:#d4edda;--success-text:#155724;--error-bg:#f8d7da;--error-text:#721c24}
   body{font-family:Arial,Helvetica,sans-serif;background:#f3f6fb;margin:10px;color:#111}
@@ -793,11 +788,17 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus, 
 function checkAuthentication() {
   const agent = JSON.parse(localStorage.getItem("loggedInAgent"));
   if (!agent) {
-    showNotification("Please login to access the quotation tool", "error");
-    setTimeout(() => {
-      window.location.href = 'dashboard.html';
-    }, 2000);
-    return null;
+    // Use default agent for demo
+    const defaultAgent = {
+      id: 'demo',
+      uid: 'demo',
+      name: 'Demo Agent',
+      email: 'demo@fc.com',
+      phone: '03000000000'
+    };
+    localStorage.setItem("loggedInAgent", JSON.stringify(defaultAgent));
+    updateAgentUI();
+    return defaultAgent;
   }
   return agent;
 }
@@ -5372,10 +5373,16 @@ function saveQuotation() {
     const dateTo = document.getElementById("dateTo")?.value || "No Date";
     
     // Get current agent
-    const agent = getCurrentAgent();
+    let agent = getCurrentAgent();
     if (!agent) {
-      showNotification("Please login to save quotations.", "error");
-      return;
+      // Use default agent for demo
+      agent = {
+        id: 'demo',
+        uid: 'demo',
+        name: 'Demo Agent',
+        email: 'demo@fc.com',
+        phone: '03000000000'
+      };
     }
     
     // Calculate expiry date (7 days from creation)
@@ -5595,7 +5602,6 @@ function saveQuotation() {
     localStorage.setItem('savedQuotations', JSON.stringify(allQuotations));
     
     // Save to Firebase
-    const agent = getCurrentAgent();
     if (agent && agent.id) {
       window.firebaseDB.saveData('umrah_quotations', agent.id, { 
         quotations: allQuotations, 
