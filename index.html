@@ -5249,11 +5249,21 @@ document.getElementById('btnSaveQuotation').addEventListener('click', () => {
 });
 
 document.getElementById('btnLoadQuotation').addEventListener('click', () => {
+  // Get current agent
+  const currentAgent = getCurrentAgent();
+  if (!currentAgent) {
+    showAlert("Please login to load quotations.");
+    return;
+  }
+  
   // Get all quotations
   const allSavedQuotations = JSON.parse(localStorage.getItem('savedQuotations')) || [];
   
-  if (allSavedQuotations.length === 0) {
-    showAlert("No saved quotations found.");
+  // Filter quotations for current agent only
+  const userQuotations = allSavedQuotations.filter(q => q.agentData && q.agentData.id === currentAgent.id);
+  
+  if (userQuotations.length === 0) {
+    showAlert("No saved quotations found for your account.");
     return;
   }
 
@@ -5283,7 +5293,7 @@ document.getElementById('btnLoadQuotation').addEventListener('click', () => {
         <tbody>
   `;
   
-  allSavedQuotations.forEach(quotation => {
+  userQuotations.forEach(quotation => {
     const statusColor = {
       'pending': '#ffc107',
       'followup': '#17a2b8',
