@@ -128,7 +128,7 @@
   .stat-value{font-size:28px;font-weight:bold;margin:5px 0}
   .stat-label{font-size:14px;color:var(--muted)}
   .filters-section{display:flex;gap:10px;align-items:center;margin-bottom:20px;flex-wrap:wrap;background:#f8f9fa;padding:15px;border-radius:8px}
-  .filters-section input, .filters-section select{padding:8px;border:1px solid #ddd;border-radius:4px}
+  .filters-section input, .filters-section select{padding:8px;border:1px solid #ddd;border-radius:4px;font-size:16px}
   .filters-section button{background:var(--accent);color:white;border:none;padding:8px 15px;border-radius:4px;cursor:pointer}
   .filters-section button:hover{background:#085ea3}
   .quotation-table{width:100%;border-collapse:collapse;margin-top:15px}
@@ -146,7 +146,15 @@
   .umrah-badge{background:#007bff;color:white}
   .international-badge{background:#28a745;color:white}
   @media print{.no-print{display:none}}
-  @media (max-width:768px){.stats-grid{grid-template-columns:1fr}.filters-section{flex-direction:column;align-items:stretch}}
+  @media (max-width:768px){
+    body { margin: 5px; }
+    .wrap { padding: 10px; }
+    .stats-grid{grid-template-columns:1fr}
+    .filters-section{flex-direction:column;align-items:stretch}
+    .quotation-table { font-size: 12px; overflow-x: auto; display: block; }
+    .quotation-table th, .quotation-table td { padding: 6px; }
+    button { min-height: 44px; }
+  }
   .btn-primary {
   background: linear-gradient(135deg, #0b76d1, #085ea3);
   color: white;
@@ -487,10 +495,10 @@ function checkAgentLogin() {
 // Helper function to save quotations to Firebase
 async function saveQuotationsToFirebase(agent, umrahQuotations, internationalQuotations) {
   try {
-    if (!agent || !agent.id) return;
+    if (!agent || !agent.id) return false;
     
     // Save Umrah quotations
-    if (umrahQuotations && umrahQuotations.length > 0) {
+    if (umrahQuotations) {
       const success = await window.firebaseDB.saveData('umrah_quotations', agent.id, { 
         quotations: umrahQuotations, 
         updatedAt: new Date(),
@@ -500,7 +508,7 @@ async function saveQuotationsToFirebase(agent, umrahQuotations, internationalQuo
     }
     
     // Save International quotations
-    if (internationalQuotations && internationalQuotations.length > 0) {
+    if (internationalQuotations) {
       const success = await window.firebaseDB.saveData('international_quotations', agent.id, { 
         quotations: internationalQuotations, 
         updatedAt: new Date(),
@@ -508,9 +516,12 @@ async function saveQuotationsToFirebase(agent, umrahQuotations, internationalQuo
       });
       if (!success) throw new Error('Failed to save International quotations to Firebase');
     }
+    
+    return true;
   } catch (error) {
     console.error('Error saving quotations to Firebase:', error);
     showNotification('Failed to save quotations to Firebase. Please check your connection and try again.', 'error');
+    return false;
   }
 }
 
