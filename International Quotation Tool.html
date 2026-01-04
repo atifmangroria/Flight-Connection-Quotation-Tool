@@ -109,7 +109,7 @@
   label{display:block;font-size:13px;color:#222;margin-top:8px}
   input,select,textarea,button{font-family:inherit}
 input[type="text"], input[type="number"], input[type="date"], input[type="password"], select, textarea{
-  width:100%;padding:10px 12px;border:1px solid #d6dbe2;border-radius:6px;font-size:14px;background:#fff;
+  width:100%;padding:10px 12px;border:1px solid #d6dbe2;border-radius:6px;font-size:16px;background:#fff;
   box-sizing:border-box;transition:border-color 0.3s ease, box-shadow 0.3s ease;
 }
 input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus, input[type="password"]:focus, select:focus, textarea:focus{
@@ -523,7 +523,19 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus, 
     display: none;
   }
 
-  @media (max-width:768px){ .grid{grid-template-columns:1fr} }
+  @media (max-width:768px){ 
+    body { margin: 5px; }
+    .wrap { padding: 10px; }
+    .grid{grid-template-columns:1fr} 
+    .modal-content { width: 95%; max-height: 90vh; padding: 15px; }
+    .actions { flex-direction: column; }
+    button { width: 100%; margin-bottom: 8px; min-height: 44px; }
+    .inline-input { flex-direction: column; align-items: stretch; }
+    .inline-input label { margin-bottom: 5px; }
+    table { font-size: 12px; overflow-x: auto; display: block; }
+    th, td { padding: 6px; }
+    .saved-list { max-height: 150px; }
+  }
   @media print{ .no-print{display:none} }
 
   /* Rich Text Editor Styles */
@@ -1671,6 +1683,7 @@ async function createHotelSection(index){
       </div>
       <div><label>Total Nights</label><input id="hotelNights_${index}" type="number" value="0" min="0" readonly></div>
       <div><label>Room Type</label><select id="hotelRoomType_${index}">${roomOptions}</select></div>
+      <div><label>Room Name (Optional)</label><input id="hotelRoomName_${index}" type="text" placeholder="e.g. Deluxe Suite"></div>
       <div><label>Rooms count</label><input id="hotelRooms_${index}" type="number" value="1" min="1"></div>
       <div><label>Service Type</label><select id="hotelService_${index}"><option>Room Only</option><option>With Breakfast</option><option>Half Board</option><option>Full Board</option></select></div>
       <div><label>Cost per night</label><input id="hotelCostNight_${index}" type="number" value="0" min="0"></div>
@@ -1867,11 +1880,23 @@ function validateTransfer(index){
   const date = document.getElementById(`tDate_${index}`);
   const from = document.getElementById(`tFrom_${index}`);
   const to = document.getElementById(`tTo_${index}`);
+  const direction = document.getElementById(`tDirection_${index}`);
+  const returnDate = document.getElementById(`tReturnDate_${index}`);
   let valid = true;
 
   if(!date.value.trim()){ date.classList.add("input-error"); valid=false; } else { date.classList.remove("input-error"); }
   if(!from.value.trim()){ from.classList.add("input-error"); valid=false; } else { from.classList.remove("input-error"); }
   if(!to.value.trim()){ to.classList.add("input-error"); valid=false; } else { to.classList.remove("input-error"); }
+  
+  // Validate return date if transfer type is Return
+  if (direction && direction.value === "Return") {
+    if (!returnDate || !returnDate.value.trim()) {
+      if (returnDate) returnDate.classList.add("input-error");
+      valid = false;
+    } else {
+      if (returnDate) returnDate.classList.remove("input-error");
+    }
+  }
   
   return valid;
 }
@@ -1945,6 +1970,10 @@ async function addTransfer(){
           <option>Return</option>
         </select>
       </div>
+      <div id="returnDateDiv_${nextTransferNumber}" style="display:none;">
+        <label>Return Date</label>
+        <input id="tReturnDate_${nextTransferNumber}" type="date">
+      </div>
       <div>
         <label>Cost</label>
         <input id="tCost_${nextTransferNumber}" type="number" placeholder="Cost">
@@ -1982,6 +2011,31 @@ async function addTransfer(){
     dateInput.setAttribute('min', formatDate(clientData.dateFromObj));
     dateInput.setAttribute('max', formatDate(clientData.dateToObj));
   }
+
+  // Toggle return date field based on transfer type
+  const directionSelect = div.querySelector(`#tDirection_${nextTransferNumber}`);
+  const returnDateDiv = div.querySelector(`#returnDateDiv_${nextTransferNumber}`);
+  const returnDateInput = div.querySelector(`#tReturnDate_${nextTransferNumber}`);
+
+  if (directionSelect && returnDateDiv && returnDateInput) {
+    directionSelect.addEventListener("change", () => {
+      if (directionSelect.value === "Return") {
+        returnDateDiv.style.display = "block";
+        returnDateInput.setAttribute('min', formatDate(clientData.dateFromObj));
+        returnDateInput.setAttribute('max', formatDate(clientData.dateToObj));
+      } else {
+        returnDateDiv.style.display = "none";
+        returnDateInput.value = "";
+      }
+    });
+
+    // Also validate return date if shown
+    returnDateInput.addEventListener("change", () => {
+      if (returnDateDiv.style.display !== "none") {
+        checkDateRange(returnDateInput, clientData);
+      }
+    });
+  }
 }
 
 // Remove transfer
@@ -1996,6 +2050,137 @@ function removeTransfer(index){
 
 // Event listener
 document.getElementById("btnAddTrans").addEventListener("click", addTransfer);
+</script>
+
+<!-- TOURS & ACTIVITIES -->
+<div class="section" id="toursWrapper">
+  <div class="transfer-header">
+    <h3>Tours & Activities</h3>
+    <button type="button" id="btnAddTour" class="add-btn">+ Add Tour</button>
+  </div>
+  <div id="toursContainer"></div>
+</div>
+
+<script>
+let nextTourNumber = 0;
+let mainTours = [];
+
+// Function to get available cities from hotels
+function getAvailableCities() {
+  const cities = new Set();
+  document.querySelectorAll("[id^='hotelBlock_']").forEach((el) => {
+    const idx = el.id.split("_")[1];
+    const city = document.getElementById(`hotelCity_${idx}`)?.value?.trim();
+    if (city) cities.add(city);
+  });
+  return Array.from(cities);
+}
+
+// Add new tour
+async function addTour(){
+  if(!isClientDataSaved) {
+    await showAlert("Please save the Client & Pax data before adding tours.");
+    return;
+  }
+  
+  const clientData = getClientData();
+  if(!clientData || !isValidDate(clientData.dateFromObj) || !isValidDate(clientData.dateToObj)){
+    await showAlert("Please save valid From/To dates in Client & Pax first.");
+    return;
+  }
+  
+  nextTourNumber++;
+  mainTours.push(nextTourNumber);
+
+  const container = document.getElementById("toursContainer");
+  const div = document.createElement("div");
+  div.className = "section";
+  div.style.marginTop = "10px";
+  div.id = "tourBlock_" + nextTourNumber;
+
+  // Get available cities from hotels
+  const availableCities = getAvailableCities();
+  const cityOptions = availableCities.length > 0 
+    ? availableCities.map(city => `<option value="${city}">${city}</option>`).join('')
+    : '<option value="">No hotels added yet</option>';
+
+  div.innerHTML = `
+    <h4>
+      Tour ${nextTourNumber}
+      <button type="button" onclick="removeTour(${nextTourNumber})" class="remove-btn">❌ Remove</button>
+    </h4>
+    <div class="grid">
+      <div>
+        <label>Tour Date</label>
+        <input id="tourDate_${nextTourNumber}" type="date" 
+               min="${clientData.dateFrom}" 
+               max="${clientData.dateTo}">
+      </div>
+      <div>
+        <label>Tour Name</label>
+        <input id="tourName_${nextTourNumber}" type="text" placeholder="e.g. City Tour, Desert Safari">
+      </div>
+      <div>
+        <label>City</label>
+        <select id="tourCity_${nextTourNumber}">
+          ${cityOptions}
+        </select>
+      </div>
+      <div>
+        <label>Tour Duration</label>
+        <select id="tourDuration_${nextTourNumber}">
+          <option value="half-day">Half Day</option>
+          <option value="full-day">Full Day</option>
+        </select>
+      </div>
+      <div>
+        <label>Tour Mode</label>
+        <select id="tourMode_${nextTourNumber}">
+          <option value="private">Private</option>
+          <option value="sharing">Sharing</option>
+        </select>
+      </div>
+      <div>
+        <label>Vehicle Type</label>
+        <select id="tourVehicle_${nextTourNumber}">
+          <option>Sedan</option>
+          <option>SUV</option>
+          <option>Van</option>
+          <option>Bus</option>
+          <option>Jeep</option>
+        </select>
+      </div>
+      <div>
+        <label>Cost per Person</label>
+        <input id="tourCost_${nextTourNumber}" type="number" value="0" min="0">
+      </div>
+      <div>
+        <label>Currency</label>
+        <select id="tourCurrency_${nextTourNumber}">
+          <option value="USD">USD</option>
+          <option value="EUR">EUR</option>
+          <option value="GBP">GBP</option>
+          <option value="PKR">PKR</option>
+        </select>
+      </div>
+      <div>
+        <label>Service Fee per Person</label>
+        <input id="tourSvc_${nextTourNumber}" type="number" value="0" min="0">
+      </div>
+    </div>
+  `;
+
+  container.appendChild(div);
+}
+
+function removeTour(index) {
+  const block = document.getElementById("tourBlock_" + index);
+  if(block) block.remove();
+  mainTours = mainTours.filter(t => t !== index);
+}
+
+// Event listener
+document.getElementById("btnAddTour").addEventListener("click", addTour);
 </script>
 
 <!-- VISA -->
@@ -2149,8 +2334,8 @@ document.getElementById("btnAddVisa").addEventListener("click", addVisa);
       <span class="panel-icon">+</span> Tours & Activities
     </div>
     <div id="toursPanel" class="addon-panel" style="display:none;">
-      <div id="toursContainer"></div>
-      <button type="button" class="add-btn blue-btn" onclick="addTour()">+ Add Tour</button>
+      <div id="addonToursContainer"></div>
+      <button type="button" class="add-btn blue-btn" onclick="addTourAddon()">+ Add Tour</button>
     </div>
   </div>
 </div>
@@ -2355,63 +2540,95 @@ async function addMealTypeAddon(){
 let tourIndex = 0;
 let tours = [];
 
-async function addTour(){
+async function addTourAddon(){
   if(!isClientDataSaved) {
     await showAlert("Please save the Client & Pax data before adding tours.");
+    return;
+  }
+  
+  const clientData = getClientData();
+  if(!clientData || !isValidDate(clientData.dateFromObj) || !isValidDate(clientData.dateToObj)){
+    await showAlert("Please save valid From/To dates in Client & Pax first.");
     return;
   }
   
   tourIndex++;
   tours.push(tourIndex);
   
-  const container = document.getElementById("toursContainer");
+  const container = document.getElementById("addonToursContainer");
   const div = document.createElement("div");
-  div.className = "section-entry";
+  div.className = "section";
+  div.style.marginTop = "10px";
   div.id = "tourAddon_" + tourIndex;
-  
+
+  // Get available cities from hotels
+  const availableCities = getAvailableCities();
+  const cityOptions = availableCities.length > 0 
+    ? availableCities.map(city => `<option value="${city}">${city}</option>`).join('')
+    : '<option value="">No hotels added yet</option>';
+
   div.innerHTML = `
     <h4>
       Tour ${tourIndex}
-      <button type="button" onclick="removeTour(${tourIndex})" class="remove-btn">❌ Remove</button>
+      <button type="button" onclick="removeTourAddon(${tourIndex})" class="remove-btn">❌ Remove</button>
     </h4>
-    <div>
-      <label>Tour Name</label>
-      <input type="text" placeholder="e.g. Dubai City Tour, Singapore Safari">
-      
-      <label>City</label>
-      <select id="tourCity_${tourIndex}">
-        <option value="dubai">Dubai</option>
-        <option value="singapore">Singapore</option>
-        <option value="istanbul">Istanbul</option>
-        <option value="kuala-lumpur">Kuala Lumpur</option>
-        <option value="bangkok">Bangkok</option>
-        <option value="other">Other</option>
-      </select>
-      
-      <label>Tour Type</label>
-      <select id="tourType_${tourIndex}">
-        <option value="half-day">Half Day</option>
-        <option value="full-day">Full Day</option>
-        <option value="multi-day">Multi Day</option>
-      </select>
-      
-      <div class="inline-input">
-        <label>Adult Cost</label><input type="number" value="0">
-        <label>Adult Service</label><input type="number" value="0">
+    <div class="grid">
+      <div>
+        <label>Tour Date</label>
+        <input id="tourAddonDate_${tourIndex}" type="date" 
+               min="${clientData.dateFrom}" 
+               max="${clientData.dateTo}">
       </div>
-      
-      <div class="inline-input">
-        <label>Child (with bed) Cost</label><input type="number" value="0">
-        <label>Child (with bed) Service</label><input type="number" value="0">
+      <div>
+        <label>Tour Name</label>
+        <input id="tourAddonName_${tourIndex}" type="text" placeholder="e.g. City Tour, Desert Safari">
       </div>
-      
-      <div class="inline-input">
-        <label>Child (no bed) Cost</label><input type="number" value="0">
-        <label>Child (no bed) Service</label><input type="number" value="0">
+      <div>
+        <label>City</label>
+        <select id="tourAddonCity_${tourIndex}">
+          ${cityOptions}
+        </select>
       </div>
-      
-      <div class="inline-input">
-        <label>Currency</label><select id="tourCurrency_${tourIndex}"><option value="USD">USD</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="PKR">PKR</option></select>
+      <div>
+        <label>Tour Duration</label>
+        <select id="tourAddonDuration_${tourIndex}">
+          <option value="half-day">Half Day</option>
+          <option value="full-day">Full Day</option>
+        </select>
+      </div>
+      <div>
+        <label>Tour Mode</label>
+        <select id="tourAddonMode_${tourIndex}">
+          <option value="private">Private</option>
+          <option value="sharing">Sharing</option>
+        </select>
+      </div>
+      <div>
+        <label>Vehicle Type</label>
+        <select id="tourAddonVehicle_${tourIndex}">
+          <option>Sedan</option>
+          <option>SUV</option>
+          <option>Van</option>
+          <option>Bus</option>
+          <option>Jeep</option>
+        </select>
+      </div>
+      <div>
+        <label>Cost per Person</label>
+        <input id="tourAddonCost_${tourIndex}" type="number" value="0" min="0">
+      </div>
+      <div>
+        <label>Currency</label>
+        <select id="tourAddonCurrency_${tourIndex}">
+          <option value="USD">USD</option>
+          <option value="EUR">EUR</option>
+          <option value="GBP">GBP</option>
+          <option value="PKR">PKR</option>
+        </select>
+      </div>
+      <div>
+        <label>Service Fee per Person</label>
+        <input id="tourAddonSvc_${tourIndex}" type="number" value="0" min="0">
       </div>
     </div>
   `;
@@ -2419,7 +2636,7 @@ async function addTour(){
   container.appendChild(div);
 }
 
-function removeTour(index) {
+function removeTourAddon(index) {
   const block = document.getElementById("tourAddon_" + index);
   if(block) block.remove();
   tours = tours.filter(t => t !== index);
@@ -2605,6 +2822,7 @@ function performCalculation() {
   const hasFlights = document.querySelectorAll("[id^='flightBlock_']").length > 0;
   const hasHotels = document.querySelectorAll("[id^='hotelBlock_']").length > 0;
   const hasTransfers = document.querySelectorAll("[id^='transferBlock_']").length > 0;
+  const hasTours = document.querySelectorAll("[id^='tourBlock_']").length > 0;
   const visaCost = parseFloat(document.getElementById("visaCost")?.value || 0);
   const hasExtras = document.querySelectorAll("[id^='dfAddon_']").length > 0 ||
     document.querySelectorAll("[id^='mealAddon_']").length > 0 ||
@@ -2620,7 +2838,7 @@ function performCalculation() {
       showNotification("⚠️ Please add Pax details before calculation!", "warning");
       return;
     }
-    if (!(hasFlights || hasHotels || hasTransfers || hasExtras || visaCost > 0)) {
+    if (!(hasFlights || hasHotels || hasTransfers || hasTours || hasExtras || visaCost > 0)) {
       showNotification("⚠️ Please add at least one service before calculating!", "warning");
       return;
     }
@@ -2795,6 +3013,49 @@ function performCalculation() {
 
     if (costOrig + svcOrig > 0) {
       addDetailedRow(`Transfer ${idx}`, `${from} to ${to}`, details, currency, costOrig, svcOrig, perPersonText, false);
+    }
+  });
+
+  // --- TOURS & ACTIVITIES ---
+  document.querySelectorAll("[id^='tourBlock_']").forEach((el) => {
+    const idx = el.id.split("_")[1];
+    const name = document.getElementById(`tourName_${idx}`)?.value || "Not specified";
+    const city = document.getElementById(`tourCity_${idx}`)?.value || "Not specified";
+    const date = document.getElementById(`tourDate_${idx}`)?.value || "Not specified";
+    const duration = document.getElementById(`tourDuration_${idx}`)?.value || "Not specified";
+    const mode = document.getElementById(`tourMode_${idx}`)?.value || "Not specified";
+    const vehicle = document.getElementById(`tourVehicle_${idx}`)?.value || "Not specified";
+    const currency = document.getElementById(`tourCurrency_${idx}`)?.value || "USD";
+    
+    // Get costs in ORIGINAL currency
+    const costOrig = parseFloat(document.getElementById(`tourCost_${idx}`)?.value || 0);
+    const svcOrig = parseFloat(document.getElementById(`tourSvc_${idx}`)?.value || 0);
+    
+    const payingPax = paxData.adults + paxData.childBed + paxData.childNoBed + paxData.infants;
+    const perPersonCost = payingPax > 0 ? convertToPKR(costOrig + svcOrig, currency) / payingPax : 0;
+    
+    const perAdult = paxData.adults > 0 ? perPersonCost : 0;
+    const perChildBed = paxData.childBed > 0 ? perPersonCost : 0;
+    const perChildNoBed = paxData.childNoBed > 0 ? perPersonCost : 0;
+    const perInfant = paxData.infants > 0 ? perPersonCost : 0;
+    
+    const details = `Date: ${formatDateToDMY(date)}<br>
+                    City: ${city}<br>
+                    Duration: ${duration}<br>
+                    Mode: ${mode}<br>
+                    Vehicle: ${vehicle}<br>
+                    Rate: ${currency} ${fmt(costOrig)} per person<br>
+                    Charged to: All passengers (${payingPax})`;
+
+    let perPersonText = [];
+    if (paxData.adults > 0) perPersonText.push(`Adult x${paxData.adults}: PKR ${fmt(perAdult)}`);
+    if (paxData.childBed > 0) perPersonText.push(`Child (with bed) x${paxData.childBed}: PKR ${fmt(perChildBed)}`);
+    if (paxData.childNoBed > 0) perPersonText.push(`Child (no bed) x${paxData.childNoBed}: PKR ${fmt(perChildNoBed)}`);
+    if (paxData.infants > 0) perPersonText.push(`Infant x${paxData.infants}: PKR ${fmt(perInfant)}`);
+    perPersonText = perPersonText.join(', ');
+
+    if (costOrig + svcOrig > 0) {
+      addDetailedRow(`Tour ${idx}`, name, details, currency, costOrig * payingPax, svcOrig * payingPax, perPersonText, false);
     }
   });
 
@@ -2999,45 +3260,45 @@ function performCalculation() {
   // --- TOUR ADD-ONS ---
   document.querySelectorAll("[id^='tourAddon_']").forEach((el, i) => {
     const idx = i + 1;
-    const inputs = el.querySelectorAll(".inline-input input[type='number']");
-    
-    const tourName = el.querySelector("input[type='text']")?.value || 'Not specified';
-    const currency = el.querySelector("select[id^='tourCurrency']")?.value || "USD";
+    const tourName = document.getElementById(`tourAddonName_${idx}`)?.value || 'Not specified';
+    const tourCity = document.getElementById(`tourAddonCity_${idx}`)?.value || 'Not specified';
+    const tourDate = document.getElementById(`tourAddonDate_${idx}`)?.value || '';
+    const tourDuration = document.getElementById(`tourAddonDuration_${idx}`)?.value || 'Not specified';
+    const tourMode = document.getElementById(`tourAddonMode_${idx}`)?.value || 'Not specified';
+    const tourVehicle = document.getElementById(`tourAddonVehicle_${idx}`)?.value || 'Not specified';
+    const currency = document.getElementById(`tourAddonCurrency_${idx}`)?.value || "USD";
     
     // Get costs in ORIGINAL currency
-    const adultCost = parseFloat(inputs[0]?.value || 0);
-    const adultSvc = parseFloat(inputs[1]?.value || 0);
-    const childBedCost = parseFloat(inputs[2]?.value || 0);
-    const childBedSvc = parseFloat(inputs[3]?.value || 0);
-    const childNoBedCost = parseFloat(inputs[4]?.value || 0);
-    const childNoBedSvc = parseFloat(inputs[5]?.value || 0);
+    const costOrig = parseFloat(document.getElementById(`tourAddonCost_${idx}`)?.value || 0);
+    const svcOrig = parseFloat(document.getElementById(`tourAddonSvc_${idx}`)?.value || 0);
     
-    const totalCostOrig = (adultCost * paxData.adults) + 
-                         (childBedCost * paxData.childBed) + 
-                         (childNoBedCost * paxData.childNoBed);
-    const totalSvcOrig = (adultSvc * paxData.adults) + 
-                        (childBedSvc * paxData.childBed) + 
-                        (childNoBedSvc * paxData.childNoBed);
-    
-    const payingPax = paxData.adults + paxData.childBed + paxData.childNoBed;
-    const perPersonCost = payingPax > 0 ? convertToPKR((adultCost + adultSvc), currency) : 0;
+    const payingPax = paxData.adults + paxData.childBed + paxData.childNoBed + paxData.infants;
+    const perPersonCost = payingPax > 0 ? convertToPKR(costOrig + svcOrig, currency) / payingPax : 0;
     
     const perAdult = paxData.adults > 0 ? perPersonCost : 0;
     const perChildBed = paxData.childBed > 0 ? perPersonCost : 0;
     const perChildNoBed = paxData.childNoBed > 0 ? perPersonCost : 0;
+    const perInfant = paxData.infants > 0 ? perPersonCost : 0;
     
-    if (totalCostOrig + totalSvcOrig > 0) {
-      const details = `${tourName}<br>
-                      Cost: ${currency} ${fmt(totalCostOrig)}<br>
-                      Service: ${currency} ${fmt(totalSvcOrig)}<br>
-                      Charged to: Adults (${paxData.adults}) + Children with bed (${paxData.childBed}) + Children without bed (${paxData.childNoBed})`;
-      
-      let perPersonText = [];
-      if (paxData.adults > 0) perPersonText.push(`Adult x${paxData.adults}: PKR ${fmt(perAdult)}`);
-      if (paxData.childBed > 0) perPersonText.push(`Child (with bed) x${paxData.childBed}: PKR ${fmt(perChildBed)}`);
-      if (paxData.childNoBed > 0) perPersonText.push(`Child (no bed) x${paxData.childNoBed}: PKR ${fmt(perChildNoBed)}`);
-      perPersonText = perPersonText.join(', ');
-      
+    const totalCostOrig = costOrig * payingPax;
+    const totalSvcOrig = svcOrig * payingPax;
+    
+    const details = `Date: ${formatDateToDMY(tourDate)}<br>
+                    City: ${tourCity}<br>
+                    Duration: ${tourDuration}<br>
+                    Mode: ${tourMode}<br>
+                    Vehicle: ${tourVehicle}<br>
+                    Rate: ${currency} ${fmt(costOrig)} per person<br>
+                    Charged to: All passengers (${payingPax})`;
+    
+    let perPersonText = [];
+    if (paxData.adults > 0) perPersonText.push(`Adult x${paxData.adults}: PKR ${fmt(perAdult)}`);
+    if (paxData.childBed > 0) perPersonText.push(`Child (with bed) x${paxData.childBed}: PKR ${fmt(perChildBed)}`);
+    if (paxData.childNoBed > 0) perPersonText.push(`Child (no bed) x${paxData.childNoBed}: PKR ${fmt(perChildNoBed)}`);
+    if (paxData.infants > 0) perPersonText.push(`Infant x${paxData.infants}: PKR ${fmt(perInfant)}`);
+    perPersonText = perPersonText.join(', ');
+    
+    if (costOrig + svcOrig > 0) {
       addDetailedRow(`Add-on - Tour ${idx}`, tourName, details, currency, totalCostOrig, totalSvcOrig, perPersonText, true);
     }
   });
@@ -3174,6 +3435,26 @@ function calculatePerPersonCosts(packageCostPKR, packageServicePKR, paxData) {
       if (numAdult > 0) perAdultCost += perPersonCost;
       if (numChildBed > 0) perChildBedCost += perPersonCost;
       if (numChildNoBed > 0) perChildNoBedCost += perPersonCost;
+    }
+  });
+  
+  // Calculate Tour costs per person
+  const tourPayingPax = numAdult + numChildBed + numChildNoBed + numInfant;
+  
+  document.querySelectorAll("[id^='tourBlock_']").forEach((el) => {
+    const idx = el.id.split("_")[1];
+    const cost = parseFloat(document.getElementById(`tourCost_${idx}`)?.value || 0);
+    const svc = parseFloat(document.getElementById(`tourSvc_${idx}`)?.value || 0);
+    const currency = document.getElementById(`tourCurrency_${idx}`)?.value || "USD";
+    const totalTourCost = convertToPKR(cost + svc, currency);
+    
+    if (tourPayingPax > 0) {
+      const perPersonCost = totalTourCost / tourPayingPax;
+      
+      if (numAdult > 0) perAdultCost += perPersonCost;
+      if (numChildBed > 0) perChildBedCost += perPersonCost;
+      if (numChildNoBed > 0) perChildNoBedCost += perPersonCost;
+      if (numInfant > 0) perInfantCost += perPersonCost;
     }
   });
   
@@ -3654,12 +3935,12 @@ function printQuotation() {
   const numInfant = paxData.infants || 0;
   const totalPax = numAdult + numChildBed + numChildNoBed + numInfant;
   
-  // Simple per person calculation (divide total by number of passengers)
-  const perPersonCost = totalPax > 0 ? finalTotalSellPKR / totalPax : 0;
-  const perAdultCost = numAdult > 0 ? perPersonCost : 0;
-  const perChildBedCost = numChildBed > 0 ? perPersonCost : 0;
-  const perChildNoBedCost = numChildNoBed > 0 ? perPersonCost : 0;
-  const perInfantCost = numInfant > 0 ? perPersonCost : 0;
+  // Calculate per person costs using the same logic as package calculation
+  const perPersonCosts = calculatePerPersonCosts(totalCostPKR, totalServicePKR, paxData);
+  const perAdultCost = perPersonCosts.perAdult;
+  const perChildBedCost = perPersonCosts.perChildBed;
+  const perChildNoBedCost = perPersonCosts.perChildNoBed;
+  const perInfantCost = perPersonCosts.perInfant;
 
   // Build the HTML for the quotation preview
   let quotationHTML = `
@@ -3773,6 +4054,11 @@ function printQuotation() {
           <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Room Type</td>
           <td style="border: 1px solid #ddd; padding: 8px;">${hotel.roomType}</td>
         </tr>
+        ${hotel.roomName ? `
+        <tr>
+          <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Room Name</td>
+          <td style="border: 1px solid #ddd; padding: 8px;">${hotel.roomName}</td>
+        </tr>` : ''}
         <tr>
           <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Service Type</td>
           <td style="border: 1px solid #ddd; padding: 8px;">${hotel.serviceType}</td>
@@ -3812,6 +4098,42 @@ function printQuotation() {
     <div style="border: 1px solid #ddd; padding: 15px; border-radius: 5px; text-align: left; font-family: Arial, Helvetica, sans-serif; font-size: 13px; line-height: 1.6;">
       ${getTransferDetails()}
     </div>
+  </div>` : ''}
+  
+  <!-- Tours & Activities Details - Only show if main tours are included -->
+  ${document.querySelectorAll("[id^='tourBlock_']").length > 0 ? `
+  <div style="margin-bottom: 20px;">
+    <h4 style="color: #0b76d1; margin-bottom: 15px;">Tours & Activities</h4>
+    
+    <!-- Main Tours -->
+    ${document.querySelectorAll("[id^='tourBlock_']").length > 0 ? 
+      getTourDetails().map((tour, index) => `
+      <div style="margin-bottom: 15px; border: 1px solid #ddd; padding: 15px; border-radius: 5px;">
+        <h5 style="color: #0b76d1; margin-bottom: 8px; margin-top: 0;">${tour.city} Tour</h5>
+        <table style="width:100%; border-collapse: collapse;">
+          <tr>
+            <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold; width: 150px;">Tour Name</td>
+            <td style="border: 1px solid #ddd; padding: 8px;">${tour.name}</td>
+          </tr>
+          <tr>
+            <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Tour Date</td>
+            <td style="border: 1px solid #ddd; padding: 8px;">${formatDateToDMY(tour.date)}</td>
+          </tr>
+          <tr>
+            <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Duration</td>
+            <td style="border: 1px solid #ddd; padding: 8px;">${tour.duration}</td>
+          </tr>
+          <tr>
+            <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Mode</td>
+            <td style="border: 1px solid #ddd; padding: 8px;">${tour.mode}</td>
+          </tr>
+          <tr>
+            <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Vehicle Type</td>
+            <td style="border: 1px solid #ddd; padding: 8px;">${tour.vehicle}</td>
+          </tr>
+        </table>
+      </div>
+      `).join('') : ''}
   </div>` : ''}
 </div>
   
@@ -3986,6 +4308,50 @@ quotationHTML += `
 `;
 }
   
+  // Add tour details
+  document.querySelectorAll("[id^='tourBlock_']").forEach((el) => {
+    const idx = el.id.split("_")[1];
+    const tourName = document.getElementById(`tourName_${idx}`)?.value || "Not specified";
+    const tourCity = document.getElementById(`tourCity_${idx}`)?.value || "Not specified";
+    const tourDate = document.getElementById(`tourDate_${idx}`)?.value || "";
+    const tourDuration = document.getElementById(`tourDuration_${idx}`)?.value || "Not specified";
+    const tourMode = document.getElementById(`tourMode_${idx}`)?.value || "Not specified";
+    const tourVehicle = document.getElementById(`tourVehicle_${idx}`)?.value || "Not specified";
+    const currency = document.getElementById(`tourCurrency_${idx}`)?.value || "USD";
+    
+    const costPerPerson = parseFloat(document.getElementById(`tourCost_${idx}`)?.value || 0);
+    const svcPerPerson = parseFloat(document.getElementById(`tourSvc_${idx}`)?.value || 0);
+    
+    // Calculate per person costs
+    const perAdultCost = convertToPKR(costPerPerson + svcPerPerson, currency);
+    const perChildBedCost = convertToPKR(costPerPerson + svcPerPerson, currency);
+    const perChildNoBedCost = convertToPKR(costPerPerson + svcPerPerson, currency);
+    const perInfantCost = convertToPKR(costPerPerson + svcPerPerson, currency); // All passengers pay for tours
+    
+    // Calculate total costs
+    const totalAdult = perAdultCost * numAdult;
+    const totalChildBed = perChildBedCost * numChildBed;
+    const totalChildNoBed = perChildNoBedCost * numChildNoBed;
+    const totalInfant = perInfantCost * numInfant;
+    const totalTour = totalAdult + totalChildBed + totalChildNoBed + totalInfant;
+    
+    quotationHTML += `
+  <tr style="background-color: #f0f8ff;">
+    <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 500;">🏛️ Tour ${idx}</td>
+    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">
+      <div style="font-weight: 500;">${sanitizeInput(tourName)}</div>
+      <div style="font-size: 12px; color: #666;">${tourCity} • ${tourDuration} • ${tourMode}</div>
+      ${tourDate ? `<div style="font-size: 12px; color: #666;">Date: ${formatDateToDMY(tourDate)}</div>` : ''}
+    </td>
+    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numAdult > 0 ? `<div style="font-size: 12px; color: #666;">Adult x${numAdult}</div><div style="font-weight: 600;">PKR ${fmt(perAdultCost)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
+    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numChildBed > 0 ? `<div style="font-size: 12px; color: #666;">Child (bed) x${numChildBed}</div><div style="font-weight: 600;">PKR ${fmt(perChildBedCost)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
+    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numChildNoBed > 0 ? `<div style="font-size: 12px; color: #666;">Child (no bed) x${numChildNoBed}</div><div style="font-weight: 600;">PKR ${fmt(perChildNoBedCost)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
+    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numInfant > 0 ? `<div style="font-size: 12px; color: #666;">Infant x${numInfant}</div><div style="font-weight: 600;">PKR ${fmt(perInfantCost)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
+    <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 600; color: #0b76d1;">PKR ${fmt(totalTour)}</td>
+  </tr>
+`;
+  });
+  
   quotationHTML += `
         </tbody>
       </table>
@@ -4090,29 +4456,26 @@ if (hasAddons) {
     document.querySelectorAll("[id^='tourAddon_']").forEach((el, i) => {
       const idx = i + 1;
       const name = "Tour";
-      const tourName = el.querySelector("input[type='text']")?.value || 'Not specified';
-      const inputs = el.querySelectorAll(".inline-input input[type='number']");
+      const tourName = document.getElementById(`tourAddonName_${idx}`)?.value || 'Not specified';
+      const inputs = el.querySelectorAll("input[type='number']");
       
-      const adultCost = parseFloat(inputs[0]?.value || 0);
-      const adultSvc = parseFloat(inputs[1]?.value || 0);
-      const childBedCost = parseFloat(inputs[2]?.value || 0);
-      const childBedSvc = parseFloat(inputs[3]?.value || 0);
-      const childNoBedCost = parseFloat(inputs[4]?.value || 0);
-      const childNoBedSvc = parseFloat(inputs[5]?.value || 0);
+      const costPerPerson = parseFloat(document.getElementById(`tourAddonCost_${idx}`)?.value || 0);
+      const svcPerPerson = parseFloat(document.getElementById(`tourAddonSvc_${idx}`)?.value || 0);
       
-      const currency = el.querySelector("select[id^='tourCurrency']")?.value || "USD";
+      const currency = document.getElementById(`tourAddonCurrency_${idx}`)?.value || "USD";
       
-      const totalAdultCost = convertToPKR((adultCost + adultSvc) * numAdult, currency);
-      const totalChildBedCost = convertToPKR((childBedCost + childBedSvc) * numChildBed, currency);
-      const totalChildNoBedCost = convertToPKR((childNoBedCost + childNoBedSvc) * numChildNoBed, currency);
+      const totalAdultCost = convertToPKR((costPerPerson + svcPerPerson) * numAdult, currency);
+      const totalChildBedCost = convertToPKR((costPerPerson + svcPerPerson) * numChildBed, currency);
+      const totalChildNoBedCost = convertToPKR((costPerPerson + svcPerPerson) * numChildNoBed, currency);
+      const totalInfantCost = convertToPKR((costPerPerson + svcPerPerson) * numInfant, currency);
       
-      const totalCost = totalAdultCost + totalChildBedCost + totalChildNoBedCost;
+      const totalCost = totalAdultCost + totalChildBedCost + totalChildNoBedCost + totalInfantCost;
       
       // Calculate per person costs
       const costPerAdult = numAdult > 0 ? totalAdultCost / numAdult : 0;
       const costPerChildBed = numChildBed > 0 ? totalChildBedCost / numChildBed : 0;
       const costPerChildNoBed = numChildNoBed > 0 ? totalChildNoBedCost / numChildNoBed : 0;
-      const costPerInfant = 0; // Infants don't pay for tours
+      const costPerInfant = numInfant > 0 ? totalInfantCost / numInfant : 0;
       
       quotationHTML += `
         <tr style="background-color: #fff;">
@@ -4124,7 +4487,7 @@ if (hasAddons) {
           <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numAdult > 0 ? `<div style="font-size: 12px; color: #666;">Adult x${numAdult}</div><div style="font-weight: 600;">PKR ${fmt(costPerAdult)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
           <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numChildBed > 0 ? `<div style="font-size: 12px; color: #666;">Child (bed) x${numChildBed}</div><div style="font-weight: 600;">PKR ${fmt(costPerChildBed)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
           <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numChildNoBed > 0 ? `<div style="font-size: 12px; color: #666;">Child (no bed) x${numChildNoBed}</div><div style="font-weight: 600;">PKR ${fmt(costPerChildNoBed)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px;"><span style="color: #999;">N/A</span></td>
+          <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numInfant > 0 ? `<div style="font-size: 12px; color: #666;">Infant x${numInfant}</div><div style="font-weight: 600;">PKR ${fmt(costPerInfant)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
           <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 600; color: #28a745;">PKR ${fmt(totalCost)}</td>
         </tr>
       `;
@@ -4213,8 +4576,39 @@ if (transferElements && transferElements.length > 0) {
       const from = document.getElementById(`tFrom_${idx}`)?.value || "Location";
       const to = document.getElementById(`tTo_${idx}`)?.value || "Location";
       const direction = document.getElementById(`tDirection_${idx}`)?.value || "One Way";
+      const vehicle = document.getElementById(`tCar_${idx}`)?.value || "Not specified";
+      const serviceType = document.getElementById(`tType_${idx}`)?.value || "Not specified";
+      const date = document.getElementById(`tDate_${idx}`)?.value || "";
+      const returnDate = document.getElementById(`tReturnDate_${idx}`)?.value || "";
       
-      inclusionsList.push(`${direction} transfer from ${sanitizeInput(from)} to ${sanitizeInput(to)}`);
+      if (direction === "Return" && returnDate) {
+        // Create two entries for return transfer
+        const formattedDate = date ? formatDateToDMY(date) : "Date not specified";
+        const formattedReturnDate = formatDateToDMY(returnDate);
+        
+        inclusionsList.push(`Outbound transfer (${formattedDate}) from ${sanitizeInput(from)} to ${sanitizeInput(to)} (${vehicle}, ${serviceType})`);
+        inclusionsList.push(`Return transfer (${formattedReturnDate}) from ${sanitizeInput(to)} to ${sanitizeInput(from)} (${vehicle}, ${serviceType})`);
+      } else {
+        // One way transfer
+        const formattedDate = date ? formatDateToDMY(date) : "Date not specified";
+        inclusionsList.push(`${direction} transfer (${formattedDate}) from ${sanitizeInput(from)} to ${sanitizeInput(to)} (${vehicle}, ${serviceType})`);
+      }
+    }
+  });
+}
+
+// Check for tours
+const tourElements = document.querySelectorAll("[id^='tourBlock_']");
+if (tourElements && tourElements.length > 0) {
+  tourElements.forEach((el) => {
+    if (el && el.id) {
+      const idx = el.id.split("_")[1];
+      const tourName = document.getElementById(`tourName_${idx}`)?.value || "Tour";
+      const tourCity = document.getElementById(`tourCity_${idx}`)?.value || "City";
+      const tourDuration = document.getElementById(`tourDuration_${idx}`)?.value || "Not specified";
+      const tourMode = document.getElementById(`tourMode_${idx}`)?.value || "Not specified";
+      
+      inclusionsList.push(`${sanitizeInput(tourName)} (${tourDuration}, ${tourMode}) in ${sanitizeInput(tourCity)}`);
     }
   });
 }
@@ -4443,13 +4837,14 @@ function getHotelDetails() {
     const city = document.getElementById(`hotelCity_${idx}`)?.value || "Not specified";
     const nights = parseFloat(document.getElementById(`hotelNights_${idx}`)?.value || 0);
     const roomType = document.getElementById(`hotelRoomType_${idx}`)?.value || "Not specified";
+    const roomName = document.getElementById(`hotelRoomName_${idx}`)?.value || "";
     const rooms = parseFloat(document.getElementById(`hotelRooms_${idx}`)?.value || 0);
     const serviceType = document.getElementById(`hotelService_${idx}`)?.value || "Room Only";
     const checkIn = document.getElementById(`hotelCheckIn_${idx}`)?.value || new Date().toISOString().split('T')[0];
     const checkOut = document.getElementById(`hotelCheckOut_${idx}`)?.value || new Date().toISOString().split('T')[0];
     
     hotels.push({
-      name, city, nights, roomType, rooms, serviceType, checkIn, checkOut
+      name, city, nights, roomType, roomName, rooms, serviceType, checkIn, checkOut
     });
   });
   
@@ -4475,11 +4870,45 @@ function getTransferDetails() {
     const from = document.getElementById(`tFrom_${idx}`)?.value || "Not specified";
     const to = document.getElementById(`tTo_${idx}`)?.value || "Not specified";
     const direction = document.getElementById(`tDirection_${idx}`)?.value || "One Way";
+    const vehicle = document.getElementById(`tCar_${idx}`)?.value || "Not specified";
+    const serviceType = document.getElementById(`tType_${idx}`)?.value || "Not specified";
+    const date = document.getElementById(`tDate_${idx}`)?.value || "";
+    const returnDate = document.getElementById(`tReturnDate_${idx}`)?.value || "";
     
-    transferHTML += `<div><strong>${direction}:</strong> ${sanitizeInput(from)} → ${sanitizeInput(to)}</div>`;
+    if (direction === "Return" && returnDate) {
+      // Create two entries for return transfer
+      const formattedDate = date ? formatDateToDMY(date) : "Date not specified";
+      const formattedReturnDate = formatDateToDMY(returnDate);
+      
+      transferHTML += `<div><strong>Outbound Transfer (${formattedDate}):</strong> ${sanitizeInput(from)} → ${sanitizeInput(to)} (${vehicle}, ${serviceType})</div>`;
+      transferHTML += `<div><strong>Return Transfer (${formattedReturnDate}):</strong> ${sanitizeInput(to)} → ${sanitizeInput(from)} (${vehicle}, ${serviceType})</div>`;
+    } else {
+      // One way transfer
+      const formattedDate = date ? formatDateToDMY(date) : "Date not specified";
+      transferHTML += `<div><strong>${direction} Transfer (${formattedDate}):</strong> ${sanitizeInput(from)} → ${sanitizeInput(to)} (${vehicle}, ${serviceType})</div>`;
+    }
   });
   
   return transferHTML || "No transfers included";
+}
+
+function getTourDetails() {
+  const tours = [];
+  document.querySelectorAll("[id^='tourBlock_']").forEach((el) => {
+    const idx = el.id.split("_")[1];
+    const name = document.getElementById(`tourName_${idx}`)?.value || "Not specified";
+    const city = document.getElementById(`tourCity_${idx}`)?.value || "Not specified";
+    const date = document.getElementById(`tourDate_${idx}`)?.value || "";
+    const duration = document.getElementById(`tourDuration_${idx}`)?.value || "Not specified";
+    const mode = document.getElementById(`tourMode_${idx}`)?.value || "Not specified";
+    const vehicle = document.getElementById(`tourVehicle_${idx}`)?.value || "Not specified";
+    
+    tours.push({
+      name, city, date, duration, mode, vehicle
+    });
+  });
+  
+  return tours;
 }
 
 
@@ -4651,6 +5080,7 @@ function saveQuotation() {
         checkOut: document.getElementById(`hotelCheckOut_${idx}`)?.value || "",
         nights: parseInt(document.getElementById(`hotelNights_${idx}`)?.value || 0),
         roomType: document.getElementById(`hotelRoomType_${idx}`)?.value || "",
+        roomName: document.getElementById(`hotelRoomName_${idx}`)?.value || "",
         rooms: parseInt(document.getElementById(`hotelRooms_${idx}`)?.value || 1),
         serviceType: document.getElementById(`hotelService_${idx}`)?.value || "",
         costNight: parseFloat(document.getElementById(`hotelCostNight_${idx}`)?.value || 0),
@@ -4671,6 +5101,7 @@ function saveQuotation() {
         vehicle: document.getElementById(`tCar_${idx}`)?.value || "",
         type: document.getElementById(`tType_${idx}`)?.value || "",
         direction: document.getElementById(`tDirection_${idx}`)?.value || "",
+        returnDate: document.getElementById(`tReturnDate_${idx}`)?.value || "",
         cost: parseFloat(document.getElementById(`tCost_${idx}`)?.value || 0),
         currency: document.getElementById(`tCurrency_${idx}`)?.value || "USD",
         service: parseFloat(document.getElementById(`tSvc_${idx}`)?.value || 0)
@@ -4690,6 +5121,24 @@ function saveQuotation() {
         service: parseFloat(document.getElementById('visaSvc')?.value || 0)
       };
     }
+    
+    // Collect tours data
+    const toursData = [];
+    document.querySelectorAll("[id^='tourBlock_']").forEach((el) => {
+      const idx = el.id.split("_")[1];
+      const tourData = {
+        date: document.getElementById(`tourDate_${idx}`)?.value || "",
+        name: document.getElementById(`tourName_${idx}`)?.value || "",
+        city: document.getElementById(`tourCity_${idx}`)?.value || "",
+        duration: document.getElementById(`tourDuration_${idx}`)?.value || "",
+        mode: document.getElementById(`tourMode_${idx}`)?.value || "",
+        vehicle: document.getElementById(`tourVehicle_${idx}`)?.value || "",
+        cost: parseFloat(document.getElementById(`tourCost_${idx}`)?.value || 0),
+        currency: document.getElementById(`tourCurrency_${idx}`)?.value || "USD",
+        service: parseFloat(document.getElementById(`tourSvc_${idx}`)?.value || 0)
+      };
+      toursData.push(tourData);
+    });
     
     // Collect add-ons data
     const addonsData = {
@@ -4745,28 +5194,16 @@ function saveQuotation() {
     // Tour add-ons
     document.querySelectorAll("[id^='tourAddon_']").forEach((el) => {
       const idx = el.id.split("_")[1];
-      const textInput = el.querySelector("input[type='text']");
-      const selects = el.querySelectorAll('select');
-      const inputs = el.querySelectorAll(".inline-input input[type='number']");
       const addonData = {
-        name: textInput?.value || "",
-        city: selects[0]?.value || "",
-        type: selects[1]?.value || "",
-        currency: selects[2]?.value || "USD",
-        costs: {
-          adult: {
-            cost: parseFloat(inputs[0]?.value || 0),
-            service: parseFloat(inputs[1]?.value || 0)
-          },
-          childBed: {
-            cost: parseFloat(inputs[2]?.value || 0),
-            service: parseFloat(inputs[3]?.value || 0)
-          },
-          childNoBed: {
-            cost: parseFloat(inputs[4]?.value || 0),
-            service: parseFloat(inputs[5]?.value || 0)
-          }
-        }
+        date: document.getElementById(`tourAddonDate_${idx}`)?.value || "",
+        name: document.getElementById(`tourAddonName_${idx}`)?.value || "",
+        city: document.getElementById(`tourAddonCity_${idx}`)?.value || "",
+        duration: document.getElementById(`tourAddonDuration_${idx}`)?.value || "",
+        mode: document.getElementById(`tourAddonMode_${idx}`)?.value || "",
+        vehicle: document.getElementById(`tourAddonVehicle_${idx}`)?.value || "",
+        cost: parseFloat(document.getElementById(`tourAddonCost_${idx}`)?.value || 0),
+        currency: document.getElementById(`tourAddonCurrency_${idx}`)?.value || "USD",
+        service: parseFloat(document.getElementById(`tourAddonSvc_${idx}`)?.value || 0)
       };
       addonsData.tours.push(addonData);
     });
@@ -4827,6 +5264,7 @@ const customSectionsData = {
       flights: flightsData,
       hotels: hotelsData,
       transfers: transfersData,
+      tours: toursData,
       visa: visaData,
       addons: addonsData,
       customSections: customSectionsData  // Add this line
@@ -4968,6 +5406,7 @@ function loadQuotation(quotationId) {
     if (document.getElementById("directFlightContainer")) document.getElementById("directFlightContainer").innerHTML = "";
     if (document.getElementById("mealTypeContainer")) document.getElementById("mealTypeContainer").innerHTML = "";
     if (document.getElementById("toursContainer")) document.getElementById("toursContainer").innerHTML = "";
+    if (document.getElementById("addonToursContainer")) document.getElementById("addonToursContainer").innerHTML = "";
     
     // Reset counters
     nextFlightNumber = 0;
@@ -4976,10 +5415,13 @@ function loadQuotation(quotationId) {
     hotels = [];
     nextTransferNumber = 0;
     transfers = [];
+    nextTourNumber = 0;
+    mainTours = [];
     visaAdded = false;
     dfIndex = 0;
     mealIndex = 0;
     tourIndex = 0;
+    tours = [];
     
     // Load flights with proper timing
     if (quotation.flights && Array.isArray(quotation.flights)) {
@@ -5050,6 +5492,8 @@ function loadQuotation(quotationId) {
               document.getElementById(`hotelNights_${idx}`).value = hotelData.nights || 0;
             if (document.getElementById(`hotelRoomType_${idx}`)) 
               document.getElementById(`hotelRoomType_${idx}`).value = hotelData.roomType || "";
+            if (document.getElementById(`hotelRoomName_${idx}`)) 
+              document.getElementById(`hotelRoomName_${idx}`).value = hotelData.roomName || "";
             if (document.getElementById(`hotelRooms_${idx}`)) 
               document.getElementById(`hotelRooms_${idx}`).value = hotelData.rooms || 1;
             if (document.getElementById(`hotelService_${idx}`)) 
@@ -5089,14 +5533,64 @@ function loadQuotation(quotationId) {
               document.getElementById(`tType_${idx}`).value = transferData.type || "";
             if (document.getElementById(`tDirection_${idx}`)) 
               document.getElementById(`tDirection_${idx}`).value = transferData.direction || "";
+            if (document.getElementById(`tReturnDate_${idx}`)) 
+              document.getElementById(`tReturnDate_${idx}`).value = transferData.returnDate || "";
             if (document.getElementById(`tCost_${idx}`)) 
               document.getElementById(`tCost_${idx}`).value = transferData.cost || 0;
             if (document.getElementById(`tCurrency_${idx}`)) 
               document.getElementById(`tCurrency_${idx}`).value = transferData.currency || "USD";
             if (document.getElementById(`tSvc_${idx}`)) 
               document.getElementById(`tSvc_${idx}`).value = transferData.service || 0;
+
+            // Trigger change event on direction select to show/hide return date
+            const directionSelect = document.getElementById(`tDirection_${idx}`);
+            if (directionSelect) {
+              directionSelect.dispatchEvent(new Event('change'));
+            }
           }, 100);
         }, 200 * transferIndex);
+      });
+    }
+    
+    // Load tours with proper timing
+    if (quotation.tours && Array.isArray(quotation.tours)) {
+      quotation.tours.forEach((tourData, tourIndex) => {
+        setTimeout(() => {
+          // Trigger the addTour function
+          document.getElementById("btnAddTour").click();
+          
+          // Wait a moment for the tour to be added
+          setTimeout(() => {
+            const idx = nextTourNumber;
+            
+            // Fill tour data
+            if (document.getElementById(`tourDate_${idx}`)) 
+              document.getElementById(`tourDate_${idx}`).value = tourData.date || "";
+            if (document.getElementById(`tourName_${idx}`)) 
+              document.getElementById(`tourName_${idx}`).value = tourData.name || "";
+            if (document.getElementById(`tourCity_${idx}`)) {
+              // Update city options first, then set value
+              const availableCities = getAvailableCities();
+              const citySelect = document.getElementById(`tourCity_${idx}`);
+              if (availableCities.length > 0) {
+                citySelect.innerHTML = availableCities.map(city => `<option value="${city}">${city}</option>`).join('');
+              }
+              citySelect.value = tourData.city || "";
+            }
+            if (document.getElementById(`tourDuration_${idx}`)) 
+              document.getElementById(`tourDuration_${idx}`).value = tourData.duration || "";
+            if (document.getElementById(`tourMode_${idx}`)) 
+              document.getElementById(`tourMode_${idx}`).value = tourData.mode || "";
+            if (document.getElementById(`tourVehicle_${idx}`)) 
+              document.getElementById(`tourVehicle_${idx}`).value = tourData.vehicle || "";
+            if (document.getElementById(`tourCost_${idx}`)) 
+              document.getElementById(`tourCost_${idx}`).value = tourData.cost || 0;
+            if (document.getElementById(`tourCurrency_${idx}`)) 
+              document.getElementById(`tourCurrency_${idx}`).value = tourData.currency || "USD";
+            if (document.getElementById(`tourSvc_${idx}`)) 
+              document.getElementById(`tourSvc_${idx}`).value = tourData.service || 0;
+          }, 100);
+        }, 200 * tourIndex);
       });
     }
     
@@ -5224,34 +5718,39 @@ function loadQuotation(quotationId) {
               togglePanel('toursPanel', document.querySelectorAll('.addon-header')[2]);
             }
             
-            // Trigger the addTour function
-            document.querySelectorAll('.addon-panel button[onclick*="addTour"]')[0].click();
+            // Trigger the addTourAddon function
+            document.querySelectorAll('.addon-panel button[onclick*="addTourAddon"]')[0].click();
             
             // Wait a moment for the add-on to be added
             setTimeout(() => {
               const idx = tourIndex;
               
               // Fill add-on data
-              const addonElement = document.getElementById(`tourAddon_${idx}`);
-              if (addonElement) {
-                const textInput = addonElement.querySelector("input[type='text']");
-                if (textInput) textInput.value = addonData.name || "";
-                
-                const selects = addonElement.querySelectorAll('select');
-                if (selects[0]) selects[0].value = addonData.city || "";
-                if (selects[1]) selects[1].value = addonData.type || "";
-                
-                const inputs = addonElement.querySelectorAll(".inline-input input[type='number']");
-                if (inputs[0]) inputs[0].value = addonData.costs?.adult?.cost || 0;
-                if (inputs[1]) inputs[1].value = addonData.costs?.adult?.service || 0;
-                if (inputs[2]) inputs[2].value = addonData.costs?.childBed?.cost || 0;
-                if (inputs[3]) inputs[3].value = addonData.costs?.childBed?.service || 0;
-                if (inputs[4]) inputs[4].value = addonData.costs?.childNoBed?.cost || 0;
-                if (inputs[5]) inputs[5].value = addonData.costs?.childNoBed?.service || 0;
-                
-                const currencySelect = addonElement.querySelector("select[id^='tourCurrency']");
-                if (currencySelect) currencySelect.value = addonData.currency || "USD";
+              if (document.getElementById(`tourAddonDate_${idx}`)) 
+                document.getElementById(`tourAddonDate_${idx}`).value = addonData.date || "";
+              if (document.getElementById(`tourAddonName_${idx}`)) 
+                document.getElementById(`tourAddonName_${idx}`).value = addonData.name || "";
+              if (document.getElementById(`tourAddonCity_${idx}`)) {
+                // Update city options first, then set value
+                const availableCities = getAvailableCities();
+                const citySelect = document.getElementById(`tourAddonCity_${idx}`);
+                if (availableCities.length > 0) {
+                  citySelect.innerHTML = availableCities.map(city => `<option value="${city}">${city}</option>`).join('');
+                }
+                citySelect.value = addonData.city || "";
               }
+              if (document.getElementById(`tourAddonDuration_${idx}`)) 
+                document.getElementById(`tourAddonDuration_${idx}`).value = addonData.duration || "";
+              if (document.getElementById(`tourAddonMode_${idx}`)) 
+                document.getElementById(`tourAddonMode_${idx}`).value = addonData.mode || "";
+              if (document.getElementById(`tourAddonVehicle_${idx}`)) 
+                document.getElementById(`tourAddonVehicle_${idx}`).value = addonData.vehicle || "";
+              if (document.getElementById(`tourAddonCost_${idx}`)) 
+                document.getElementById(`tourAddonCost_${idx}`).value = addonData.cost || 0;
+              if (document.getElementById(`tourAddonCurrency_${idx}`)) 
+                document.getElementById(`tourAddonCurrency_${idx}`).value = addonData.currency || "USD";
+              if (document.getElementById(`tourAddonSvc_${idx}`)) 
+                document.getElementById(`tourAddonSvc_${idx}`).value = addonData.service || 0;
             }, 100);
           }, 300 * (addonIndex + 1));
         });
