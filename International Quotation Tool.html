@@ -3341,6 +3341,9 @@ function performCalculation() {
   calcSummarySection.style.display = "block";
   btnGenerateQuotation.style.display = "inline-block";
   
+  // Auto-save quotation after calculation
+  saveQuotation();
+  
   if (isButtonClick) {
     calcSummarySection.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
@@ -3606,6 +3609,8 @@ document.getElementById('btnUpdateStatus').addEventListener('click', () => {
 <script>
 // Default terms and conditions
 const defaultTerms = `
+<h2>Terms & Conditions</h2>
+
 <h3>1. Payment Policy</h3>
 <p>A 50% advance payment is required at the time of booking to confirm the reservation. The remaining 50% balance must be paid at the time of voucher handover (prior to final ticket issuance or hotel confirmation)</p>
 <p>Payments may be made by bank transfer, cash, or any other approved payment method communicated by Flight Connection Travel.</p>
@@ -3634,7 +3639,34 @@ const defaultTerms = `
 `;
 
 // Store custom terms in localStorage
-let customTerms = localStorage.getItem('customTerms_international') || defaultTerms;
+let customTerms = defaultTerms; // Temporary default
+
+// Load custom terms from Firebase on startup
+async function loadCustomTermsFromFirebase() {
+  try {
+    const agent = getCurrentAgent();
+    if (agent && agent.uid) {
+      const data = await window.firebaseDB.getData('agents/' + agent.uid + '/data', 'customTerms_international');
+      if (data && data.value) {
+        customTerms = data.value;
+        localStorage.setItem('customTerms_international', data.value);
+      } else {
+        // If no custom terms in Firebase, use default and save
+        customTerms = defaultTerms;
+        await window.firebaseDB.saveData('agents/' + agent.uid + '/data', 'customTerms_international', { value: defaultTerms });
+        localStorage.setItem('customTerms_international', defaultTerms);
+      }
+    } else {
+      // Fallback to localStorage if no agent
+      customTerms = localStorage.getItem('customTerms_international') || defaultTerms;
+    }
+  } catch (error) {
+    console.log('Could not load custom terms from Firebase, using local:', error);
+    customTerms = localStorage.getItem('customTerms_international') || defaultTerms;
+  }
+}
+
+loadCustomTermsFromFirebase();
 
 // Store default content if not already stored
 if (!localStorage.getItem('section1Content_international')) {
@@ -6411,6 +6443,17 @@ saveBtn.addEventListener('click', (e) => {
   const fullTermsHtml = `<h3 style="margin-top: 0; color: #0b76d1; text-align: center;">Terms and Conditions</h3>${editorContent}`;
   // Save to localStorage
   localStorage.setItem('customTerms_international', fullTermsHtml);
+  // Save to Firebase
+  (async () => {
+    try {
+      const agent = getCurrentAgent();
+      if (agent && agent.uid) {
+        await window.firebaseDB.saveData('agents/' + agent.uid + '/data', 'customTerms_international', { value: fullTermsHtml });
+      }
+    } catch (error) {
+      console.log('Could not save custom terms to Firebase:', error);
+    }
+  })();
   // Update the global variable to keep it in sync during the session
   customTerms = fullTermsHtml;
   showNotification('Terms & Conditions updated successfully!', 'success');

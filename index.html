@@ -2804,6 +2804,8 @@ const roeInput = document.getElementById("roeInput");
 
 // Default terms and conditions
 const defaultTerms = `
+<h2>Terms & Conditions</h2>
+
 <h3>1. Payment Policy</h3>
 <p>A 50% advance payment is required at the time of booking to confirm the reservation. The remaining 50% balance must be paid at the time of voucher handover (prior to final ticket issuance or hotel confirmation)</p>
 <p>Payments may be made by bank transfer, cash, or any other approved payment method communicated by Flight Connection Travel.</p>
@@ -2831,9 +2833,6 @@ const defaultTerms = `
 <p>Any disputes arising under these terms shall be governed by the applicable laws of Pakistan and subject to the jurisdiction of competent courts.</p>
 `;
 
-// Store custom terms in Firebase Cloud / localStorage
-let customTerms = localStorage.getItem('customTerms') || defaultTerms;
-
 // Load custom terms from Firebase on startup
 async function loadCustomTermsFromFirebase() {
   try {
@@ -2843,12 +2842,25 @@ async function loadCustomTermsFromFirebase() {
       if (data && data.value) {
         customTerms = data.value;
         localStorage.setItem('customTerms', data.value);
+      } else {
+        // If no custom terms in Firebase, use default and save
+        customTerms = defaultTerms;
+        await window.firebaseDB.saveData('agents/' + agent.uid + '/data', 'customTerms', { value: defaultTerms });
+        localStorage.setItem('customTerms', defaultTerms);
       }
+    } else {
+      // Fallback to localStorage if no agent
+      customTerms = localStorage.getItem('customTerms') || defaultTerms;
     }
   } catch (error) {
     console.log('Could not load custom terms from Firebase, using local:', error);
+    customTerms = localStorage.getItem('customTerms') || defaultTerms;
   }
 }
+
+// Initialize custom terms
+let customTerms = defaultTerms; // Temporary default
+loadCustomTermsFromFirebase();
 
 function fmt(num) {
   return num.toLocaleString("en-PK", { maximumFractionDigits: 0 });
@@ -3494,6 +3506,9 @@ function performCalculation() {
 
   calcSummarySection.style.display = "block";
   btnGenerateQuotation.style.display = "inline-block";
+  
+  // Auto-save quotation after calculation
+  saveQuotation();
   
   // Scroll to the total section only on explicit button click
   if (isButtonClick) {
@@ -6223,11 +6238,22 @@ function showTermsEditor() {
   
   const saveBtn = document.createElement('button');
   saveBtn.textContent = 'Save';
-  saveBtn.addEventListener('click', (e) => {
+  saveBtn.addEventListener('click', async (e) => {
     e.preventDefault();
     e.stopPropagation();
     customTerms = editor.value;
     localStorage.setItem('customTerms', customTerms);
+    
+    // Save to Firebase
+    try {
+      const agent = getCurrentAgent();
+      if (agent && agent.uid) {
+        await window.firebaseDB.saveData('agents/' + agent.uid + '/data', 'customTerms', { value: customTerms });
+      }
+    } catch (error) {
+      console.log('Could not save custom terms to Firebase:', error);
+    }
+    
     modal.classList.remove('visible');
     showNotification('Terms & Conditions updated successfully!', 'success');
   });
