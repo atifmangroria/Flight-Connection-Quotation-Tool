@@ -300,17 +300,6 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus, 
   .inline-input input { width:120px; }
   .inline-input label { width:140px; }
 
-  <!-- Add this after your existing header >
-<div class="progress-container no-print">
-  <div class="progress-bar">
-    <div class="progress-step active" data-step="1">1. Client Info</div>
-    <div class="progress-step" data-step="2">2. Flights</div>
-    <div class="progress-step" data-step="3">3. Hotels</div>
-    <div class="progress-step" data-step="4">4. Add-ons</div>
-    <div class="progress-step" data-step="5">5. Calculate</div>
-  </div>
-</div>
-
   /* Quotation Search Styles */
   .search-container {
     margin-bottom: 15px;
@@ -915,6 +904,17 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
   </script>
+
+<!-- Add this after your existing header -->
+<div class="progress-container no-print">
+  <div class="progress-bar">
+    <div class="progress-step active" data-step="1">1. Client Info</div>
+    <div class="progress-step" data-step="2">2. Flights</div>
+    <div class="progress-step" data-step="3">3. Hotels</div>
+    <div class="progress-step" data-step="4">4. Add-ons</div>
+    <div class="progress-step" data-step="5">5. Calculate</div>
+  </div>
+</div>
 
   <!-- MAIN FORM -->
   <form id="mainForm" onsubmit="return false;">
@@ -2804,7 +2804,6 @@ const roeInput = document.getElementById("roeInput");
 
 // Default terms and conditions
 const defaultTerms = `
-<h2>Terms & Conditions</h2>
 
 <h3>1. Payment Policy</h3>
 <p>A 50% advance payment is required at the time of booking to confirm the reservation. The remaining 50% balance must be paid at the time of voucher handover (prior to final ticket issuance or hotel confirmation)</p>
@@ -2831,6 +2830,50 @@ const defaultTerms = `
 <p>The company reserves the right to amend or withdraw any quotation or offer without prior notice.</p>
 <p>Acceptance of the quotation and payment of the advance constitutes acceptance of these Terms & Conditions by the client.</p>
 <p>Any disputes arising under these terms shall be governed by the applicable laws of Pakistan and subject to the jurisdiction of competent courts.</p>
+`;
+
+// Default section contents
+const defaultVisaRequirements = `
+<h3>Umrah Visa Requirement</h3>
+<ul style="padding-left: 20px; margin: 0; text-align: left;">
+  <li>Passport (valid for at least 6 months with 2 blank pages)</li>
+  <li>CNIC Copy</li>
+  <li>Passport-Sized Photograph (white background)</li>
+  <li>NADRA B-Form (for children)</li>
+  <li>Biometric Registration via Saudi Visa Bio App (mandatory)</li>
+  <li>Visa Validity: 15 Days from date of issue</li>
+  <li>Stay Validity: 20 days from entry into Saudi Arabia</li>
+  <li>Processing Time: 4–7 working days (subject to change)</li>
+  <li>Note: In some cases, visa status may change to "Send to Embassy" — the total processing cost will be PKR 17,000 per person, and it will be completed by us.</li>
+</ul>
+`;
+
+const defaultBiometricProcess = `
+<h3>Biometric Process</h3>
+<p style="margin-top: 0;">As per the Saudi Govt, biometric is now mandatory for Umrah visa processing. You can complete it from home using the Saudi Visa Bio App.</p>
+<div style="margin-top: 15px; margin-bottom: 10px; font-weight: 600;">🔽 Download:</div>
+<ul style="padding-left: 20px; margin: 0 0 15px 0; text-align: left;">
+  <li>Android: https://bit.ly/Saudi-Visa-Bio-Apps-Google-Play</li>
+  <li>Apple: https://bit.ly/‎Saudi-Visa-Bio-Apple-Store</li>
+</ul>
+<div style="margin-top: 15px; margin-bottom: 10px; font-weight: 600;">📝 Steps:</div>
+<ol style="padding-left: 20px; margin: 0; text-align: left;">
+  <li>Open app → Start Self Enrollment → Accept</li>
+  <li>Enter your email → Click verification link (Sometimes app shows error please try 3 to 4 times)</li>
+  <li>Fill visa form:
+    <ul style="padding-left: 20px; margin: 0 0 10px 0;">
+      <li>Visa Type: Umrah</li>
+      <li>Embassy: Islamabad</li>
+      <li>Visit Saudi before: Yes/No</li>
+    </ul>
+  </li>
+  <li>Scan passport bio page (on table with good light)</li>
+  <li>Check and Confirm your details</li>
+  <li>Face Scan: Stand in front of plain wall</li>
+  <li>Fingerprint Scan: Follow app instructions</li>
+  <li>Tick consent box → Click Send</li>
+</ol>
+<p style="margin-top: 15px; margin-bottom: 0;">📩 You will get an Enrollment ID by email — Please send us the screenshot so we can apply your visa.</p>
 `;
 
 // Load custom terms from Firebase on startup
@@ -2861,6 +2904,61 @@ async function loadCustomTermsFromFirebase() {
 // Initialize custom terms
 let customTerms = defaultTerms; // Temporary default
 loadCustomTermsFromFirebase();
+
+// Initialize section contents
+let visaRequirements = defaultVisaRequirements;
+let biometricProcess = defaultBiometricProcess;
+
+async function loadVisaRequirementsFromFirebase() {
+  try {
+    const agent = getCurrentAgent();
+    if (agent && agent.uid) {
+      const data = await window.firebaseDB.getData('agents/' + agent.uid + '/data', 'visaRequirements');
+      if (data && data.value) {
+        visaRequirements = data.value;
+        localStorage.setItem('visaRequirements', data.value);
+      } else {
+        // If no data in Firebase, use default and save
+        visaRequirements = defaultVisaRequirements;
+        await window.firebaseDB.saveData('agents/' + agent.uid + '/data', 'visaRequirements', { value: defaultVisaRequirements });
+        localStorage.setItem('visaRequirements', defaultVisaRequirements);
+      }
+    } else {
+      // Fallback to localStorage if no agent
+      visaRequirements = localStorage.getItem('visaRequirements') || defaultVisaRequirements;
+    }
+  } catch (error) {
+    console.log('Could not load visa requirements from Firebase, using local:', error);
+    visaRequirements = localStorage.getItem('visaRequirements') || defaultVisaRequirements;
+  }
+}
+
+async function loadBiometricProcessFromFirebase() {
+  try {
+    const agent = getCurrentAgent();
+    if (agent && agent.uid) {
+      const data = await window.firebaseDB.getData('agents/' + agent.uid + '/data', 'biometricProcess');
+      if (data && data.value) {
+        biometricProcess = data.value;
+        localStorage.setItem('biometricProcess', data.value);
+      } else {
+        // If no data in Firebase, use default and save
+        biometricProcess = defaultBiometricProcess;
+        await window.firebaseDB.saveData('agents/' + agent.uid + '/data', 'biometricProcess', { value: defaultBiometricProcess });
+        localStorage.setItem('biometricProcess', defaultBiometricProcess);
+      }
+    } else {
+      // Fallback to localStorage if no agent
+      biometricProcess = localStorage.getItem('biometricProcess') || defaultBiometricProcess;
+    }
+  } catch (error) {
+    console.log('Could not load biometric process from Firebase, using local:', error);
+    biometricProcess = localStorage.getItem('biometricProcess') || defaultBiometricProcess;
+  }
+}
+
+loadVisaRequirementsFromFirebase();
+loadBiometricProcessFromFirebase();
 
 function fmt(num) {
   return num.toLocaleString("en-PK", { maximumFractionDigits: 0 });
@@ -6628,6 +6726,7 @@ editorContent.style.border = '1px solid #ddd';
 editorContent.style.borderRadius = '4px';
 editorContent.style.overflowY = 'auto';
 editorContent.style.width = '100%';
+editorContent.style.textAlign = 'left';
     
     // Remove existing heading from content for editing
     let cleanContent = content.replace(/<h3[^>]*>.*?<\/h3>/g, '');
@@ -6682,24 +6781,56 @@ editorContent.style.width = '100%';
   const termsHtml = customTerms || defaultTerms;
   const termsEditor = createRichEditorWithHeadingAndToggle(termsHtml, 0, 'Terms and Conditions');
   termsContent.appendChild(termsEditor);
+
+  // Add reset to default button for Terms & Conditions
+  const resetBtn = document.createElement('button');
+  resetBtn.textContent = 'Reset to Default';
+  resetBtn.style.marginTop = '10px';
+  resetBtn.addEventListener('click', () => {
+    editors[0].innerHTML = defaultTerms;
+  });
+  termsContent.appendChild(resetBtn);
+
   contentContainer.appendChild(termsContent);
   tabContents.push(termsContent);
-  
+
   // Section 1 Tab (with toggle and editable heading)
   const section1Content = document.createElement('div');
   section1Content.style.display = 'none';
-  const section1Html = localStorage.getItem('visaRequirements') || '';
+  const section1Html = visaRequirements;
   const section1Editor = createRichEditorWithHeadingAndToggle(section1Html, 1, 'Section 1 Heading');
   section1Content.appendChild(section1Editor);
+
+  // Add reset to default button for Section 1
+  const resetBtn1 = document.createElement('button');
+  resetBtn1.textContent = 'Reset to Default';
+  resetBtn1.style.marginTop = '10px';
+  resetBtn1.addEventListener('click', () => {
+    headingInputs[1].value = 'Umrah Visa Requirement';
+    editors[1].innerHTML = defaultVisaRequirements.replace(/<h3[^>]*>.*?<\/h3>/gi, '');
+  });
+  section1Content.appendChild(resetBtn1);
+
   contentContainer.appendChild(section1Content);
   tabContents.push(section1Content);
   
   // Section 2 Tab (with toggle and editable heading)
   const section2Content = document.createElement('div');
   section2Content.style.display = 'none';
-  const section2Html = localStorage.getItem('biometricProcess') || '';
+  const section2Html = biometricProcess;
   const section2Editor = createRichEditorWithHeadingAndToggle(section2Html, 2, 'Section 2 Heading');
   section2Content.appendChild(section2Editor);
+
+  // Add reset to default button for Section 2
+  const resetBtn2 = document.createElement('button');
+  resetBtn2.textContent = 'Reset to Default';
+  resetBtn2.style.marginTop = '10px';
+  resetBtn2.addEventListener('click', () => {
+    headingInputs[2].value = 'Biometric Process';
+    editors[2].innerHTML = defaultBiometricProcess.replace(/<h3[^>]*>.*?<\/h3>/gi, '');
+  });
+  section2Content.appendChild(resetBtn2);
+
   contentContainer.appendChild(section2Content);
   tabContents.push(section2Content);
   

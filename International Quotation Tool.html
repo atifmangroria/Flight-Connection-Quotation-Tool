@@ -3609,7 +3609,6 @@ document.getElementById('btnUpdateStatus').addEventListener('click', () => {
 <script>
 // Default terms and conditions
 const defaultTerms = `
-<h2>Terms & Conditions</h2>
 
 <h3>1. Payment Policy</h3>
 <p>A 50% advance payment is required at the time of booking to confirm the reservation. The remaining 50% balance must be paid at the time of voucher handover (prior to final ticket issuance or hotel confirmation)</p>
@@ -3667,30 +3666,6 @@ async function loadCustomTermsFromFirebase() {
 }
 
 loadCustomTermsFromFirebase();
-
-// Store default content if not already stored
-if (!localStorage.getItem('section1Content_international')) {
-  const defaultSection1Content = `
-}
-<div style="font-size: 13px; line-height: 1.6; text-align: left;">
-  <h4 style="color: #007bff; margin-bottom: 10px;">Important Information</h4>
-  <p>Please ensure all passengers have valid passports with at least 6 months validity from the date of travel.</p>
-  <p>Visa requirements vary by destination. Please check the specific visa requirements for your destination country.</p>
-  <p>Travel insurance is highly recommended for all international tours.</p>
-</div>`;
-  localStorage.setItem('section1Content_international', defaultSection1Content);
-}
-
-if (!localStorage.getItem('section2Content_international')) {
-  const defaultSection2Content = `
-<div style="font-size: 13px; line-height: 1.6; text-align: left;">
-  <h4 style="color: #007bff; margin-bottom: 10px;">Payment Information</h4>
-  <p>All payments should be made through bank transfer or credit/debit card.</p>
-  <p>Prices are subject to change without prior notice due to currency fluctuations.</p>
-  <p>Any additional services not mentioned in the quotation will be charged separately.</p>
-</div>`;
-  localStorage.setItem('section2Content_international', defaultSection2Content);
-}
 
 // Get stored content
 const section1Content = localStorage.getItem('section1Content_international') || '';
@@ -5984,7 +5959,143 @@ function setupAutoSave() {
 }
 
 // Content Editor Function with Rich Text Editor and Section Toggles
+const visaOptions = [
+  {
+    name: 'Malaysia Tourist Visa Requirements',
+    content: `
+✅ Required Documents
+* Passport – Must be valid for at least 8 months.
+* Valid CNIC – (National Identity Card)
+* Two recent passport-size photos – White background only.
+* Bank Statement (Last 6 months) – Minimum maintained balance of PKR 350,000 per person.
+* Bank Maintenance Certificate – Must include branch manager's visiting card.
+* Employment Letter (for salaried individuals) or Self-Employment Work Detail Letter (for business owners/freelancers).
+* Family Registration Certificate (FRC) – Issued by NADRA.
+🕒 Processing Time
+E-Visa: 10–20 working days
+Sticker Visa: 8–10 working days
+(Excludes Saturday & Sunday)
+📤 Submission Instructions
+For E-Visa:
+Send scanned copies of all required documents along with the visa fee deposit receipt.
+For Sticker Visa:
+Submit original documents at our office during working hours.
+🛂 Visa Details
+Visa Validity: 6 months (from date of issue)
+Stay Validity: 30 days (per entry)
+`
+  },
+  {
+    name: 'Indonesia Tourist Visa Requirements',
+    content: `
+Original passport valid for at least 6 months with 2 blank visa pages.
+One recent passport-size color photograph.
+Copy of passport pages 1 and 2.
+Copy of valid or latest national identity card (NIC).
+Copy of previous Indonesia visa (if any).
+Bank statement and account maintenance certificate for last 6 months.
+Apply within 30 days of intended travel date.
+Processing Time:
+7–8 working days
+🛂 Visa Details
+Visa Validity: 90 days (from date of issue)
+Stay Validity: Up to 60 days (as granted)
+Important Notes:
+In some cases, the embassy may require personal appearance or additional documentation.
+`
+  },
+  {
+    name: 'Thailand Tourist Visa Requirements',
+    content: `
+✅ Required Documents
+ • Passport – Valid for at least 6 months.
+ • Valid CNIC – Front & back scanned on the same page.
+ • Two recent passport-size photos – Blue or white background (taken within the last 6 months).
+ • Bank Statement stamped  (Last 3 months) – Maintained minimum balance of PKR 300,000 per applicant + account maintenance letter.
+• Bank Maintenance Certificate – Must include branch manager's visiting card.
+• Employment Letter (for salaried individuals) or Self-Employment Work Detail Letter (for business owners/freelancers).
+ 
+🕒 Processing Time
+ 7–10 working days
+ (Excludes Saturday & Sunday)
+📤 Submission Instructions
+ Send scanned copies of all required documents along with visa fee receipt via WhatsApp or email.
+🛂 Visa Details
+Visa Validity: 
+Single Entry: 3 months (from date of issue)
+Multiple Entry: 6 months (from date of issue) 
+Stay Validity: Up to 30 days (as granted)
+`
+  },
+  {
+    name: 'Sri Lanka E-Visa Requirements',
+    content: `
+✅ Required Documents (Clear Scans Only)
+ • Passport – 1st page
+ • CNIC – Front & back
+🕒 Processing Time
+ 2–4 working days
+🛂 Visa Details
+ • Entry Type: Double Entry
+ • Travel Validity: 90 days from date of issue
+ • Stay Validity: 30 days
+🇦🇿 Azerbaijan, Baku E-Visa Requirements
+✅ Required Documents (Clear Scans Only)
+ • Passport – 1st page
+ • CNIC – Front & back
+🛂 Visa Details
+ • Entry Type: Single Entry
+ • Travel Validity: 60 days from date of issue
+ • Stay Validity: 30 days
+`
+  },
+  {
+    name: 'Singapore E-Visa Requirements',
+    content: `
+✅ Required Documents (Clear Scans Only)
+ • Passport – 1st, 2nd & 3rd pages
+ • CNIC – Front & back
+ • Recent photo – White background
+ • Employment Letter (for salaried individuals)
+ • Business Letterhead (if self-employed)
+📄 Additional Info Required
+ • Name
+ • Marital Status
+ • Occupation & Designation
+ • Yearly Income
+ • Education
+ • Email Address
+ • Contact Number
+🕒 Processing Time
+ 8–10 working days normally, 
+In some cases take 15 - 20 days as well.
+🛂 Visa Details
+ • Entry Type: Single/Double (Subject to Immigration Approval)
+ • Travel Validity: 60 days from date of issue
+ • Stay Validity: 30 days
+📌 In case of rejection, only a consulate receipt image with "unsuccessful" stamp will be shared.
+`
+  },
+  {
+    name: 'Requirements for Visa on Arrival (Qatar) – Pakistani Passport',
+    content: `
+• Passport must have minimum 6 months validity.
+• Confirmed return or onward ticket required.
+• Minimum 2 nights hotel must be booked via Discover Qatar only.
+• We can book Discover Qatar hotels at the same rates shown on the website, calculated on the current rate of exchange.
+• Qatar-approved travel insurance required – PKR 7,500 per person.
+• Debit/credit card under passenger's name may be asked as proof of funds.
+• Stay allowed 30 days, extendable once for another 30 days.
+• Visa/entry always depends on final approval by Qatar Immigration.
+`
+  }
+];
+
 function showContentEditor() {
+  if (!localStorage.getItem('sectionDisabled_2')) {
+    localStorage.setItem('sectionDisabled_2', 'true');
+  }
+  
   const modal = document.getElementById('contentEditorModal');
   const modalTitle = document.getElementById('contentEditorModalTitle');
   const modalContent = document.getElementById('contentEditorModalContent');
@@ -6132,6 +6243,28 @@ function showContentEditor() {
       headingContainer.appendChild(headingInput);
       editorSection.appendChild(headingContainer);
       headingInputs[tabIndex] = headingInput;
+    }
+    
+    // Create visa requirements dropdown for Section 1
+    if (tabIndex === 1) {
+      const select = document.createElement('select');
+      select.style.width = '100%';
+      select.style.padding = '10px';
+      select.style.border = '1px solid #ddd';
+      select.style.borderRadius = '4px';
+      select.style.marginBottom = '15px';
+      select.innerHTML = '<option value="">Select Visa Requirements</option>';
+      visaOptions.forEach((option, index) => {
+        select.innerHTML += `<option value="${index}">${option.name}</option>`;
+      });
+      select.addEventListener('change', () => {
+        if (select.value !== '') {
+          const opt = visaOptions[parseInt(select.value)];
+          headingInputs[1].value = opt.name;
+          editors[1].innerHTML = opt.content.replace(/\n/g, '<br>');
+        }
+      });
+      editorSection.appendChild(select);
     }
     
     // Create toolbar
@@ -6338,6 +6471,7 @@ function showContentEditor() {
     editorContent.style.borderRadius = '4px';
     editorContent.style.overflowY = 'auto';
     editorContent.style.width = '100%';
+    editorContent.style.textAlign = 'left';
     
     // Remove existing heading from content for editing
     let cleanContent = content.replace(/<h3[^>]*>.*?<\/h3>/g, '');
@@ -6397,6 +6531,16 @@ const termsContent = document.createElement('div');
 const termsHtml = customTerms || defaultTerms;
 const termsEditor = createRichEditorWithHeadingAndToggle(termsHtml, 0, 'Terms and Conditions');
 termsContent.appendChild(termsEditor);
+
+// Add reset to default button for Terms & Conditions
+const resetBtn = document.createElement('button');
+resetBtn.textContent = 'Reset to Default';
+resetBtn.style.marginTop = '10px';
+resetBtn.addEventListener('click', () => {
+  editors[0].innerHTML = defaultTerms;
+});
+termsContent.appendChild(resetBtn);
+
 contentContainer.appendChild(termsContent);
 tabContents.push(termsContent);
 
@@ -6406,6 +6550,17 @@ section1Content.style.display = 'none';
 const section1Html = localStorage.getItem('section1Content_international') || '';
 const section1Editor = createRichEditorWithHeadingAndToggle(section1Html, 1, 'Section 1 Heading');
 section1Content.appendChild(section1Editor);
+
+// Add reset to default button for Section 1
+const resetBtn1 = document.createElement('button');
+resetBtn1.textContent = 'Reset to Default';
+resetBtn1.style.marginTop = '10px';
+resetBtn1.addEventListener('click', () => {
+  headingInputs[1].value = 'Section 1 Heading';
+  editors[1].innerHTML = '';
+});
+section1Content.appendChild(resetBtn1);
+
 contentContainer.appendChild(section1Content);
 tabContents.push(section1Content);
 
@@ -6415,6 +6570,17 @@ section2Content.style.display = 'none';
 const section2Html = localStorage.getItem('section2Content_international') || '';
 const section2Editor = createRichEditorWithHeadingAndToggle(section2Html, 2, 'Section 2 Heading');
 section2Content.appendChild(section2Editor);
+
+// Add reset to default button for Section 2
+const resetBtn2 = document.createElement('button');
+resetBtn2.textContent = 'Reset to Default';
+resetBtn2.style.marginTop = '10px';
+resetBtn2.addEventListener('click', () => {
+  headingInputs[2].value = 'Section 2 Heading';
+  editors[2].innerHTML = '';
+});
+section2Content.appendChild(resetBtn2);
+
 contentContainer.appendChild(section2Content);
 tabContents.push(section2Content);
 
