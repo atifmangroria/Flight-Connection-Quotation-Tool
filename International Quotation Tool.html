@@ -3692,10 +3692,10 @@ function printQuotation() {
         }
       });
       let html = clonedContent.innerHTML;
-      // Make PDF more compact by reducing margins
-      html = html.replace(/margin-bottom:\s*20px/g, 'margin-bottom: 15px');
-      html = html.replace(/padding:\s*15px/g, 'padding: 10px');
-      html = html.replace(/margin:\s*15px/g, 'margin: 10px');
+      // Improve PDF readability by adjusting margins and padding
+      html = html.replace(/margin-bottom:\s*20px/g, 'margin-bottom: 20px');
+      html = html.replace(/padding:\s*15px/g, 'padding: 15px');
+      html = html.replace(/margin:\s*15px/g, 'margin: 15px');
       
       const printWindow = window.open('', '_blank');
       
@@ -3717,8 +3717,8 @@ function printQuotation() {
               margin: 0px;
               color: #111;
               background: white !important;
-              font-size: 12px;
-              line-height: 1.4;
+              font-size: 14px;
+              line-height: 1.5;
             }
             
             * {
@@ -3731,12 +3731,16 @@ function printQuotation() {
             h1, h2, h3 { 
               color: #0b76d1 !important;
               padding: 0px 0 !important;
-              margin: 0px 0 10px 0 !important;
+              margin: 0px 0 15px 0 !important;
               display: block !important;
-              font-size: 16px !important;
+              font-size: 18px !important;
               page-break-after: avoid !important;
               page-break-inside: avoid !important;
               page-break-before: avoid !important;
+            }
+            
+            h4 {
+              page-break-after: avoid !important;
             }
             
             /* Tables - keep exactly as original */
@@ -3752,9 +3756,9 @@ function printQuotation() {
             
             th, td { 
               border: 0.5px solid #ddd !important;
-              padding: 6px 8px;
+              padding: 8px 10px;
               text-align: left;
-              font-size: 11px;
+              font-size: 13px;
             }
             
             th { 
@@ -3764,20 +3768,20 @@ function printQuotation() {
             }
             
             p {
-              margin: 5px 0;
+              margin: 8px 0;
             }
             
             /* Sections - NO blue background or borders */
             div[style*="border: 1px solid #eee"],
             div[style*="border: 1px solid #ddd"] {
-              margin: 0px 0 15px 0 !important;
-              padding: 10px !important;
+              margin: 0px 0 20px 0 !important;
+              padding: 15px !important;
               border: none !important;
               border-radius: 0px !important;
               background: white !important;
               page-break-inside: avoid !important;
               page-break-after: auto !important;
-              page-break-before: auto !important;
+              page-break-before: avoid !important;
               display: block !important;
               position: relative !important;
             }
