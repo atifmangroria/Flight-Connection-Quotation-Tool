@@ -2826,7 +2826,7 @@ const defaultTerms = `
 // Default section contents
 const defaultVisaRequirements = `
 <ul style="padding-left: 20px; margin: 0; text-align: left;">
-  <h2>Umrah Visa Requirement</h2>
+  <h>Umrah Visa Requirement</h2>
   <li>Passport (valid for at least 6 months with 2 blank pages)</li>
   <li>CNIC Copy</li>
   <li>Passport-Sized Photograph (white background)</li>
@@ -2864,7 +2864,7 @@ const defaultBiometricProcess = `
   <li>Fingerprint Scan: Follow app instructions</li>
   <li>Tick consent box → Click Send</li>
 </ol>
-<li>📩 You will get an Enrollment ID by email — Please send us the screenshot so we can apply your visa.</li>
+<p style="margin-top: 15px; margin-bottom: 0;">📩 You will get an Enrollment ID by email — Please send us the screenshot so we can apply your visa.</p>
 `;
 
 // Load custom terms from Firebase on startup
@@ -5161,7 +5161,8 @@ if (!localStorage.getItem('biometricProcess')) {
   <li>Fingerprint Scan: Follow app instructions</li>
   <li>Tick consent box → Click Send</li>
 </ol>
-<li>📩 You will get an Enrollment ID by email — Please send us the screenshot so we can apply your visa.</li>
+
+<p style="margin-top: 15px; margin-bottom: 0;">📩 You will get an Enrollment ID by email — Please send us the screenshot so we can apply your visa.</p>`;
   localStorage.setItem('biometricProcess', defaultBiometricProcess);
 }
 
