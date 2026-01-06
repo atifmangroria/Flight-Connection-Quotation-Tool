@@ -898,6 +898,11 @@ document.addEventListener('DOMContentLoaded', function() {
     localStorage.removeItem('selectedQuotationId');
     localStorage.removeItem('umrahSelectedQuotationId');
     
+    // Set status select field from loaded quotation
+    const quotationStatus = document.getElementById('quotationStatus');
+    if (quotationStatus && quotation.status) {
+      quotationStatus.value = quotation.status;
+    }
     // Show status section
     showStatusSection();
   }
@@ -2793,29 +2798,26 @@ const roeInput = document.getElementById("roeInput");
 
 // Default terms and conditions
 const defaultTerms = `
-
-<h2>Terms & Conditions</h2>
-
-<h3>1. Payment Policy</h3>
+<h4 style="margin-top: 20px; color: #222; text-align: left; font-size: 16px; font-weight: 600;">1. Payment Policy</h4>
 <p>A 50% advance payment is required at the time of booking to confirm the reservation. The remaining 50% balance must be paid at the time of voucher handover (prior to final ticket issuance or hotel confirmation)</p>
 <p>Payments may be made by bank transfer, cash, or any other approved payment method communicated by Flight Connection Travel.</p>
 <p>Bookings will be processed only after receipt of the advance payment and confirmation from our accounts department.</p>
 <p>Failure to pay the balance by the due time may result in cancellation of the booking and forfeiture of the advance payment, as per supplier rules.</p>
 
-<h3>2. Rates & Availability</h3>
+<h4 style="margin-top: 20px; color: #222; text-align: left; font-size: 16px; font-weight: 600;">2. Rates & Availability</h4>
 <p>All rates quoted are subject to change without prior notice due to fluctuations in airline fares, hotel rates, exchange rates, and supplier availability.</p>
 <p>Package prices are calculated based on the prevailing exchange rate at the time of quotation; any change in exchange rate at the time of final payment will be applied accordingly.</p>
 <p>Availability of flights, hotels, and ground transport is not guaranteed until bookings are confirmed and payment has been received.</p>
 <p>Flight Connection Travel reserves the right to revise the quotation if any supplier increases fares or imposes additional charges before confirmation.</p>
 
-<h3>3. Cancellation & Refund Policy</h3>
+<h4 style="margin-top: 20px; color: #222; text-align: left; font-size: 16px; font-weight: 600;">3. Cancellation & Refund Policy</h4>
 <p>Cancellation and refund charges are determined by the respective airlines, hotels, and other service providers. Clients must contact Flight Connection Travel to confirm applicable charges prior to cancelling.</p>
 <p>Airline tickets, hotel reservations, and other supplier services may be non-refundable or partially refundable depending on supplier rules.</p>
 <p>Flight Connection Travel charges a non-refundable service fee for administrative processing; this service fee will not be refunded under any circumstances.</p>
 <p>Any refunds due from suppliers will be processed after deducting applicable supplier charges and Flight Connection Travel service fees. Refund processing times depend on supplier policies.</p>
 <p>In case of cancellations initiated by the supplier (airline/hotel), the supplier's policy for rebooking, refund, or compensation will apply and Flight Connection Travel will assist in accordance with those policies</p>
 
-<h3>4. General Terms</h3>
+<h4 style="margin-top: 20px; color: #222; text-align: left; font-size: 16px; font-weight: 600;">4. General Terms</h4>
 <p>Flight Connection Travel acts as an intermediary between the client and third-party service providers (airlines, hotels, ground transport, visa agencies, etc.) and is not liable for delays, cancellations, or service failures caused by those providers.</p>
 <p>Passengers are responsible for ensuring they hold valid travel documents (passport, visas, vaccination certificates, etc.) prior to departure. Flight Connection Travel will not be liable for denied boarding or entry due to invalid documents.</p>
 <p>The company reserves the right to amend or withdraw any quotation or offer without prior notice.</p>
@@ -2825,8 +2827,8 @@ const defaultTerms = `
 
 // Default section contents
 const defaultVisaRequirements = `
+<h3 style="margin-top: 0; color: #0b76d1; text-align: center;">Umrah Visa Requirement</h3>
 <ul style="padding-left: 20px; margin: 0; text-align: left;">
-  <h>Umrah Visa Requirement</h2>
   <li>Passport (valid for at least 6 months with 2 blank pages)</li>
   <li>CNIC Copy</li>
   <li>Passport-Sized Photograph (white background)</li>
@@ -2840,32 +2842,31 @@ const defaultVisaRequirements = `
 `;
 
 const defaultBiometricProcess = `
-<h2>Biometric Process</h2>
-<p style="margin-top: 0;">As per the Saudi Govt, biometric is now mandatory for Umrah visa processing. You can complete it from home using the Saudi Visa Bio App.</p>
-<div style="margin-top: 15px; margin-bottom: 10px; font-weight: 600;">🔽 Download:</div>
-<ul style="padding-left: 20px; margin: 0 0 15px 0; text-align: left;">
-  <li>Android: https://bit.ly/Saudi-Visa-Bio-Apps-Google-Play</li>
-  <li>Apple: https://bit.ly/‎Saudi-Visa-Bio-Apple-Store</li>
-</ul>
-<div style="margin-top: 15px; margin-bottom: 10px; font-weight: 600;">📝 Steps:</div>
-<ol style="padding-left: 20px; margin: 0; text-align: left;">
-  <li>Open app → Start Self Enrollment → Accept</li>
-  <li>Enter your email → Click verification link (Sometimes app shows error please try 3 to 4 times)</li>
-  <li>Fill visa form:
-    <ul style="padding-left: 20px; margin: 0 0 10px 0;">
-      <li>Visa Type: Umrah</li>
-      <li>Embassy: Islamabad</li>
-      <li>Visit Saudi before: Yes/No</li>
-    </ul>
-  </li>
-  <li>Scan passport bio page (on table with good light)</li>
-  <li>Check and Confirm your details</li>
-  <li>Face Scan: Stand in front of plain wall</li>
-  <li>Fingerprint Scan: Follow app instructions</li>
-  <li>Tick consent box → Click Send</li>
-</ol>
-<div style="margin: 0; padding: 0;">
-📩 You will get an Enrollment ID by email — Please send us the screenshot so we can apply your visa.
+<h3 style="margin-top: 0; color: #0b76d1; text-align: center;">Biometric Process</h3>
+<div style="page-break-inside: avoid;">
+  <p style="margin-top: 0;">As per the Saudi Govt, biometric is now mandatory for Umrah visa processing. You can complete it from home using the Saudi Visa Bio App.</p>
+  <div style="margin-top: 15px; margin-bottom: 10px; font-weight: 600;">🔽 Download:</div>
+  <ul style="padding-left: 20px; margin: 0 0 15px 0; text-align: left;">
+    <li>Android: https://bit.ly/Saudi-Visa-Bio-Apps-Google-Play</li>
+    <li>Apple: https://bit.ly/‎Saudi-Visa-Bio-Apple-Store</li>
+  </ul>
+  <div style="margin-top: 15px; margin-bottom: 10px; font-weight: 600;">📝 Steps:</div>
+  <ol style="padding-left: 20px; margin: 0; text-align: left;">
+    <li>Open app → Start Self Enrollment → Accept</li>
+    <li>Enter your email → Click verification link (Sometimes app shows error please try 3 to 4 times)</li>
+    <li>Fill visa form:
+      <ul style="padding-left: 20px; margin: 0 0 10px 0;">
+        <li>Visa Type: Umrah</li>
+        <li>Embassy: Islamabad</li>
+        <li>Visit Saudi before: Yes/No</li>
+      </ul>
+    </li>
+    <li>Scan passport bio page (on table with good light)</li>
+    <li>Check and Confirm your details</li>
+    <li>Face Scan: Stand in front of plain wall</li>
+    <li>Fingerprint Scan: Follow app instructions</li>
+    <li>Tick consent box → Click Send</li>
+  </ol>
 </div>
 `;
 
@@ -3593,6 +3594,15 @@ function performCalculation() {
         <div style="font-size: 20px; font-weight: bold; color: #2e7d32;">PKR ${fmt(finalPackageSellPKR + addonCostPKR + addonServicePKR)}</div>
       </div>` : ''}
   `;
+  // Re-sync status select field from current quotation after calculation
+  const allSavedQuotations = JSON.parse(localStorage.getItem('savedQuotations')) || [];
+  if (currentQuotationId) {
+    const quotation = allSavedQuotations.find(q => q.id === currentQuotationId);
+    const quotationStatus = document.getElementById('quotationStatus');
+    if (quotationStatus && quotation && quotation.status) {
+      quotationStatus.value = quotation.status;
+    }
+  }
   showStatusSection();
 
   calcSummarySection.style.display = "block";
@@ -5713,7 +5723,7 @@ function saveQuotation() {
         new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       expiresAt: expiryDate.toISOString(),
-      status: 'pending',
+      status: document.getElementById('quotationStatus')?.value || 'pending',
       flights: flightsData,
       hotelsMakkah: hotelsMakkahData,
       hotelsMadina: hotelsMadinaData,
@@ -6984,14 +6994,11 @@ function showStatusSection() {
   
   if (currentQuotationId) {
     statusSection.style.display = 'block';
-    
     // Get current status
     const quotation = allSavedQuotations.find(q => q.id === currentQuotationId);
     if (quotation && quotation.status) {
       quotationStatus.value = quotation.status;
-    } else {
-      quotationStatus.value = 'pending';
-    }
+    } // Do not set to 'pending' by default; leave unchanged if no status
   } else {
     statusSection.style.display = 'none';
   }
