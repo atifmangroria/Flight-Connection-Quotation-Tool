@@ -2864,7 +2864,9 @@ const defaultBiometricProcess = `
   <li>Fingerprint Scan: Follow app instructions</li>
   <li>Tick consent box → Click Send</li>
 </ol>
-<p style="margin-top: 0px; margin-bottom: 0;">📩 You will get an Enrollment ID by email — Please send us the screenshot so we can apply your visa.</p>
+<div style="margin: 0; padding: 0;">
+📩 You will get an Enrollment ID by email — Please send us the screenshot so we can apply your visa.
+</div>
 `;
 
 // Load custom terms from Firebase on startup
@@ -5161,8 +5163,10 @@ if (!localStorage.getItem('biometricProcess')) {
   <li>Fingerprint Scan: Follow app instructions</li>
   <li>Tick consent box → Click Send</li>
 </ol>
-
-<p style="margin-top: 0px; margin-bottom: 0;">📩 You will get an Enrollment ID by email — Please send us the screenshot so we can apply your visa.</p>`;
+<div style="margin: 0; padding: 0;">
+📩 You will get an Enrollment ID by email — Please send us the screenshot so we can apply your visa.
+</div>
+`;
   localStorage.setItem('biometricProcess', defaultBiometricProcess);
 }
 
