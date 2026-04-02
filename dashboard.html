@@ -348,6 +348,7 @@
     </div>
     <div class="header-right no-print">
       <button onclick="showQuotationTypeModal()" class="btn-primary">Create Quotation</button>
+      <button id="adminBtn" onclick="showPackageModal()" class="btn-primary" style="display:none;">Manage Packages</button>
       <button id="btnLogout" class="btn-logout">Logout</button>
     </div>
   </div>
@@ -386,9 +387,14 @@
 
   <!-- Filters Section -->
   <div class="filters-section no-print">
+    <div style="width: 100%; display: flex; gap: 10px; margin-bottom: 15px;">
+      <button class="view-mode-btn active" data-mode="active" onclick="changeViewMode('active')" style="padding: 8px 15px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; background: var(--accent); color: white;">Active Quotations</button>
+      <button class="view-mode-btn" data-mode="expired" onclick="changeViewMode('expired')" style="padding: 8px 15px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; background: #f3f6fb; color: #111;">Archived (30+ days)</button>
+      <button id="allUsersBtn" class="view-mode-btn" data-mode="all-users" onclick="changeViewMode('all-users')" style="display: none; padding: 8px 15px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; background: #f3f6fb; color: #111;">All Users</button>
+    </div>
     <div class="search-box">
       <span class="search-icon">🔍</span>
-      <input type="text" id="searchInput" placeholder="Search by client name or quotation ID...">
+      <input type="text" id="searchInput" placeholder="Search by client name, quotation ID, or agent name...">
     </div>
     <select id="statusFilter">
       <option value="">All Status</option>
@@ -402,6 +408,9 @@
       <option value="">All Types</option>
       <option value="umrah">Umrah</option>
       <option value="international">International</option>
+    </select>
+    <select id="userFilter" style="display: none;">
+      <option value="">All Users</option>
     </select>
     <select id="filterPeriod">
       <option value="maximum" selected>Maximum (All Quotations)</option>
@@ -429,6 +438,7 @@
           <th>Quotation #</th>
           <th>Type</th>
           <th>Client Name</th>
+          <th id="agentHeaderCol" style="display: none;">Agent</th>
           <th>Destination</th>
           <th>Date Created</th>
           <th>Expiry Date</th>
@@ -438,7 +448,7 @@
       </thead>
       <tbody id="allQuotationsTableBody">
         <tr>
-          <td colspan="8" style="text-align:center;">Loading quotations...</td>
+          <td colspan="9" style="text-align:center;">Loading quotations...</td>
         </tr>
       </tbody>
     </table>
@@ -471,13 +481,209 @@
   </div>
 </div>
 
+<!-- Package Modal -->
+<div id="packageModal" class="modal-overlay no-print">
+  <div class="modal-content" style="max-width: 800px;">
+    <div class="modal-header">
+      <h3 class="modal-title">Create Package</h3>
+      <button class="modal-close" onclick="closePackageModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="packageForm">
+        <div style="margin-bottom: 15px;">
+          <label>Package Name:</label>
+          <input type="text" id="packageName" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
+        <div style="margin-bottom: 15px;">
+          <label>Package Type:</label>
+          <select id="packageType" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            <option value="">-- Select package type --</option>
+            <option value="umrah">Umrah</option>
+            <option value="international">International</option>
+            <option value="both">Both</option>
+          </select>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px;">
+          <div>
+            <label>Adults:</label>
+            <input type="number" id="adults" min="1" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+          </div>
+          <div>
+            <label>Children:</label>
+            <input type="number" id="children" min="0" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+          </div>
+          <div>
+            <label>Infants:</label>
+            <input type="number" id="infants" min="0" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+          </div>
+        </div>
+        <div style="margin-bottom: 15px;">
+          <label>Air Tickets Total Price (PKR):</label>
+          <input type="number" id="airTickets" min="0" step="0.01" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px;">
+          <div>
+            <label>3 Star Hotels Total (PKR):</label>
+            <input type="number" id="hotels3Star" min="0" step="0.01" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+          </div>
+          <div>
+            <label>4 Star Hotels Total (PKR):</label>
+            <input type="number" id="hotels4Star" min="0" step="0.01" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+          </div>
+          <div>
+            <label>5 Star Hotels Total (PKR):</label>
+            <input type="number" id="hotels5Star" min="0" step="0.01" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+          </div>
+        </div>
+        <div style="margin-bottom: 15px;">
+          <label>Transfers Details:</label>
+          <textarea id="transfersDetails" rows="3" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"></textarea>
+        </div>
+        <div style="margin-bottom: 15px;">
+          <label>Transfers Total Price (PKR):</label>
+          <input type="number" id="transfersPrice" min="0" step="0.01" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
+        <div style="margin-bottom: 15px;">
+          <label>Tours & Activities Details:</label>
+          <textarea id="toursDetails" rows="3" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"></textarea>
+        </div>
+        <div style="margin-bottom: 15px;">
+          <label>Tours & Activities Total Price (PKR):</label>
+          <input type="number" id="toursPrice" min="0" step="0.01" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
+        <div style="margin-bottom: 15px;">
+          <button type="button" onclick="calculatePackagePrices()" class="btn-primary">Calculate Prices</button>
+        </div>
+        <div id="calculatedPrices" style="display: none; background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+          <h4>Calculated Prices Per Person:</h4>
+          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+            <div>Air: <span id="airPerPerson">0</span> PKR</div>
+            <div>3 Star Hotel: <span id="hotel3PerPerson">0</span> PKR</div>
+            <div>4 Star Hotel: <span id="hotel4PerPerson">0</span> PKR</div>
+            <div>5 Star Hotel: <span id="hotel5PerPerson">0</span> PKR</div>
+            <div>Transfers: <span id="transfersPerPerson">0</span> PKR</div>
+            <div>Tours: <span id="toursPerPerson">0</span> PKR</div>
+          </div>
+        </div>
+        <div style="text-align: right;">
+          <button type="submit" class="btn-primary">Save Package</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <script>
+// Show package modal
+function showPackageModal() {
+  document.getElementById('packageModal').classList.add('visible');
+}
+
+// Close package modal
+function closePackageModal() {
+  document.getElementById('packageModal').classList.remove('visible');
+  document.getElementById('packageForm').reset();
+  document.getElementById('calculatedPrices').style.display = 'none';
+}
+
+// Calculate package prices
+function calculatePackagePrices() {
+  const adults = parseInt(document.getElementById('adults').value) || 0;
+  const children = parseInt(document.getElementById('children').value) || 0;
+  const infants = parseInt(document.getElementById('infants').value) || 0;
+  const airTickets = parseFloat(document.getElementById('airTickets').value) || 0;
+  const hotels3Star = parseFloat(document.getElementById('hotels3Star').value) || 0;
+  const hotels4Star = parseFloat(document.getElementById('hotels4Star').value) || 0;
+  const hotels5Star = parseFloat(document.getElementById('hotels5Star').value) || 0;
+  const transfersPrice = parseFloat(document.getElementById('transfersPrice').value) || 0;
+  const toursPrice = parseFloat(document.getElementById('toursPrice').value) || 0;
+
+  const totalPax = adults + children + infants;
+  if (totalPax === 0) {
+    showNotification('Please enter at least one passenger', 'error');
+    return;
+  }
+
+  const airPerPerson = airTickets / totalPax;
+  const hotel3PerPerson = hotels3Star / totalPax;
+  const hotel4PerPerson = hotels4Star / totalPax;
+  const hotel5PerPerson = hotels5Star / totalPax;
+  const transfersPerPerson = transfersPrice / totalPax;
+  const toursPerPerson = toursPrice / totalPax;
+
+  document.getElementById('airPerPerson').textContent = airPerPerson.toFixed(2);
+  document.getElementById('hotel3PerPerson').textContent = hotel3PerPerson.toFixed(2);
+  document.getElementById('hotel4PerPerson').textContent = hotel4PerPerson.toFixed(2);
+  document.getElementById('hotel5PerPerson').textContent = hotel5PerPerson.toFixed(2);
+  document.getElementById('transfersPerPerson').textContent = transfersPerPerson.toFixed(2);
+  document.getElementById('toursPerPerson').textContent = toursPerPerson.toFixed(2);
+
+  document.getElementById('calculatedPrices').style.display = 'block';
+}
+
+// Save package
+document.getElementById('packageForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  
+  const agent = checkAgentLogin();
+  if (!agent || agent.role !== 'admin') {
+    showNotification('Only admin can create packages', 'error');
+    return;
+  }
+
+  const packageData = {
+    name: document.getElementById('packageName').value,
+    type: document.getElementById('packageType').value,
+    pax: {
+      adults: parseInt(document.getElementById('adults').value),
+      children: parseInt(document.getElementById('children').value) || 0,
+      infants: parseInt(document.getElementById('infants').value) || 0
+    },
+    costs: {
+      airTickets: parseFloat(document.getElementById('airTickets').value),
+      hotels: {
+        '3star': parseFloat(document.getElementById('hotels3Star').value) || 0,
+        '4star': parseFloat(document.getElementById('hotels4Star').value) || 0,
+        '5star': parseFloat(document.getElementById('hotels5Star').value) || 0
+      },
+      transfers: {
+        details: document.getElementById('transfersDetails').value,
+        price: parseFloat(document.getElementById('transfersPrice').value) || 0
+      },
+      tours: {
+        details: document.getElementById('toursDetails').value,
+        price: parseFloat(document.getElementById('toursPrice').value) || 0
+      }
+    },
+    prices: {
+      air: parseFloat(document.getElementById('airPerPerson').textContent),
+      hotels: {
+        '3star': parseFloat(document.getElementById('hotel3PerPerson').textContent),
+        '4star': parseFloat(document.getElementById('hotel4PerPerson').textContent),
+        '5star': parseFloat(document.getElementById('hotel5PerPerson').textContent)
+      },
+      transfers: parseFloat(document.getElementById('transfersPerPerson').textContent),
+      tours: parseFloat(document.getElementById('toursPerPerson').textContent)
+    },
+    createdAt: new Date().toISOString(),
+    createdBy: checkAgentLogin().id
+  };
+
+  const success = await window.firebaseDB.saveData('packages', packageData.name.replace(/\s+/g, '_').toLowerCase(), packageData);
+  if (success) {
+    showNotification('Package saved successfully', 'success');
+    closePackageModal();
+  }
+});
+
 // Dashboard JavaScript
 let currentPage = 1;
 const itemsPerPage = 10;
 let filteredAllQuotations = [];
 let allUmrahQuotations = [];
 let allInternationalQuotations = [];
+let allUsersQuotations = [];
+let viewMode = 'active'; // 'active', 'expired', 'all-users'
 
 // Check if agent is logged in
 function checkAgentLogin() {
@@ -609,6 +815,9 @@ function loadAgentInfo() {
   const agent = checkAgentLogin();
   if (agent) {
     document.getElementById("agentInfo").textContent = `Logged in as: ${agent.name} (${agent.phone})`;
+    if (agent.role === 'admin') {
+      document.getElementById("adminBtn").style.display = 'inline-block';
+    }
   }
 }
 
@@ -623,9 +832,27 @@ async function loadAllQuotations() {
   const firebaseData = await loadQuotationsFromFirebase(agent);
   console.log('Loaded firebaseData:', firebaseData);
   
-  allUmrahQuotations = firebaseData.umrah.map(q => ({...q, type: 'umrah'}));
+  allUmrahQuotations = firebaseData.umrah.map(q => ({...q, type: 'umrah', agentId: agent.id, agentName: agent.name}));
   
-  allInternationalQuotations = firebaseData.international.map(q => ({...q, type: 'international'}));
+  allInternationalQuotations = firebaseData.international.map(q => ({...q, type: 'international', agentId: agent.id, agentName: agent.name}));
+  
+  // Load all users' quotations for admin
+  if (agent.role === 'admin') {
+    allUsersQuotations = [];
+    try {
+      const allAgents = await window.firebaseDB.getAll('agents');
+      for (const agentData of allAgents) {
+        const agentQuotations = await loadQuotationsFromFirebase(agentData);
+        allUsersQuotations = allUsersQuotations.concat(
+          (agentQuotations.umrah || []).map(q => ({...q, type: 'umrah', agentId: agentData.id, agentName: agentData.name})),
+          (agentQuotations.international || []).map(q => ({...q, type: 'international', agentId: agentData.id, agentName: agentData.name}))
+        );
+      }
+      populateUserFilter();
+    } catch (err) {
+      console.error('Error loading all users quotations:', err);
+    }
+  }
   
   console.log('allUmrahQuotations:', allUmrahQuotations);
   console.log('allInternationalQuotations:', allInternationalQuotations);
@@ -701,8 +928,39 @@ function applyFilter() {
   }
   
   // Combine and filter quotations
-  const allQuotations = [...allUmrahQuotations, ...allInternationalQuotations];
-  filteredAllQuotations = allQuotations.filter(q => {
+  let baseQuotations = [...allUmrahQuotations, ...allInternationalQuotations];
+  
+  // Admin view: load all users' quotations
+  const agent = checkAgentLogin();
+  if (agent && agent.role === 'admin' && viewMode === 'all-users') {
+    baseQuotations = allUsersQuotations;
+  }
+  
+  // Separate active (< 30 days old) from archived (30+ days expired)
+  const now = new Date();
+  const thirtyDaysAgo = new Date(now);
+  thirtyDaysAgo.setDate(now.getDate() - 30);
+  
+  const activeQuotations = baseQuotations.filter(q => {
+    if (q.status === 'expired') {
+      const expireDate = new Date(q.expiresAt);
+      return expireDate >= thirtyDaysAgo; // Show expired < 30 days old
+    }
+    return true; // Keep all non-expired
+  });
+  
+  const archivedQuotations = baseQuotations.filter(q => {
+    if (q.status === 'expired') {
+      const expireDate = new Date(q.expiresAt);
+      return expireDate < thirtyDaysAgo; // Hide expired 30+ days old
+    }
+    return false;
+  });
+  
+  // Apply view mode
+  let displayQuotations = viewMode === 'expired' ? archivedQuotations : activeQuotations;
+  
+  filteredAllQuotations = displayQuotations.filter(q => {
     const createdDate = new Date(q.createdAt);
     return createdDate >= startDate && createdDate <= endDate;
   });
@@ -711,16 +969,19 @@ function applyFilter() {
   const searchTerm = document.getElementById('searchInput').value.toLowerCase();
   const statusFilter = document.getElementById('statusFilter').value;
   const typeFilter = document.getElementById('typeFilter').value;
+  const userFilter = document.getElementById('userFilter')?.value || '';
   
   filteredAllQuotations = filteredAllQuotations.filter(q => {
     const matchesSearch = !searchTerm || 
       q.id.toLowerCase().includes(searchTerm) || 
-      (q.clientData.name && q.clientData.name.toLowerCase().includes(searchTerm));
+      (q.clientData.name && q.clientData.name.toLowerCase().includes(searchTerm)) ||
+      (q.agentName && q.agentName.toLowerCase().includes(searchTerm));
     
     const matchesStatus = !statusFilter || q.status === statusFilter;
     const matchesType = !typeFilter || q.type === typeFilter;
+    const matchesUser = !userFilter || q.agentId === userFilter;
     
-    return matchesSearch && matchesStatus && matchesType;
+    return matchesSearch && matchesStatus && matchesType && matchesUser;
   });
   
   // Sort by creation date (newest first)
@@ -740,6 +1001,34 @@ function resetFilter() {
   document.getElementById('searchInput').value = '';
   document.getElementById('statusFilter').value = '';
   document.getElementById('typeFilter').value = '';
+  if (document.getElementById('userFilter')) {
+    document.getElementById('userFilter').value = '';
+  }
+  applyFilter();
+}
+
+// Populate user filter for admin
+function populateUserFilter() {
+  const agent = checkAgentLogin();
+  const userFilter = document.getElementById('userFilter');
+  if (!agent || agent.role !== 'admin' || !userFilter) return;
+  
+  const uniqueUsers = [...new Map(allUsersQuotations.map(q => [q.agentId, {id: q.agentId, name: q.agentName}])).values()];
+  uniqueUsers.forEach(user => {
+    if (!Array.from(userFilter.options).find(o => o.value === user.id)) {
+      const opt = document.createElement('option');
+      opt.value = user.id;
+      opt.textContent = user.name;
+      userFilter.appendChild(opt);
+    }
+  });
+}
+
+// Change view mode (active/expired/all-users)
+function changeViewMode(mode) {
+  viewMode = mode;
+  document.querySelectorAll('.view-mode-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelector(`[data-mode="${mode}"]`).classList.add('active');
   applyFilter();
 }
 
@@ -775,12 +1064,22 @@ function updateStatistics() {
 function renderQuotationsTable() {
   const tableBody = document.getElementById('allQuotationsTableBody');
   const quotations = filteredAllQuotations;
+  const agent = checkAgentLogin();
   
   if (quotations.length === 0) {
-    tableBody.innerHTML = `<tr><td colspan="8" style="text-align:center;">No quotations found</td></tr>`;
+    tableBody.innerHTML = `<tr><td colspan="9" style="text-align:center;">No quotations found</td></tr>`;
     document.getElementById('allPagination').innerHTML = '';
     return;
   }
+  
+  // Show/hide agent column based on admin viewing all users
+  const agentCol = document.getElementById('agentHeaderCol');
+  const showAgentCol = agent && agent.role === 'admin' && viewMode === 'all-users';
+  if (agentCol) agentCol.style.display = showAgentCol ? 'table-cell' : 'none';
+  const allUsersBtn = document.getElementById('allUsersBtn');
+  if (allUsersBtn) allUsersBtn.style.display = agent && agent.role === 'admin' ? 'inline-block' : 'none';
+  const userFilter = document.getElementById('userFilter');
+  if (userFilter) userFilter.style.display = showAgentCol ? 'inline-block' : 'none';
   
   // Calculate pagination
   const totalPages = Math.ceil(quotations.length / itemsPerPage);
@@ -822,10 +1121,16 @@ function renderQuotationsTable() {
       : (quotation.clientData.tourDestination || 'N/A');
     
     // Build row HTML
-    const rowHTML = `
+    let rowHTML = `
       <td>${quotation.id}</td>
       <td>${typeBadge}</td>
-      <td>${quotation.clientData.name || 'N/A'}</td>
+      <td>${quotation.clientData.name || 'N/A'}</td>`;
+    
+    if (showAgentCol) {
+      rowHTML += `<td>${quotation.agentName || 'N/A'}</td>`;
+    }
+    
+    rowHTML += `
       <td>${destination}</td>
       <td>${createdDate}</td>
       <td class="${expiryClass}">${expiryDate}</td>
@@ -1004,6 +1309,9 @@ window.resetFilter = resetFilter;
 window.viewQuotation = viewQuotation;
 window.editQuotation = editQuotation;
 window.deleteQuotation = deleteQuotation;
+window.showPackageModal = showPackageModal;
+window.closePackageModal = closePackageModal;
+window.calculatePackagePrices = calculatePackagePrices;
 
 // Initialize dashboard
 document.addEventListener('DOMContentLoaded', async function() {

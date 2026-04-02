@@ -196,8 +196,8 @@
 <script>
 // Predefined agents
 const predefinedAgents = [
-  { email: "atif@fc.com", name: "Muhammad Atif", phone: "03002022713", password: "atif123" },
-  { email: "owais@fc.com", name: "Owais Shah", phone: "0300202992", password: "owais123" }
+  { email: "atif@fc.com", name: "Muhammad Atif", phone: "03002022713", password: "atif123", role: "admin" },
+  { email: "owais@fc.com", name: "Owais Shah", phone: "0300202992", password: "owais123", role: "agent" }
 ];
 
 // Switch between tabs
@@ -253,18 +253,22 @@ document.getElementById('loginForm').addEventListener('submit', function(e) {
     let agent;
     if (agentDoc.exists()) {
       agent = agentDoc.data();
+      if (!agent.role) {
+        agent.role = 'agent';
+      }
     } else {
       // Create agent doc if it doesn't exist (for existing Firebase users)
       agent = {
         email: user.email,
         name: user.displayName || user.email.split('@')[0],  // Fallback name
         phone: '',  // Can be updated later
+        role: 'agent',
         registeredAt: new Date().toISOString()
       };
       await window.setDoc(window.doc(window.db, 'agents', user.uid), agent);
     }
     agent.id = user.uid;  // Ensure id is set
-    agent.uid = user.uid;  // Ensure uid is set
+    agent.uid = user.uid;
     // Also keep in localStorage for instant access
     localStorage.setItem("loggedInAgent", JSON.stringify(agent));
     localStorage.setItem("agentLoggedIn", "true");
@@ -352,6 +356,7 @@ document.getElementById('registerForm').addEventListener('submit', function(e) {
       email: email,
       name: name,
       phone: phone,
+      role: 'agent',
       registeredAt: new Date().toISOString()
     });
     
@@ -361,6 +366,7 @@ document.getElementById('registerForm').addEventListener('submit', function(e) {
       email: email,
       name: name,
       phone: phone,
+      role: 'agent',
       id: user.uid
     };
     localStorage.setItem("loggedInAgent", JSON.stringify(agent));
@@ -413,6 +419,8 @@ document.addEventListener('DOMContentLoaded', function() {
   // Check predefined login
   const agent = JSON.parse(localStorage.getItem("loggedInAgent"));
   if (agent) {
+    if (!agent.role) agent.role = 'agent';
+    localStorage.setItem("loggedInAgent", JSON.stringify(agent));
     // Check if login is recent (within 24 hours)
     const loginTime = localStorage.getItem("loginTime");
     if (loginTime) {

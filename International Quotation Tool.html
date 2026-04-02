@@ -811,6 +811,49 @@ function updateAgentUI() {
   }
 }
 
+let availablePackages = [];
+
+async function loadPackages(type = 'international') {
+  const packageSelect = document.getElementById('packageSelect');
+  if (!packageSelect) return;
+  packageSelect.innerHTML = '<option value="">-- No Package --</option>';
+
+  try {
+    const packages = await window.firebaseDB.getAll('packages');
+    availablePackages = packages || [];
+    const filtered = availablePackages.filter(pkg => pkg.type === type || pkg.type === 'both');
+
+    filtered.forEach(pkg => {
+      const opt = document.createElement('option');
+      opt.value = pkg.id || pkg.name.replace(/\s+/g, '_').toLowerCase();
+      opt.textContent = `${pkg.name} (${pkg.type})`;
+      packageSelect.appendChild(opt);
+    });
+  } catch (error) {
+    console.error('Failed to load packages', error);
+    showNotification('Failed to load packages', 'error');
+  }
+}
+
+function applyPackageToForm(pkg) {
+  if (!pkg) return;
+  if (document.getElementById('numAdult')) document.getElementById('numAdult').value = pkg.pax.adults || 0;
+  if (document.getElementById('numChildBed')) document.getElementById('numChildBed').value = pkg.pax.children || 0;
+  if (document.getElementById('numChildNoBed')) document.getElementById('numChildNoBed').value = pkg.pax.children || 0;
+  if (document.getElementById('numInfant')) document.getElementById('numInfant').value = pkg.pax.infants || 0;
+
+  const flightCostAdult = document.getElementById('flightCostAdult_0');
+  if (flightCostAdult) flightCostAdult.value = pkg.prices?.air || '';
+  const flightCostChildBed = document.getElementById('flightCostChildBed_0');
+  if (flightCostChildBed) flightCostChildBed.value = pkg.prices?.air || '';
+  const flightCostChildNoBed = document.getElementById('flightCostChildNoBed_0');
+  if (flightCostChildNoBed) flightCostChildNoBed.value = pkg.prices?.air || '';
+  const flightCostInf = document.getElementById('flightCostInf_0');
+  if (flightCostInf) flightCostInf.value = pkg.prices?.air || '';
+
+  // More mapping can be added
+}
+
 // --- DASHBOARD BUTTON ---
 document.getElementById('btnDashboard').addEventListener('click', () => {
   window.location.href = 'dashboard.html';
@@ -827,6 +870,18 @@ document.addEventListener('DOMContentLoaded', function() {
   const agent = checkAuthentication();
   if (agent) {
     updateAgentUI();
+    loadPackages();
+
+    const packageSelect = document.getElementById('packageSelect');
+    if (packageSelect) {
+      packageSelect.addEventListener('change', function () {
+        const val = this.value;
+        if (!val) return;
+        const pkg = availablePackages.find(p => (p.id === val) || (p.name.replace(/\s+/g, '_').toLowerCase() === val));
+        if (pkg) applyPackageToForm(pkg);
+      });
+    }
+
     // Load quotations from Firebase
     window.firebaseDB.getData('international_quotations', agent.id).then(firebaseData => {
       if (firebaseData && firebaseData.quotations) {
@@ -853,6 +908,17 @@ document.addEventListener('DOMContentLoaded', function() {
       <div id="agentPhoneDisplay" class="small"></div>
     </div>
   </header>
+</div>
+
+<!-- PACKAGE SELECTION -->
+<div class="section">
+  <h3>Package Selection (Optional)</h3>
+  <div>
+    <label for="packageSelect">Select Package</label>
+    <select id="packageSelect">
+      <option value="">-- No Package --</option>
+    </select>
+  </div>
 </div>
 
   <!-- CLIENT & PAX -->
