@@ -1203,13 +1203,9 @@ async function loadAllQuotations() {
       }
 
       const usersFromUsersCollection = await window.firebaseDB.getAll('users');
-      const usersFromAgentsCollection = await window.firebaseDB.getAll('agents');
       const allUsersMap = new Map();
 
       usersFromUsersCollection.forEach(u => allUsersMap.set(u.id, u));
-      usersFromAgentsCollection.forEach(u => {
-        if (!allUsersMap.has(u.id)) allUsersMap.set(u.id, u);
-      });
 
       for (const userData of allUsersMap.values()) {
         if (!userData?.id) continue;
