@@ -10,7 +10,7 @@
   // Import the functions you need from the SDKs you need
   import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
   import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
 
   // Your web app's Firebase configuration
   const firebaseConfig = {
@@ -112,6 +112,7 @@
   window.deleteDoc = deleteDoc;
   window.updateDoc = updateDoc;
   window.signOut = signOut;
+  window.onAuthStateChanged = onAuthStateChanged;
 </script>
 <style>
   :root{--accent:#0b76d1;--muted:#666;--success:#28a745;--warning:#f39c12;--danger:#e74c3c;--info:#17a2b8}
@@ -980,6 +981,34 @@ function isFirebaseAvailableForDashboard() {
   return window.location.protocol !== 'file:' && !!window.auth?.currentUser;
 }
 
+function waitForFirebaseAuthSession(timeoutMs = 5000) {
+  return new Promise(resolve => {
+    if (window.location.protocol === 'file:' || !window.auth || !window.onAuthStateChanged) {
+      resolve(null);
+      return;
+    }
+
+    if (window.auth.currentUser) {
+      resolve(window.auth.currentUser);
+      return;
+    }
+
+    let settled = false;
+    let unsubscribe = () => {};
+
+    const finish = (user) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      unsubscribe();
+      resolve(user || null);
+    };
+
+    const timer = setTimeout(() => finish(window.auth.currentUser), timeoutMs);
+    unsubscribe = window.onAuthStateChanged(window.auth, user => finish(user), () => finish(null));
+  });
+}
+
 function getLocalQuotationsSnapshot() {
   return {
     umrah: JSON.parse(localStorage.getItem('savedQuotations')) || [],
@@ -1149,6 +1178,9 @@ function loadAgentInfo() {
 async function loadAllQuotations() {
   const agent = checkAgentLogin();
   if (!agent) return;
+
+  // Wait for Firebase auth state restoration to avoid transient null currentUser on page load.
+  await waitForFirebaseAuthSession();
   
   console.log('Agent ID:', agent.id);
   
