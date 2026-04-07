@@ -1,0 +1,130 @@
+// FIRESTORE SECURITY RULES
+// Copy-paste this entire ruleset into Firebase Console > Firestore > Rules
+// Then click "Publish"
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ==================== USERS COLLECTION ====================
+    // Users Collection - Approval workflow
+    match /users/{userId} {
+      // Users can read their own document
+      allow read: if request.auth.uid == userId;
+      
+      // Users can create their own document during signup
+      allow create: if request.auth.uid == userId 
+        && request.resource.data.uid == userId
+        && (request.resource.data.status == 'pending' || request.resource.data.status == 'approved');
+      
+      // Users can update only their own document (except status/role which only admin updates)
+      allow update: if request.auth.uid == userId 
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status', 'role', 'approvedAt', 'approvedBy']);
+      
+      // Admins can read all users
+      allow read: if isAdmin();
+      
+      // Admins can update status, role, approval fields
+      allow update: if isAdmin();
+      
+      // Admins can delete user documents when removing agents/users
+      allow delete: if isAdmin();
+    }
+    
+    // ==================== AGENTS COLLECTION ====================
+    // Agents Collection - User agents management
+    match /agents/{agentId} {
+      // Users can read agents they own
+      allow read: if request.auth.uid == resource.data.ownerId;
+      
+      // Approved users can create agents
+      allow create: if request.auth != null 
+        && isApproved()
+        && request.resource.data.ownerId == request.auth.uid;
+      
+      // Users can update agents they own
+      allow update: if request.auth.uid == resource.data.ownerId;
+      
+      // Users can delete agents they own
+      allow delete: if request.auth.uid == resource.data.ownerId;
+    }
+    
+    // ==================== UMRAH QUOTATIONS ====================
+    // Umrah Quotations - Approved users only
+    match /umrah_quotations/{quotationId} {
+      // Approved users can read quotations
+      allow read: if isApproved();
+      
+      // Approved users can create quotations
+      allow create: if isApproved();
+      
+      // Users can update their own quotations; admins can manage all for reassignment
+      allow update: if isApproved() && (resource.data.userId == request.auth.uid || resource.data.agentId == request.auth.uid || isAdmin());
+      
+      // Users can delete their own quotations; admins can delete during transfers/removals
+      allow delete: if isApproved() && (resource.data.userId == request.auth.uid || resource.data.agentId == request.auth.uid || isAdmin());
+    }
+    
+    // ==================== INTERNATIONAL QUOTATIONS ====================
+    // International Quotations - Approved users only
+    match /international_quotations/{quotationId} {
+      // Approved users can read quotations
+      allow read: if isApproved();
+      
+      // Approved users can create quotations
+      allow create: if isApproved();
+      
+      // Users can update their own quotations; admins can manage all for reassignment
+      allow update: if isApproved() && (resource.data.userId == request.auth.uid || resource.data.agentId == request.auth.uid || isAdmin());
+      
+      // Users can delete their own quotations; admins can delete during transfers/removals
+      allow delete: if isApproved() && (resource.data.userId == request.auth.uid || resource.data.agentId == request.auth.uid || isAdmin());
+    }
+    
+    // ==================== PACKAGES COLLECTION ====================
+    // Packages - Authenticated users can read, admin can write
+    match /packages/{packageId} {
+      // Authenticated users can read all packages
+      allow read: if request.auth != null;
+      
+      // Admin users can create packages
+      allow create: if isAdmin();
+      
+      // Admin users can update packages
+      allow update: if isAdmin();
+      
+      // Admin users can delete packages
+      allow delete: if isAdmin();
+    }
+    
+    // ==================== DESTINATIONS COLLECTION ====================
+    // Destinations - For package builder reference data
+    match /destinations/{destinationId} {
+      // Anyone can read destinations
+      allow read: if true;
+      
+      // Only admin can modify destinations
+      allow write: if isAdmin();
+    }
+    
+    // ==================== HELPER FUNCTIONS ====================
+    
+    // Check if user is admin
+    function isAdmin() {
+      return request.auth != null 
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Check if user is approved
+    function isApproved() {
+      return request.auth != null 
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'approved';
+    }
+    
+    // Check if user document exists
+    function userExists(userId) {
+      return exists(/databases/$(database)/documents/users/$(userId));
+    }
+    
+  }
+}

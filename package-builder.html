@@ -1,0 +1,1778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Advanced Package Builder - Flight Connection</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyDx3Qxt84vJlz_-mXuxiC0W2flaLadr9Ws",
+    authDomain: "fc-quotation-tool.firebaseapp.com",
+    projectId: "fc-quotation-tool",
+    storageBucket: "fc-quotation-tool.firebasestorage.app",
+    messagingSenderId: "370566945624",
+    appId: "1:370566945624:web:a84b20d5a8f99d20a6e32d"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+
+  window.auth = auth;
+  window.db = db;
+  window.firebaseDB = {
+    async saveData(collection_name, docId, data) {
+      try {
+        window.lastFirebaseError = null;
+        await db.collection(collection_name).doc(docId).set(data, { merge: true });
+        return true;
+      } catch (error) {
+        window.lastFirebaseError = error;
+        console.error(`Error saving to ${collection_name}:`, error);
+        return false;
+      }
+    },
+    async getData(collection_name, docId) {
+      try {
+        const snap = await db.collection(collection_name).doc(docId).get();
+        return snap.exists ? snap.data() : null;
+      } catch (error) {
+        console.error(`Error getting from ${collection_name}:`, error);
+        return null;
+      }
+    },
+    async getAll(collection_name) {
+      try {
+        const snapshot = await db.collection(collection_name).get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      } catch (error) {
+        console.error(`Error getting all from ${collection_name}:`, error);
+        return [];
+      }
+    }
+  };
+</script>
+
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; background: #f3f6fb; color: #111; }
+  .header { background: linear-gradient(135deg, #0b76d1, #0d5fa8); color: white; padding: 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+  .header h1 { font-size: 24px; }
+  .btn-close { background: none; border: none; color: white; font-size: 28px; cursor: pointer; }
+  .wrap { max-width: 1100px; margin: 20px auto; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); max-height: calc(100vh - 150px); overflow-y: auto; }
+  .section { margin-bottom: 30px; padding: 20px; background: #f9f9f9; border-radius: 8px; border-left: 4px solid #0b76d1; }
+  .section h3 { margin: 0 0 20px 0; color: #0b76d1; font-size: 18px; display: flex; align-items: center; gap: 10px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; }
+  .grid.full { grid-template-columns: 1fr; }
+  .grid.cols2 { grid-template-columns: repeat(2, 1fr); }
+  .grid.cols3 { grid-template-columns: repeat(3, 1fr); }
+  .grid.cols4 { grid-template-columns: repeat(4, 1fr); }
+  label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 13px; color: #333; }
+  label .req { color: #e74c3c; }
+  input, select, textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit; font-size: 13px; box-sizing: border-box; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: #0b76d1; box-shadow: 0 0 0 3px rgba(11, 118, 209, 0.1); }
+  textarea { resize: vertical; min-height: 60px; }
+  .subsection { background: white; padding: 15px; border: 1px solid #e0e0e0; border-radius: 6px; margin-bottom: 15px; position: relative; }
+  .subsection-header { font-weight: 600; color: #0b76d1; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
+  .btn { padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px; transition: all 0.3s; }
+  .btn-add { background: #0b76d1; color: white; }
+  .btn-add:hover { background: #085ea3; }
+  .btn-remove { background: #e74c3c; color: white; padding: 5px 10px; font-size: 12px; }
+  .btn-remove:hover { background: #c0392b; }
+  .btn-primary { background: #27ae60; color: white; padding: 12px 30px; font-size: 16px; }
+  .btn-primary:hover { background: #229954; }
+  .btn-secondary { background: #95a5a6; color: white; padding: 12px 30px; font-size: 16px; }
+  .btn-secondary:hover { background: #7f8c8d; }
+  .btn-print { background: #f39c12; color: white; padding: 12px 30px; font-size: 16px; }
+  .btn-print:hover { background: #e67e22; }
+  .actions { display: flex; gap: 10px; margin-top: 30px; justify-content: center; padding-top: 20px; border-top: 2px solid #e0e0e0; }
+  .notification { padding: 15px; border-radius: 4px; margin-bottom: 15px; font-weight: 600; }
+  .notification.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+  .notification.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+  .hidden { display: none !important; }
+  .badge { display: inline-block; background: #0b76d1; color: white; padding: 3px 8px; border-radius: 3px; font-size: 11px; margin-left: 5px; }
+  
+  /* Print Styles */
+  .print-document {
+    display: none;
+    width: 100%;
+    background: white;
+    padding: 40px;
+    font-family: Arial, sans-serif;
+    color: #333;
+  }
+  .print-document.show { display: block; }
+  .print-header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #0b76d1; padding-bottom: 20px; }
+  .print-header h1 { font-size: 28px; margin: 10px 0; color: #0b76d1; }
+  .print-header p { margin: 5px 0; color: #666; }
+  .print-section { margin-bottom: 25px; page-break-inside: avoid; }
+  .print-section h2 { font-size: 18px; color: #0b76d1; border-bottom: 2px solid #0b76d1; padding-bottom: 10px; margin-bottom: 15px; }
+  .print-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+  .print-table th { background: #0b76d1; color: white; padding: 10px; text-align: left; font-size: 12px; }
+  .print-table td { border: 1px solid #ddd; padding: 10px; font-size: 12px; }
+  .print-table tr:nth-child(even) { background: #f9f9f9; }
+  .print-details { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 15px; }
+  .print-detail-label { font-weight: 600; color: #0b76d1; font-size: 12px; }
+  .print-detail-value { font-size: 13px; }
+  .print-footer { text-align: center; margin-top: 40px; padding-top: 20px; border-top: 2px solid #ddd; color: #999; font-size: 12px; }
+  
+  @media print {
+    body { margin: 0; padding: 0; background: white; }
+    .wrap { max-height: none; overflow: visible; box-shadow: none; margin: 0; padding: 0; }
+    .print-document { display: block; padding: 0; }
+    .section, .header { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>📦 Advanced Package Builder</h1>
+  <button class="btn-close" onclick="window.close()">✕</button>
+</div>
+
+<div class="wrap">
+  <div id="notification"></div>
+
+  <form id="packageForm">
+
+    <!-- PACKAGE DETAILS & DESTINATIONS -->
+    <div class="section">
+      <h3>📋 Package Details & Destinations</h3>
+      <div class="grid cols2">
+        <div>
+          <label>Package Name <span class="req">*</span></label>
+          <input type="text" id="packageName" required placeholder="e.g., March International Tour 2024">
+        </div>
+        <div>
+          <label>Package Type <span class="req">*</span></label>
+          <select id="packageType" required onchange="updateSections()">
+            <option value="">-- Select --</option>
+            <option value="umrah">Umrah</option>
+            <option value="international">International</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid cols3">
+        <div>
+          <label>Travel Month & Year <span class="req">*</span></label>
+          <select id="travelMonthYear" required>
+            <option value="">-- Select Month & Year --</option>
+            <option value="04-2026">April 2026</option>
+            <option value="05-2026">May 2026</option>
+            <option value="06-2026">June 2026</option>
+            <option value="07-2026">July 2026</option>
+            <option value="08-2026">August 2026</option>
+            <option value="09-2026">September 2026</option>
+            <option value="10-2026">October 2026</option>
+            <option value="11-2026">November 2026</option>
+            <option value="12-2026">December 2026</option>
+            <option value="01-2027">January 2027</option>
+            <option value="02-2027">February 2027</option>
+            <option value="03-2027">March 2027</option>
+          </select>
+        </div>
+        <div>
+          <label>Total Nights <span class="req">*</span></label>
+          <input type="number" id="totalNights" min="1" max="30" required placeholder="10">
+        </div>
+        <div></div>
+      </div>
+
+      <h4 style="margin: 30px 0 15px 0; color: #0b76d1; font-size: 16px; border-bottom: 2px solid #0b76d1; padding-bottom: 8px;">🌍 Destinations & Cities</h4>
+      <div id="destinationsContainer"></div>
+      <button type="button" class="btn btn-add" onclick="addDestination()">+ Add Destination</button>
+    </div>
+
+    <!-- FLIGHT DETAILS -->
+    <div class="section">
+      <h3>✈️ Flight Details</h3>
+      <div id="flightsContainer"></div>
+      <button type="button" class="btn btn-add" onclick="addFlight()">+ Add Flight Sector</button>
+    </div>
+
+    <!-- HOTEL DETAILS -->
+    <div class="section">
+      <h3>🏨 Hotel Details</h3>
+      <div id="hotelsContainer"></div>
+      <button type="button" class="btn btn-add" onclick="addHotel()">+ Add Hotel</button>
+    </div>
+
+    <!-- TOUR DETAILS (International Only) -->
+    <div class="section hidden" id="tourSection">
+      <h3>🎫 Tour Details</h3>
+      <div id="toursContainer"></div>
+      <button type="button" class="btn btn-add" onclick="addTour()">+ Add Tour</button>
+    </div>
+
+    <!-- TRANSFER DETAILS -->
+    <div class="section">
+      <h3>🚗 Transfer Details</h3>
+      <div id="transfersContainer"></div>
+      <button type="button" class="btn btn-add" onclick="addTransfer()">+ Add Transfer</button>
+    </div>
+
+    <!-- VISA DETAILS -->
+    <div class="section">
+      <h3>🛂 Visa Details</h3>
+      <div id="visasContainer"></div>
+      <button type="button" class="btn btn-add" onclick="addVisa()">+ Add Visa</button>
+    </div>
+
+    <!-- SERVICE CHARGE -->
+    <div class="section">
+      <h3>💰 Service Charge</h3>
+      <div class="grid cols2">
+        <div>
+          <label>Service Charge Per Adult <span class="req">*</span></label>
+          <input type="number" id="chargeAdult" min="0" step="0.01" required placeholder="0">
+        </div>
+        <div>
+          <label>Service Charge Per Child (With Bed) <span class="req">*</span></label>
+          <input type="number" id="chargeChildBed" min="0" step="0.01" required placeholder="0">
+        </div>
+      </div>
+      <div class="grid cols2">
+        <div>
+          <label>Service Charge Per Child (Without Bed) <span class="req">*</span></label>
+          <input type="number" id="chargeChildNoBed" min="0" step="0.01" required placeholder="0">
+        </div>
+        <div>
+          <label>Service Charge Per Infant <span class="req">*</span></label>
+          <input type="number" id="chargeInfant" min="0" step="0.01" required placeholder="0">
+        </div>
+      </div>
+    </div>
+
+    <!-- ACTIONS -->
+    <div class="actions">
+      <button type="button" class="btn btn-secondary" onclick="window.close()">Cancel</button>
+      <button type="submit" class="btn btn-primary">💾 Save Package</button>
+      <button type="button" class="btn btn-print" onclick="generatePDF()">🖨️ Print Package (PDF)</button>
+      <button type="button" class="btn btn-print" style="background:#27a9e1;" onclick="generateImage()">🖼️ Download as Image (PNG)</button>
+    </div>
+<script>
+// Generate PNG image with same layout as PDF
+async function generateImage() {
+  showNotification('⏳ Generating image... Please wait', 'success');
+  const pkgName = document.getElementById('packageName').value.trim();
+  if (!pkgName) {
+    showNotification('Save or fill package name first', 'error');
+    return;
+  }
+  const monthYearVal = document.getElementById('travelMonthYear').value || '';
+  const [monthVal, yearVal] = monthYearVal ? monthYearVal.split('-') : ['N/A', 'N/A'];
+  const monthNames = [ '', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December' ];
+  let travelPeriod = 'N/A';
+  if (monthVal && yearVal && monthVal.length === 2 && !isNaN(Number(monthVal))) {
+    const monthNum = parseInt(monthVal, 10);
+    travelPeriod = monthNum > 0 && monthNum <= 12 ? `${monthNames[monthNum]}/${yearVal}` : `${monthVal}/${yearVal}`;
+  } else if (monthVal && yearVal) {
+    travelPeriod = `${monthVal}/${yearVal}`;
+  }
+  const packageCode = currentPackageCode || await getNextPackageCode();
+  const totalNights = Number(document.getElementById('totalNights').value || 0);
+  const totalDays = totalNights > 0 ? totalNights + 1 : 0;
+  const destinationRows = Array.from(document.querySelectorAll('#destinationsContainer .subsection')).map(s => ({
+    city: s.querySelector('.destCity')?.value?.trim() || '',
+    nights: Number(s.querySelector('.destNights')?.value || 0)
+  })).filter(d => d.city);
+  const destinationNames = [...new Set(destinationRows.map(d => d.city))].join(', ') || 'N/A';
+  const cityNightText = destinationRows.length
+    ? destinationRows.map(d => `${d.city}: ${d.nights}N`).join(' | ')
+    : 'N/A';
+  // --- Prepare inclusions/exclusions/price/terms as in PDF ---
+  const inclusions = [];
+  const titleCase = (txt = '') => String(txt).toLowerCase().replace(/\b\w/g, ch => ch.toUpperCase());
+  const normalizeAirline = (name = '') => { const v = String(name).trim(); if (!v) return 'Airline'; if (v.toLowerCase() === 'airasia') return 'Air Asia'; return titleCase(v); };
+  const normalizeHotelCategory = (cat = '') => { const v = String(cat).trim().toLowerCase(); if (!v) return 'Hotel'; if (v.includes('3')) return '3-Star'; if (v.includes('4')) return '4-Star'; if (v.includes('5')) return '5-Star'; return titleCase(cat); };
+  const normalizeVehicle = (vehicle = '') => { const v = String(vehicle).trim(); return v ? titleCase(v) : 'Vehicle'; };
+  const normalizeRoute = (route = '') => String(route).trim().replace(/\s+/g, '').replace(/-/g, ' - ').toUpperCase();
+  document.querySelectorAll('#flightsContainer .subsection').forEach(item => {
+    const airline = normalizeAirline(item.querySelector('.flAirline')?.value || 'Airline');
+    const sector = normalizeRoute(item.querySelector('.flSector')?.value || '');
+    const flightType = item.querySelector('.flType')?.value || 'Flight';
+    inclusions.push(`${titleCase(flightType)} Flight${sector ? ` ${sector}` : ''} by ${airline}`);
+  });
+  document.querySelectorAll('#hotelsContainer .subsection').forEach(item => {
+    const category = normalizeHotelCategory(item.querySelector('.htlCategory')?.value || 'Hotel');
+    const city = titleCase(item.querySelector('.htlCity')?.value || 'Destination City');
+    const mealPlan = item.querySelector('.htlMealPlan')?.value || 'Breakfast Included';
+    const nights = item.querySelector('.htlNights')?.value || '';
+    inclusions.push(`${category} hotel in ${city} (${nights ? nights + ' nights, ' : ''}${mealPlan})`);
+  });
+  document.querySelectorAll('#toursContainer .subsection').forEach(item => {
+    const name = titleCase(item.querySelector('.trName')?.value || 'Tour');
+    const city = titleCase(item.querySelector('.trCity')?.value || '');
+    const vehicle = normalizeVehicle(item.querySelector('.trVehicle')?.value || 'vehicle');
+    inclusions.push(`${name}${city ? ` in ${city}` : ''} by ${vehicle}`);
+  });
+  document.querySelectorAll('#transfersContainer .subsection').forEach(item => {
+    const from = titleCase(item.querySelector('.tfFrom')?.value || 'Point A');
+    const to = titleCase(item.querySelector('.tfTo')?.value || 'Point B');
+    const vehicle = normalizeVehicle(item.querySelector('.tfVehicle')?.value || 'vehicle');
+    inclusions.push(`Return transfer from ${from} to ${to} by ${vehicle}`);
+  });
+  document.querySelectorAll('#visasContainer .subsection').forEach(item => {
+    const country = titleCase(item.querySelector('.vsCountry')?.value || 'Destination');
+    const visaType = item.querySelector('.vsType')?.value || 'Visa';
+    inclusions.push(`${visaType} visa processing for ${country}`);
+  });
+  const exclusions = [
+    'Lunch and Dinner (if not explicitly mentioned)',
+    'Early check-in / Late check-out',
+    'Entrance tickets if not mentioned',
+    'Meals in flight if not mentioned',
+    'Personal expenses, tips, laundry, and phone calls',
+    'Any item not clearly mentioned in inclusions'
+  ];
+  // --- Price lines: use same calculation as PDF ---
+  // --- Calculation logic (copied from PDF) ---
+  const toNumber = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+  const toPKR = (value, currency = 'PKR', roe = 1) => {
+    const amount = toNumber(value);
+    if (!amount) return 0;
+    const cur = (currency || 'PKR').toUpperCase();
+    if (cur === 'PKR') return amount;
+    const rate = toNumber(roe) > 0 ? toNumber(roe) : 1;
+    return amount * rate;
+  };
+  let adultDouble = 0, adultTriple = 0, childWithBed = 0, childWithoutBed = 0, infant = 0;
+  document.querySelectorAll('#flightsContainer .subsection').forEach(item => {
+    const c = item.querySelector('.flCurrency')?.value || 'PKR';
+    const r = item.querySelector('.flROE')?.value || 1;
+    adultDouble += toPKR(item.querySelector('.flAdult')?.value, c, r);
+    adultTriple += toPKR(item.querySelector('.flAdult')?.value, c, r);
+    const childTicket = toPKR(item.querySelector('.flChild')?.value, c, r);
+    childWithBed += childTicket;
+    childWithoutBed += childTicket;
+    infant += toPKR(item.querySelector('.flInfant')?.value, c, r);
+  });
+  document.querySelectorAll('#hotelsContainer .subsection').forEach(item => {
+    const c = item.querySelector('.htlCurrency')?.value || 'PKR';
+    const r = item.querySelector('.htlROE')?.value || 1;
+    const nights = toNumber(item.querySelector('.htlNights')?.value);
+    const doubleRate = toNumber(item.querySelector('.htlDouble')?.value);
+    const tripleRate = toNumber(item.querySelector('.htlTriple')?.value);
+    const perAdultDoubleHotel = toPKR((doubleRate * nights) / 2, c, r);
+    const perAdultTripleHotel = toPKR((tripleRate * nights) / 3, c, r);
+    adultDouble += perAdultDoubleHotel;
+    adultTriple += perAdultTripleHotel;
+    childWithBed += perAdultDoubleHotel;
+  });
+  const applyMoveService = (item, prefix) => {
+    const currency = item.querySelector(`.${prefix}Currency`)?.value || 'PKR';
+    const roe = item.querySelector(`.${prefix}ROE`)?.value || 1;
+    const perVehicleRaw = toNumber(item.querySelector(`.${prefix}PerVehicle`)?.value);
+    const perVehicle = toPKR(perVehicleRaw, currency, roe);
+    if (perVehicleRaw > 0) {
+      const totalAdultsForSplit = 1;
+      const adultPart = totalAdultsForSplit > 0 ? perVehicle / totalAdultsForSplit : 0;
+      adultDouble += adultPart;
+      adultTriple += adultPart;
+      return;
+    }
+    const a = toPKR(item.querySelector(`.${prefix}Adult`)?.value, currency, roe);
+    const cnb = toPKR(item.querySelector(`.${prefix}ChildNoBed`)?.value, currency, roe);
+    adultDouble += a;
+    adultTriple += a;
+    childWithoutBed += cnb;
+    const cwbRaw = item.querySelector(`.${prefix}ChildBed`)?.value;
+    childWithBed += cwbRaw !== null && cwbRaw !== undefined && cwbRaw !== '' ? toPKR(cwbRaw, currency, roe) : cnb;
+  };
+  document.querySelectorAll('#transfersContainer .subsection').forEach(item => applyMoveService(item, 'tf'));
+  document.querySelectorAll('#toursContainer .subsection').forEach(item => applyMoveService(item, 'tr'));
+  document.querySelectorAll('#visasContainer .subsection').forEach(item => {
+    const c = item.querySelector('.vsCurrency')?.value || 'PKR';
+    const r = item.querySelector('.vsROE')?.value || 1;
+    const a = toPKR(item.querySelector('.vsAdult')?.value, c, r);
+    const ch = toPKR(item.querySelector('.vsChild')?.value, c, r);
+    const inf = toPKR(item.querySelector('.vsInfant')?.value, c, r);
+    adultDouble += a;
+    adultTriple += a;
+    childWithBed += ch;
+    childWithoutBed += ch;
+    infant += inf;
+  });
+  adultDouble += toNumber(document.getElementById('chargeAdult')?.value);
+  adultTriple += toNumber(document.getElementById('chargeAdult')?.value);
+  childWithBed += toNumber(document.getElementById('chargeChildBed')?.value);
+  childWithoutBed += toNumber(document.getElementById('chargeChildNoBed')?.value);
+  infant += toNumber(document.getElementById('chargeInfant')?.value);
+  const fmtPKR = (n) => `PKR ${Math.round(toNumber(n)).toLocaleString('en-PK')}`;
+  const priceLines = [
+    `Per Person on Double bed: ${fmtPKR(adultDouble)}`,
+    `Per Person on Triple bed: ${fmtPKR(adultTriple)}`,
+    `Per Child (2-12) with bed: ${fmtPKR(childWithBed)}`,
+    `Per Child (2-12) without bed: ${fmtPKR(childWithoutBed)}`,
+    `Per Infant (0-2): ${fmtPKR(infant)}`
+  ];
+  const terms = [
+    'Above is just a quotation. Rates can change any time without prior notice due to supplier and exchange-rate changes.',
+    'All bookings are subject to availability at the time of confirmation and receipt of advance payment.',
+    'Cancellation and refund charges are applied as per airline, hotel, and supplier policies.',
+    'Service charges are non-refundable once processing has started.',
+    'Flight Connection acts as an intermediary with third-party service providers and is not liable for supplier-side disruptions.',
+    'Passengers are responsible for valid travel documents including passport and visa requirements.'
+  ];
+  // --- Canvas size (A4 at 2x scale for high-DPI sharpness) ---
+  const scale = 2;
+  const width = 210 * scale * (96/25.4); // mm to px
+  const height = 297 * scale * (96/25.4);
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  // Ensure crisp text when downscaled
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  // White background
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, width, height);
+  ctx.save();
+  // --- Draw header (match PDF) ---
+  let y = 40 * scale;
+  ctx.font = `bold ${20*scale}px Arial`;
+  ctx.fillStyle = '#0b76d1';
+  ctx.textAlign = 'center';
+  ctx.fillText('FLIGHT CONNECTION TRAVEL & TOURS', width/2, y);
+  y += 24 * scale;
+  ctx.font = `bold ${18*scale}px Arial`;
+  ctx.fillText('PACKAGE QUOTATION', width/2, y);
+  y += 18 * scale;
+  ctx.font = `${10*scale}px Arial`;
+  ctx.fillStyle = '#555';
+  ctx.fillText('Mezzanine Floor, 17-E, Shahbaz Commercial, Phase 6. DHA', width/2, y);
+  y += 14 * scale;
+  ctx.fillText('www.flightconnection.net.pk | info@flightconnection.net.pk', width/2, y);
+  y += 18 * scale;
+  ctx.font = `${13*scale}px Arial`;
+  ctx.fillStyle = '#222';
+  ctx.textAlign = 'left';
+  ctx.fillText(`Package Code: ${packageCode}`, 30*scale, y);
+  y += 18 * scale;
+  ctx.fillText(`Package Name: ${pkgName}`, 30*scale, y);
+  y += 18 * scale;
+  ctx.fillText(`Destinations: ${destinationNames}`, 30*scale, y);
+  y += 18 * scale;
+  ctx.fillText(`Cities with Nights: ${cityNightText}`, 30*scale, y);
+  y += 18 * scale;
+  // Add 5 Nights / 6 Days (calculate from cityNightText if possible)
+  let nights = 5;
+  let days = 6;
+  if (typeof cityNightText === 'string') {
+    const match = cityNightText.match(/(\d+)N/);
+    if (match) {
+      nights = parseInt(match[1], 10);
+      days = nights + 1;
+    }
+  }
+  ctx.fillText(`${nights} Nights / ${days} Days`, 30*scale, y);
+  y += 18 * scale;
+  ctx.fillText(`Travel Period: ${travelPeriod}`, 30*scale, y);
+  y += 18 * scale;
+  ctx.fillText(`Package Type: INTERNATIONAL`, 30*scale, y);
+  y += 24 * scale;
+  // --- Draw sections ---
+  const drawSection = (title, lines) => {
+    // Highlight background for heading
+    const headingHeight = 18*scale + 6*scale;
+    ctx.save();
+    ctx.fillStyle = 'rgba(237,244,255,0.95)';
+    ctx.fillRect(20*scale, y - 4*scale, width - 40*scale, headingHeight);
+    ctx.restore();
+    ctx.font = `bold ${15*scale}px Arial`;
+    ctx.fillStyle = '#0b76d1';
+    ctx.textAlign = 'left';
+    ctx.fillText(title, 30*scale, y + 12*scale);
+    y += headingHeight;
+    y += 6*scale; // Extra padding between heading and first bullet
+    ctx.font = `${12*scale}px Arial`;
+    ctx.fillStyle = '#222';
+    lines.forEach(line => {
+      // Add bullet for each line
+      ctx.fillText('• ' + line, 45*scale, y);
+      y += 16*scale;
+    });
+    y += 8*scale;
+  };
+  drawSection('Inclusions', inclusions.length ? inclusions : ['As per attached package service details']);
+  drawSection('Exclusions', exclusions);
+  drawSection('Price (All amounts in PKR)', priceLines);
+  drawSection('Terms & Conditions', terms);
+  // --- Footer ---
+  ctx.font = `${11*scale}px Arial`;
+  ctx.fillStyle = '#888';
+  ctx.textAlign = 'center';
+  ctx.fillText('Flight Connection Travel & Tours | www.flightconnection.net.pk', width/2, height-30*scale);
+  ctx.restore();
+  // --- Open PNG in new tab ---
+  const fileName = `${packageCode}-${pkgName}`.replace(/[^a-zA-Z0-9-_]/g, '_') + '.png';
+  canvas.toBlob(function(blob) {
+    const url = URL.createObjectURL(blob);
+    const win = window.open();
+    if (win) {
+      // Display at half size for sharpness
+      const displayWidth = Math.round(width / scale);
+      const displayHeight = Math.round(height / scale);
+      win.document.write(`
+        <html><head><title>${fileName}</title></head><body style='margin:0;background:#eee;display:flex;flex-direction:column;align-items:center;'>
+        <div style='padding:10px;font-family:sans-serif;color:#333;'>
+          <button id='downloadImgBtn' style='background:#0b76d1;color:#fff;padding:8px 18px;border:none;border-radius:5px;font-size:16px;cursor:pointer;margin-bottom:8px;'>⬇️ Download Image</button>
+          <button id='copyImgBtn' style='background:#4caf50;color:#fff;padding:8px 18px;border:none;border-radius:5px;font-size:16px;cursor:pointer;margin-left:10px;margin-bottom:8px;'>📋 Copy Image</button><br>
+          <span>Click a button to download or copy.<br><b>${fileName}</b></span>
+        </div>
+        <img id='imgPreview' src='${url}' width='${displayWidth}' height='${displayHeight}' style='max-width:98vw;max-height:95vh;border:2px solid #0b76d1;background:#fff;box-shadow:0 2px 12px #aaa;image-rendering:auto;'/>
+        <script>
+        document.getElementById('downloadImgBtn').onclick = function() {
+          const a = document.createElement('a');
+          a.href = '${url}';
+          a.download = '${fileName}';
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(() => document.body.removeChild(a), 100);
+        };
+        document.getElementById('copyImgBtn').onclick = async function() {
+          try {
+            const response = await fetch('${url}');
+            const blob = await response.blob();
+            await navigator.clipboard.write([
+              new window.ClipboardItem({ 'image/png': blob })
+            ]);
+            alert('✅ Image copied to clipboard!');
+          } catch (e) {
+            alert('❌ Failed to copy image. Your browser may not support this feature.');
+          }
+        };
+        <\/script>
+        </body></html>
+      `);
+    } else {
+      showNotification('Popup blocked! Please allow popups for image preview.', 'error');
+    }
+    showNotification('✅ Image generated and opened in new tab!', 'success');
+  }, 'image/png');
+}
+</script>
+
+  </form>
+
+  <!-- PRINT PREVIEW -->
+  <div id="printPreview" class="print-document"></div>
+
+</div>
+
+<script>
+let destCount = 0;
+let flightCount = 0;
+let hotelCount = 0;
+let tourCount = 0;
+let transferCount = 0;
+let visaCount = 0;
+let editingPackageId = null;
+let currentPackageCode = null;
+
+function formatPackageCode(number) {
+  return `PKG-${String(number).padStart(4, '0')}`;
+}
+
+async function getNextPackageCode() {
+  const packages = await window.firebaseDB.getAll('packages');
+  const maxCodeNumber = packages.reduce((max, pkg) => {
+    const match = String(pkg.packageCode || '').match(/^PKG-(\d{1,})$/i);
+    const codeNumber = match ? parseInt(match[1], 10) : 0;
+    return Math.max(max, Number.isFinite(codeNumber) ? codeNumber : 0);
+  }, 0);
+  return formatPackageCode(maxCodeNumber + 1);
+}
+
+function getEditingPackageIdFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('edit');
+}
+
+function resetDynamicSections() {
+  document.getElementById('destinationsContainer').innerHTML = '';
+  document.getElementById('flightsContainer').innerHTML = '';
+  document.getElementById('hotelsContainer').innerHTML = '';
+  document.getElementById('toursContainer').innerHTML = '';
+  document.getElementById('transfersContainer').innerHTML = '';
+  document.getElementById('visasContainer').innerHTML = '';
+
+  destCount = 0;
+  flightCount = 0;
+  hotelCount = 0;
+  tourCount = 0;
+  transferCount = 0;
+  visaCount = 0;
+}
+
+async function loadPackageForEditing(packageId) {
+  const data = await window.firebaseDB.getData('packages', packageId);
+  if (!data) {
+    showNotification('Package not found for editing', 'error');
+    return;
+  }
+
+  editingPackageId = packageId;
+  if (!data.packageCode) {
+    const assignedPackageCode = await getNextPackageCode();
+    data.packageCode = assignedPackageCode;
+    currentPackageCode = assignedPackageCode;
+    await window.firebaseDB.saveData('packages', packageId, { packageCode: assignedPackageCode });
+  } else {
+    currentPackageCode = data.packageCode;
+  }
+  const submitBtn = document.querySelector('#packageForm button[type="submit"]');
+  if (submitBtn) submitBtn.textContent = '💾 Update Package';
+
+  document.getElementById('packageName').value = data.name || '';
+  document.getElementById('packageType').value = data.type || '';
+  if (data.travelMonth && data.travelYear) {
+    document.getElementById('travelMonthYear').value = `${String(data.travelMonth).padStart(2, '0')}-${data.travelYear}`;
+  }
+  document.getElementById('totalNights').value = data.totalNights || '';
+  updateSections();
+  updateTourDaySelectors();
+
+  resetDynamicSections();
+
+  (data.destinations || []).forEach(d => {
+    addDestination();
+    const row = document.querySelector('#destinationsContainer .subsection:last-child');
+    if (!row) return;
+    row.querySelector('.destCity').value = d.city || '';
+    row.querySelector('.destNights').value = d.nights || '';
+  });
+  if (!(data.destinations || []).length) addDestination();
+  updateCitySelectors();
+
+  (data.flights || []).forEach(f => {
+    addFlight();
+    const row = document.querySelector('#flightsContainer .subsection:last-child');
+    if (!row) return;
+    row.querySelector('.flAirline').value = f.airline || '';
+    row.querySelector('.flVendor').value = f.vendor || '';
+    row.querySelector('.flCurrency').value = f.currency || 'PKR';
+    row.querySelector('.flROE').value = f.roe ?? '';
+    row.querySelector('.flType').value = f.type || 'Direct';
+    row.querySelector('.flSector').value = f.sector || '';
+    row.querySelector('.flAdult').value = f.priceAdult ?? '';
+    row.querySelector('.flChild').value = f.priceChild ?? '';
+    row.querySelector('.flInfant').value = f.priceInfant ?? '';
+  });
+  if (!(data.flights || []).length) addFlight();
+
+  (data.hotels || []).forEach(h => {
+    addHotel();
+    const row = document.querySelector('#hotelsContainer .subsection:last-child');
+    if (!row) return;
+    row.querySelector('.htlName').value = h.name || '';
+    row.querySelector('.htlCity').value = h.city || '';
+    row.querySelector('.htlVendor').value = h.vendor || '';
+    row.querySelector('.htlCurrency').value = h.currency || 'PKR';
+    row.querySelector('.htlROE').value = h.roe ?? '';
+    row.querySelector('.htlNights').value = h.nights ?? '';
+    row.querySelector('.htlCategory').value = h.category || '3-Star';
+    row.querySelector('.htlMealPlan').value = h.mealPlan || 'Breakfast Included';
+    row.querySelector('.htlDouble').value = h.doubleRate ?? '';
+    row.querySelector('.htlTriple').value = h.tripleRate ?? '';
+    row.querySelector('.htlQuad').value = h.quadRate ?? '';
+    row.querySelector('.htlChildBed').value = h.childBedCharge ?? '';
+  });
+  if (!(data.hotels || []).length) addHotel();
+
+  (data.transfers || []).forEach(t => {
+    addTransfer();
+    const row = document.querySelector('#transfersContainer .subsection:last-child');
+    if (!row) return;
+    row.querySelector('.tfFrom').value = t.from || '';
+    row.querySelector('.tfTo').value = t.to || '';
+    row.querySelector('.tfVendor').value = t.vendor || '';
+    row.querySelector('.tfCurrency').value = t.currency || 'PKR';
+    row.querySelector('.tfROE').value = t.roe ?? '';
+    row.querySelector('.tfType').value = t.type || 'One Way';
+    row.querySelector('.tfVehicle').value = t.vehicle || 'Sedan';
+    row.querySelector('.tfCity').value = t.city || '';
+    row.querySelector('.tfPerVehicle').value = t.pricePerVehicle ?? '';
+    row.querySelector('.tfAdult').value = t.priceAdult ?? '';
+    row.querySelector('.tfChildBed').value = t.priceChildBed ?? '';
+    row.querySelector('.tfChildNoBed').value = t.priceChildNoBed ?? '';
+    row.querySelector('.tfInfant').value = t.priceInfant ?? '';
+  });
+  if (!(data.transfers || []).length) addTransfer();
+
+  (data.visas || []).forEach(v => {
+    addVisa();
+    const row = document.querySelector('#visasContainer .subsection:last-child');
+    if (!row) return;
+    row.querySelector('.vsCountry').value = v.country || '';
+    row.querySelector('.vsVendor').value = v.vendor || '';
+    row.querySelector('.vsCurrency').value = v.currency || 'PKR';
+    row.querySelector('.vsROE').value = v.roe ?? '';
+    row.querySelector('.vsType').value = v.type || 'Single Entry';
+    row.querySelector('.vsAdult').value = v.priceAdult ?? '';
+    row.querySelector('.vsChild').value = v.priceChild ?? '';
+    row.querySelector('.vsInfant').value = v.priceInfant ?? '';
+  });
+  if (!(data.visas || []).length) addVisa();
+
+  if ((data.type || '') === 'international') {
+    (data.tours || []).forEach(t => {
+      addTour();
+      const row = document.querySelector('#toursContainer .subsection:last-child');
+      if (!row) return;
+      row.querySelector('.trName').value = t.name || '';
+      row.querySelector('.trVendor').value = t.vendor || '';
+      row.querySelector('.trDay').value = t.day || '';
+      row.querySelector('.trCurrency').value = t.currency || 'PKR';
+      row.querySelector('.trROE').value = t.roe ?? '';
+      row.querySelector('.trType').value = t.type || 'Full Day';
+      row.querySelector('.trVehicle').value = t.vehicle || 'Bus';
+      row.querySelector('.trCity').value = t.city || '';
+      row.querySelector('.trPerVehicle').value = t.pricePerVehicle ?? '';
+      row.querySelector('.trAdult').value = t.priceAdult ?? '';
+      row.querySelector('.trChildBed').value = t.priceChildBed ?? '';
+      row.querySelector('.trChildNoBed').value = t.priceChildNoBed ?? '';
+      row.querySelector('.trInfant').value = t.priceInfant ?? '';
+    });
+  }
+
+  document.getElementById('chargeAdult').value = data.serviceCharge?.adult ?? '';
+  document.getElementById('chargeChildBed').value = data.serviceCharge?.childBed ?? '';
+  document.getElementById('chargeChildNoBed').value = data.serviceCharge?.childNoBed ?? '';
+  document.getElementById('chargeInfant').value = data.serviceCharge?.infant ?? '';
+
+  updateCitySelectors();
+  updateTourDaySelectors();
+  showNotification('Package loaded for editing', 'success');
+}
+
+function getDestinationCities() {
+  const cities = [];
+  document.querySelectorAll('#destinationsContainer .destCity').forEach(input => {
+    const city = input.value.trim();
+    if (city && !cities.includes(city)) {
+      cities.push(city);
+    }
+  });
+  if (cities.length === 0) {
+    return '<option value="">-- Add destinations first --</option>';
+  }
+  return '<option value="">-- Select City --</option>' + cities.map(city => `<option value="${city}">${city}</option>`).join('');
+}
+
+function updateCitySelectors() {
+  const cityOptions = getDestinationCities();
+  document.querySelectorAll('.htlCity, .trCity, .tfCity').forEach(select => {
+    const currentValue = select.value;
+    select.innerHTML = cityOptions;
+    if (currentValue && select.querySelector(`option[value="${currentValue}"]`)) {
+      select.value = currentValue;
+    }
+  });
+}
+
+function getTourDayOptions() {
+  const totalNights = parseInt(document.getElementById('totalNights').value) || 0;
+  const maxDays = totalNights + 1;
+  let options = '<option value="">-- Select Day --</option>';
+  for (let i = 1; i <= maxDays; i++) {
+    options += `<option value="Day ${i}">Day ${i}</option>`;
+  }
+  return options;
+}
+
+function updateTourDaySelectors() {
+  const dayOptions = getTourDayOptions();
+  document.querySelectorAll('.trDay').forEach(select => {
+    const currentValue = select.value;
+    select.innerHTML = dayOptions;
+    if (currentValue && select.querySelector(`option[value="${currentValue}"]`)) {
+      select.value = currentValue;
+    }
+  });
+}
+
+// Add event listener to totalNights field to update tour day options
+document.getElementById('totalNights').addEventListener('input', updateTourDaySelectors);
+document.getElementById('packageType').addEventListener('change', updateSections);
+updateSections();
+
+const packageData = {};
+
+function checkAdminAccess() {
+  const agent = JSON.parse(localStorage.getItem("loggedInAgent"));
+  if (!agent || agent.role !== 'admin') {
+    showNotification('Only admins can create packages', 'error');
+    setTimeout(() => window.close(), 2000);
+    return false;
+  }
+  return true;
+}
+
+function showNotification(msg, type = 'success') {
+  const notif = document.getElementById('notification');
+  notif.textContent = msg;
+  notif.className = 'notification ' + type;
+  notif.style.display = 'block';
+  if (type === 'success') setTimeout(() => { notif.style.display = 'none'; }, 3000);
+}
+
+function updateSections() {
+  const type = document.getElementById('packageType').value;
+  document.getElementById('tourSection').classList.toggle('hidden', type !== 'international');
+}
+
+// DESTINATIONS
+function addDestination() {
+  const container = document.getElementById('destinationsContainer');
+  const id = destCount++;
+  const html = `
+    <div class="subsection" id="dest_${id}">
+      <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; align-items: end;">
+        <div>
+          <label>City Name <span class="req">*</span></label>
+          <input type="text" class="destCity" placeholder="e.g., Makkah" required>
+        </div>
+        <div>
+          <label>Total Nights <span class="req">*</span></label>
+          <input type="number" class="destNights" min="1" value="3" required>
+        </div>
+        <button type="button" class="btn btn-remove" onclick="removeEl('dest_${id}')">Remove</button>
+      </div>
+    </div>
+  `;
+  container.insertAdjacentHTML('beforeend', html);
+
+  const cityInput = container.querySelector(`#dest_${id} .destCity`);
+  cityInput.addEventListener('input', updateCitySelectors);
+  updateCitySelectors();
+}
+
+// FLIGHTS
+function addFlight() {
+  const container = document.getElementById('flightsContainer');
+  const id = flightCount++;
+  const html = `
+    <div class="subsection" id="flight_${id}">
+      <div class="subsection-header">
+        <span>✈️ Flight ${id + 1}</span>
+        <button type="button" class="btn btn-remove" onclick="removeEl('flight_${id}')">Remove</button>
+      </div>
+      <div class="grid cols3">
+        <div><label>Airline <span class="req">*</span></label><input type="text" class="flAirline" placeholder="PK, EK, etc" required></div>
+        <div><label>Vendor <span class="req">*</span></label><input type="text" class="flVendor" placeholder="Vendor name" required></div>
+        <div><label>Currency <span class="req">*</span></label><select class="flCurrency" required><option>PKR</option><option>USD</option><option>EUR</option></select></div>
+      </div>
+      <div class="grid cols3">
+        <div><label>ROE (Rate of Exchange) <span class="req">*</span></label><input type="number" class="flROE" min="0" step="0.01" placeholder="1" required></div>
+        <div><label>Direct / Layover <span class="req">*</span></label><select class="flType" required><option>Direct</option><option>Layover</option></select></div>
+        <div><label>Sector <span class="req">*</span></label><input type="text" class="flSector" placeholder="KHI-JED" required></div>
+      </div>
+      <div class="grid cols2">
+        <div><label>Price Per Adult <span class="req">*</span></label><input type="number" class="flAdult" min="0" step="0.01" required></div>
+        <div><label>Price Per Child <span class="req">*</span></label><input type="number" class="flChild" min="0" step="0.01" required></div>
+      </div>
+      <div class="grid cols1">
+        <div><label>Price Per Infant <span class="req">*</span></label><input type="number" class="flInfant" min="0" step="0.01" required></div>
+      </div>
+    </div>
+  `;
+  container.insertAdjacentHTML('beforeend', html);
+}
+
+// HOTELS
+function addHotel() {
+  const container = document.getElementById('hotelsContainer');
+  const id = hotelCount++;
+  const cityOptions = getDestinationCities();
+  const html = `
+    <div class="subsection" id="hotel_${id}">
+      <div class="subsection-header">
+        <span>🏨 Hotel ${id + 1}</span>
+        <button type="button" class="btn btn-remove" onclick="removeEl('hotel_${id}')">Remove</button>
+      </div>
+      <div class="grid cols3">
+        <div><label>Hotel Name/Options <span class="req">*</span></label><input type="text" class="htlName" placeholder="e.g., 5-Star Deluxe" required></div>
+        <div><label>City <span class="req">*</span></label><select class="htlCity" required>${cityOptions}</select></div>
+        <div><label>Vendor <span class="req">*</span></label><input type="text" class="htlVendor" placeholder="Vendor name" required></div>
+      </div>
+      <div class="grid cols3">
+        <div><label>Currency <span class="req">*</span></label><select class="htlCurrency" required><option>PKR</option><option>USD</option><option>SAR</option></select></div>
+        <div><label>ROE <span class="req">*</span></label><input type="number" class="htlROE" min="0" step="0.01" required></div>
+        <div><label>Total Nights <span class="req">*</span></label><input type="number" class="htlNights" min="1" required></div>
+      </div>
+      <div class="grid cols3">
+        <div><label>Hotel Category <span class="req">*</span></label><select class="htlCategory" required><option>3-Star</option><option>4-Star</option><option>5-Star</option></select></div>
+        <div><label>Meal Plan <span class="req">*</span></label><select class="htlMealPlan" required><option value="Breakfast Included">Breakfast Included</option><option value="Room Only">Room Only</option><option value="Half Board">Half Board</option><option value="Full Board">Full Board</option><option value="All Inclusive">All Inclusive</option></select></div>
+        <div><label>Double Rate/Night <span class="req">*</span></label><input type="number" class="htlDouble" min="0" step="0.01" required></div>
+      </div>
+      <div class="grid cols3">
+        <div><label>Triple Rate/Night <span class="req">*</span></label><input type="number" class="htlTriple" min="0" step="0.01" required></div>
+        <div><label>Quad Rate/Night</label><input type="number" class="htlQuad" min="0" step="0.01" placeholder="Optional"></div>
+        <div><label>Child Extra Bed Charges</label><input type="number" class="htlChildBed" min="0" step="0.01" placeholder="Optional"></div>
+      </div>
+    </div>
+  `;
+  container.insertAdjacentHTML('beforeend', html);
+  updateCitySelectors();
+}
+
+// VISAS
+function addVisa() {
+  const container = document.getElementById('visasContainer');
+  const id = visaCount++;
+  const html = `
+    <div class="subsection" id="visa_${id}">
+      <div class="subsection-header">
+        <span>🛂 Visa ${id + 1}</span>
+        <button type="button" class="btn btn-remove" onclick="removeEl('visa_${id}')">Remove</button>
+      </div>
+      <div class="grid cols3">
+        <div><label>Country <span class="req">*</span></label><input type="text" class="vsCountry" required></div>
+        <div><label>Vendor <span class="req">*</span></label><input type="text" class="vsVendor" required></div>
+        <div><label>Currency <span class="req">*</span></label><select class="vsCurrency" required><option>PKR</option><option>USD</option><option>AED</option><option>SAR</option></select></div>
+      </div>
+      <div class="grid cols3">
+        <div><label>ROE <span class="req">*</span></label><input type="number" class="vsROE" min="0" step="0.01" required></div>
+        <div><label>Type <span class="req">*</span></label><select class="vsType" required><option>Single Entry</option><option>Multiple Entry</option><option>Transit</option></select></div>
+        <div></div>
+      </div>
+      <div class="grid cols3">
+        <div><label>Price Per Adult <span class="req">*</span></label><input type="number" class="vsAdult" min="0" step="0.01" required></div>
+        <div><label>Price Per Child <span class="req">*</span></label><input type="number" class="vsChild" min="0" step="0.01" required></div>
+        <div><label>Price Per Infant <span class="req">*</span></label><input type="number" class="vsInfant" min="0" step="0.01" required></div>
+      </div>
+    </div>
+  `;
+  container.insertAdjacentHTML('beforeend', html);
+}
+
+// TOURS (International Only)
+function addTour() {
+  const container = document.getElementById('toursContainer');
+  const id = tourCount++;
+  const cityOptions = getDestinationCities();
+  const dayOptions = getTourDayOptions();
+  const html = `
+    <div class="subsection" id="tour_${id}">
+      <div class="subsection-header">
+        <span>🎫 Tour ${id + 1}</span>
+        <button type="button" class="btn btn-remove" onclick="removeEl('tour_${id}')">Remove</button>
+      </div>
+      <div class="grid cols3">
+        <div><label>Tour Name <span class="req">*</span></label><input type="text" class="trName" placeholder="e.g., Dubai City Tour" required></div>
+        <div><label>Vendor <span class="req">*</span></label><input type="text" class="trVendor" placeholder="Vendor name" required></div>
+        <div><label>Tour Day <span class="req">*</span></label><select class="trDay" required>${dayOptions}</select></div>
+      </div>
+      <div class="grid cols3">
+        <div><label>Currency <span class="req">*</span></label><select class="trCurrency" required><option>PKR</option><option>USD</option><option>AED</option></select></div>
+        <div><label>ROE <span class="req">*</span></label><input type="number" class="trROE" min="0" step="0.01" required></div>
+        <div><label>Tour Type <span class="req">*</span></label><select class="trType" required><option>Full Day</option><option>Half Day</option><option>Evening</option></select></div>
+      </div>
+      <div class="grid cols3">
+        <div><label>Vehicle Type <span class="req">*</span></label><select class="trVehicle" required><option>Bus</option><option>Van</option><option>Car</option></select></div>
+        <div><label>City <span class="req">*</span></label><select class="trCity" required>${cityOptions}</select></div>
+        <div><label>Price Per Vehicle</label><input type="number" class="trPerVehicle" min="0" step="0.01" placeholder="Optional - if entered, per person prices below are optional"></div>
+      </div>
+      <div class="grid cols3">
+        <div><label>Price Per Adult</label><input type="number" class="trAdult" min="0" step="0.01" placeholder="Required if no vehicle price"></div>
+        <div><label>Price Per Child (With Bed)</label><input type="number" class="trChildBed" min="0" step="0.01" placeholder="Required if no vehicle price"></div>
+        <div><label>Price Per Child (Without Bed)</label><input type="number" class="trChildNoBed" min="0" step="0.01" placeholder="Required if no vehicle price"></div>
+      </div>
+      <div class="grid cols1">
+        <div><label>Price Per Infant</label><input type="number" class="trInfant" min="0" step="0.01" placeholder="Required if no vehicle price"></div>
+      </div>
+    </div>
+  `;
+  container.insertAdjacentHTML('beforeend', html);
+  updateCitySelectors();
+  updateTourDaySelectors();
+}
+
+// TRANSFERS
+function addTransfer() {
+  const container = document.getElementById('transfersContainer');
+  const id = transferCount++;
+  const cityOptions = getDestinationCities();
+  const html = `
+    <div class="subsection" id="transfer_${id}">
+      <div class="subsection-header">
+        <span>🚗 Transfer ${id + 1}</span>
+        <button type="button" class="btn btn-remove" onclick="removeEl('transfer_${id}')">Remove</button>
+      </div>
+      <div class="grid cols3">
+        <div><label>From <span class="req">*</span></label><input type="text" class="tfFrom" placeholder="Airport" required></div>
+        <div><label>To <span class="req">*</span></label><input type="text" class="tfTo" placeholder="Hotel" required></div>
+        <div><label>Vendor <span class="req">*</span></label><input type="text" class="tfVendor" placeholder="Vendor name" required></div>
+      </div>
+      <div class="grid cols3">
+        <div><label>Currency <span class="req">*</span></label><select class="tfCurrency" required><option>PKR</option><option>USD</option><option>SAR</option></select></div>
+        <div><label>ROE <span class="req">*</span></label><input type="number" class="tfROE" min="0" step="0.01" required></div>
+        <div><label>Transfer Type <span class="req">*</span></label><select class="tfType" required><option>One Way</option><option>Round Trip</option><option>Multi-Day</option></select></div>
+      </div>
+      <div class="grid cols3">
+        <div><label>Vehicle Type <span class="req">*</span></label><select class="tfVehicle" required><option>Sedan</option><option>Van</option><option>Bus</option></select></div>
+        <div><label>City <span class="req">*</span></label><select class="tfCity" required>${cityOptions}</select></div>
+        <div><label>Price Per Vehicle</label><input type="number" class="tfPerVehicle" min="0" step="0.01" placeholder="Optional - if entered, per person prices below are optional"></div>
+      </div>
+      <div class="grid cols3">
+        <div><label>Price Per Adult</label><input type="number" class="tfAdult" min="0" step="0.01" placeholder="Required if no vehicle price"></div>
+        <div><label>Price Per Child (With Bed)</label><input type="number" class="tfChildBed" min="0" step="0.01" placeholder="Required if no vehicle price"></div>
+        <div><label>Price Per Child (Without Bed)</label><input type="number" class="tfChildNoBed" min="0" step="0.01" placeholder="Required if no vehicle price"></div>
+      </div>
+      <div class="grid cols1">
+        <div><label>Price Per Infant</label><input type="number" class="tfInfant" min="0" step="0.01" placeholder="Required if no vehicle price"></div>
+      </div>
+    </div>
+  `;
+  container.insertAdjacentHTML('beforeend', html);
+}
+
+function removeEl(id) {
+  const el = document.getElementById(id);
+  if (el) {
+    el.remove();
+    updateCitySelectors();
+  }
+}
+
+// SAVE PACKAGE
+console.log('Setting up form submission listener...');
+document.getElementById('packageForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  console.log('=== FORM SUBMISSION STARTED ===');
+
+  if (!checkAdminAccess()) {
+    console.log('❌ Admin access check failed');
+    return;
+  }
+  console.log('✅ Admin access check passed');
+
+  if (!window.auth || !window.auth.currentUser) {
+    showNotification('Your login session is not active in this tab. Please login again and retry.', 'error');
+    console.log('❌ Firebase auth user not found in package builder tab');
+    return;
+  }
+
+  const pkgType = document.getElementById('packageType').value;
+  console.log('Package type:', pkgType);
+  if (!pkgType) {
+    showNotification('Please select package type', 'error');
+    console.log('❌ No package type selected');
+    return;
+  }
+  console.log('✅ Package type selected:', pkgType);
+
+  // Collect destinations
+  const destinations = [];
+  document.querySelectorAll('#destinationsContainer .subsection').forEach(item => {
+    const city = item.querySelector('.destCity').value;
+    const nights = parseInt(item.querySelector('.destNights').value);
+    if (city) destinations.push({city, nights});
+  });
+  console.log('Destinations collected:', destinations);
+  if (destinations.length === 0) {
+    showNotification('Add at least one destination', 'error');
+    console.log('❌ No destinations found');
+    return;
+  }
+  console.log('✅ Destinations validated:', destinations.length, 'destinations');
+
+  // Collect flights
+  const flights = [];
+  document.querySelectorAll('#flightsContainer .subsection').forEach(item => {
+    flights.push({
+      airline: item.querySelector('.flAirline').value,
+      vendor: item.querySelector('.flVendor').value,
+      currency: item.querySelector('.flCurrency').value,
+      roe: parseFloat(item.querySelector('.flROE').value),
+      type: item.querySelector('.flType').value,
+      sector: item.querySelector('.flSector').value,
+      priceAdult: parseFloat(item.querySelector('.flAdult').value),
+      priceChild: parseFloat(item.querySelector('.flChild').value),
+      priceInfant: parseFloat(item.querySelector('.flInfant').value)
+    });
+  });
+  if (flights.length === 0) { showNotification('Add at least one flight', 'error'); return; }
+
+  // Collect hotels
+  const hotels = [];
+  document.querySelectorAll('#hotelsContainer .subsection').forEach(item => {
+    hotels.push({
+      name: item.querySelector('.htlName').value,
+      city: item.querySelector('.htlCity').value,
+      vendor: item.querySelector('.htlVendor').value,
+      currency: item.querySelector('.htlCurrency').value,
+      roe: parseFloat(item.querySelector('.htlROE').value),
+      nights: parseInt(item.querySelector('.htlNights').value),
+      category: item.querySelector('.htlCategory').value,
+      mealPlan: item.querySelector('.htlMealPlan').value,
+      doubleRate: parseFloat(item.querySelector('.htlDouble').value),
+      tripleRate: parseFloat(item.querySelector('.htlTriple').value),
+      quadRate: parseFloat(item.querySelector('.htlQuad').value) || 0,
+      childBedCharge: parseFloat(item.querySelector('.htlChildBed').value) || 0
+    });
+  });
+  if (hotels.length === 0) { showNotification('Add at least one hotel', 'error'); return; }
+
+  // Collect transfers
+  const transfers = [];
+  document.querySelectorAll('#transfersContainer .subsection').forEach(item => {
+    transfers.push({
+      from: item.querySelector('.tfFrom').value,
+      to: item.querySelector('.tfTo').value,
+      vendor: item.querySelector('.tfVendor').value,
+      currency: item.querySelector('.tfCurrency').value,
+      roe: parseFloat(item.querySelector('.tfROE').value),
+      type: item.querySelector('.tfType').value,
+      vehicle: item.querySelector('.tfVehicle').value,
+      city: item.querySelector('.tfCity').value,
+      pricePerVehicle: parseFloat(item.querySelector('.tfPerVehicle').value) || 0,
+      priceAdult: parseFloat(item.querySelector('.tfAdult').value) || 0,
+      priceChildBed: parseFloat(item.querySelector('.tfChildBed').value) || 0,
+      priceChildNoBed: parseFloat(item.querySelector('.tfChildNoBed').value) || 0,
+      priceInfant: parseFloat(item.querySelector('.tfInfant').value) || 0
+    });
+  });
+  if (transfers.length === 0) { showNotification('Add at least one transfer', 'error'); return; }
+
+  // Collect visas
+  const visas = [];
+  document.querySelectorAll('#visasContainer .subsection').forEach(item => {
+    visas.push({
+      country: item.querySelector('.vsCountry').value,
+      vendor: item.querySelector('.vsVendor').value,
+      currency: item.querySelector('.vsCurrency').value,
+      roe: parseFloat(item.querySelector('.vsROE').value),
+      type: item.querySelector('.vsType').value,
+      priceAdult: parseFloat(item.querySelector('.vsAdult').value),
+      priceChild: parseFloat(item.querySelector('.vsChild').value),
+      priceInfant: parseFloat(item.querySelector('.vsInfant').value)
+    });
+  });
+
+  // Collect tours (if international)
+  const tours = [];
+  if (pkgType === 'international') {
+    document.querySelectorAll('#toursContainer .subsection').forEach(item => {
+      tours.push({
+        name: item.querySelector('.trName').value,
+        vendor: item.querySelector('.trVendor').value,
+        day: item.querySelector('.trDay').value,
+        currency: item.querySelector('.trCurrency').value,
+        roe: parseFloat(item.querySelector('.trROE').value),
+        type: item.querySelector('.trType').value,
+        vehicle: item.querySelector('.trVehicle').value,
+        city: item.querySelector('.trCity').value,
+        pricePerVehicle: parseFloat(item.querySelector('.trPerVehicle').value) || 0,
+        priceAdult: parseFloat(item.querySelector('.trAdult').value) || 0,
+        priceChildBed: parseFloat(item.querySelector('.trChildBed').value) || 0,
+        priceChildNoBed: parseFloat(item.querySelector('.trChildNoBed').value) || 0,
+        priceInfant: parseFloat(item.querySelector('.trInfant').value) || 0
+      });
+    });
+  }
+
+  // Validate tours (if international)
+  if (pkgType === 'international') {
+    let invalidTour = false;
+    document.querySelectorAll('#toursContainer .subsection').forEach((item, index) => {
+      const perVehicle = parseFloat(item.querySelector('.trPerVehicle').value) || 0;
+      const adult = parseFloat(item.querySelector('.trAdult').value) || 0;
+      const childBed = parseFloat(item.querySelector('.trChildBed').value) || 0;
+      const childNoBed = parseFloat(item.querySelector('.trChildNoBed').value) || 0;
+      const infant = parseFloat(item.querySelector('.trInfant').value) || 0;
+      
+      if (perVehicle === 0 && (adult === 0 || childBed === 0 || childNoBed === 0 || infant === 0)) {
+        showNotification(`Tour ${index + 1}: Either enter price per vehicle OR all per person prices`, 'error');
+        invalidTour = true;
+      }
+    });
+    if (invalidTour) return;
+  }
+
+  // Validate transfers
+  let invalidTransfer = false;
+  document.querySelectorAll('#transfersContainer .subsection').forEach((item, index) => {
+    const perVehicle = parseFloat(item.querySelector('.tfPerVehicle').value) || 0;
+    const adult = parseFloat(item.querySelector('.tfAdult').value) || 0;
+    const childBed = parseFloat(item.querySelector('.tfChildBed').value) || 0;
+    const childNoBed = parseFloat(item.querySelector('.tfChildNoBed').value) || 0;
+    const infant = parseFloat(item.querySelector('.tfInfant').value) || 0;
+    
+    if (perVehicle === 0 && (adult === 0 || childBed === 0 || childNoBed === 0 || infant === 0)) {
+      showNotification(`Transfer ${index + 1}: Either enter price per vehicle OR all per person prices`, 'error');
+      invalidTransfer = true;
+    }
+  });
+  if (invalidTransfer) return;
+
+  const agent = JSON.parse(localStorage.getItem("loggedInAgent"));
+  console.log('Agent data:', agent);
+  if (!agent) {
+    showNotification('Please log in first', 'error');
+    return;
+  }
+
+  // Parse month-year field
+  const monthYearValue = document.getElementById('travelMonthYear').value;
+  console.log('Month-year value:', monthYearValue);
+  if (!monthYearValue || !monthYearValue.includes('-')) {
+    showNotification('Please select travel month and year', 'error');
+    return;
+  }
+  const [month, year] = monthYearValue.split('-');
+
+  const packageCode = currentPackageCode || await getNextPackageCode();
+
+  const data = {
+    name: document.getElementById('packageName').value,
+    type: pkgType,
+    travelMonth: month,
+    travelYear: parseInt(year),
+    packageCode,
+    totalNights: parseInt(document.getElementById('totalNights').value),
+    destinations,
+    flights,
+    hotels,
+    transfers,
+    visas,
+    tours: pkgType === 'international' ? tours : [],
+    serviceCharge: {
+      adult: parseFloat(document.getElementById('chargeAdult').value),
+      childBed: parseFloat(document.getElementById('chargeChildBed').value),
+      childNoBed: parseFloat(document.getElementById('chargeChildNoBed').value),
+      infant: parseFloat(document.getElementById('chargeInfant').value)
+    },
+    createdBy: agent.id
+  };
+
+  currentPackageCode = packageCode;
+
+  if (editingPackageId) {
+    data.updatedAt = new Date().toISOString();
+    data.updatedBy = agent.id;
+  } else {
+    data.createdAt = new Date().toISOString();
+  }
+
+  const docId = editingPackageId || data.name.replace(/\s+/g, '_').toLowerCase();
+  console.log('Attempting to save package with docId:', docId);
+  console.log('Data to save:', data);
+
+  try {
+    if (!window.firebaseDB) {
+      console.error('Firebase not initialized - window.firebaseDB is undefined');
+      throw new Error('Firebase not initialized');
+    }
+    if (!firebase) {
+      console.error('Firebase global object not available');
+      throw new Error('Firebase global object not available');
+    }
+
+    const success = await window.firebaseDB.saveData('packages', docId, data);
+    console.log('Save result:', success);
+
+    if (success) {
+      showNotification(editingPackageId ? '✅ Package updated successfully!' : '✅ Package saved successfully!', 'success');
+      setTimeout(() => window.close(), 1500);
+    } else {
+      const firebaseErr = window.lastFirebaseError;
+      const detail = firebaseErr?.message ? ` (${firebaseErr.message})` : '';
+      showNotification('❌ Failed to save package' + detail, 'error');
+    }
+  } catch (error) {
+    console.error('Error during save:', error);
+    showNotification('❌ Error saving package: ' + error.message, 'error');
+  }
+});
+
+// PDF GENERATION
+async function generatePDF() {
+  showNotification('⏳ Generating PDF... Please wait', 'success');
+
+  const pkgName = document.getElementById('packageName').value.trim();
+  if (!pkgName) {
+    showNotification('Save or fill package name first', 'error');
+    return;
+  }
+
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF('p', 'mm', 'a4');
+
+  const pageWidth = 210;
+  const pageHeight = 297;
+  const margin = 14;
+  const contentWidth = pageWidth - (margin * 2);
+  let y = 14;
+
+  const toNumber = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  const toPKR = (value, currency = 'PKR', roe = 1) => {
+    const amount = toNumber(value);
+    if (!amount) return 0;
+    const cur = (currency || 'PKR').toUpperCase();
+    if (cur === 'PKR') return amount;
+    const rate = toNumber(roe) > 0 ? toNumber(roe) : 1;
+    return amount * rate;
+  };
+
+  const fmtPKR = (n) => `PKR ${Math.round(toNumber(n)).toLocaleString('en-PK')}`;
+
+  const ensureSpace = (h = 8) => {
+    if (y + h > pageHeight - 14) {
+      pdf.addPage();
+      y = 14;
+    }
+  };
+
+  const drawTitle = (txt) => {
+    ensureSpace(9);
+    pdf.setFillColor(237, 244, 255);
+    pdf.rect(margin, y - 1, contentWidth, 7, 'F');
+    pdf.setTextColor(11, 88, 170);
+    pdf.setFontSize(11);
+    pdf.setFont(undefined, 'bold');
+    pdf.text(txt, margin + 2, y + 3.5);
+    y += 8;
+  };
+
+  const drawBullets = (items) => {
+    pdf.setTextColor(30, 30, 30);
+    pdf.setFontSize(9);
+    pdf.setFont(undefined, 'normal');
+    items.forEach(item => {
+      const lines = pdf.splitTextToSize(`• ${item}`, contentWidth - 2);
+      const blockH = lines.length * 4.2;
+      ensureSpace(blockH + 1);
+      pdf.text(lines, margin + 1, y + 3.2);
+      y += blockH;
+    });
+    y += 2;
+  };
+
+  const loadLogoDataUrl = (url) => new Promise((resolve) => {
+    try {
+      const img = new Image();
+      img.crossOrigin = 'Anonymous';
+      img.onload = () => {
+        try {
+          const c = document.createElement('canvas');
+          c.width = img.naturalWidth;
+          c.height = img.naturalHeight;
+          const ctx = c.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          resolve(c.toDataURL('image/png'));
+        } catch {
+          resolve(null);
+        }
+      };
+      img.onerror = () => resolve(null);
+      img.src = url;
+    } catch {
+      resolve(null);
+    }
+  });
+
+  const logo = await loadLogoDataUrl('https://flightconnection.net.pk/wp-content/uploads/2018/09/cropped-cropped-Flight-Connection-Travel-1.png');
+
+  // ========= PACKAGE META =========
+  const typeVal = (document.getElementById('packageType').value || 'N/A').toUpperCase();
+  const monthYearVal = document.getElementById('travelMonthYear').value || '';
+  const [monthVal, yearVal] = monthYearVal ? monthYearVal.split('-') : ['N/A', 'N/A'];
+  const totalNights = toNumber(document.getElementById('totalNights').value || 0);
+  const totalDays = totalNights > 0 ? totalNights + 1 : 0;
+  // Convert month number to month name
+  const monthNames = [
+    '', 'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+  let travelPeriod = 'N/A';
+  if (monthVal && yearVal && monthVal.length === 2 && !isNaN(Number(monthVal))) {
+    const monthNum = parseInt(monthVal, 10);
+    travelPeriod = monthNum > 0 && monthNum <= 12 ? `${monthNames[monthNum]}/${yearVal}` : `${monthVal}/${yearVal}`;
+  } else if (monthVal && yearVal) {
+    travelPeriod = `${monthVal}/${yearVal}`;
+  }
+  const packageCode = currentPackageCode || await getNextPackageCode();
+  currentPackageCode = packageCode;
+  const currentAgent = JSON.parse(localStorage.getItem('loggedInAgent') || 'null') || {};
+  const userContactNumber = [
+    currentAgent.phone,
+    currentAgent.mobile,
+    currentAgent.contact,
+    currentAgent.contactNumber,
+    currentAgent.number
+  ].find(value => String(value || '').trim()) || '';
+  const headerContactLine = [
+    'www.flightconnection.net.pk',
+    userContactNumber,
+    'info@flightconnection.net.pk'
+  ].filter(value => String(value || '').trim()).join(' | ');
+
+  const destinationRows = Array.from(document.querySelectorAll('#destinationsContainer .subsection')).map(s => ({
+    city: s.querySelector('.destCity')?.value?.trim() || '',
+    nights: toNumber(s.querySelector('.destNights')?.value || 0)
+  })).filter(d => d.city);
+
+  const destinationNames = [...new Set(destinationRows.map(d => d.city))].join(', ') || 'N/A';
+  const cityNightText = destinationRows.length
+    ? destinationRows.map(d => `${d.city}: ${d.nights}N`).join(' | ')
+    : 'N/A';
+
+  // ========= CALCULATION (AS REQUESTED) =========
+  let adultDouble = 0;
+  let adultTriple = 0;
+  let childWithBed = 0;
+  let childWithoutBed = 0;
+  let infant = 0;
+
+  // Ticket
+  document.querySelectorAll('#flightsContainer .subsection').forEach(item => {
+    const c = item.querySelector('.flCurrency')?.value || 'PKR';
+    const r = item.querySelector('.flROE')?.value || 1;
+    adultDouble += toPKR(item.querySelector('.flAdult')?.value, c, r);
+    adultTriple += toPKR(item.querySelector('.flAdult')?.value, c, r);
+    const childTicket = toPKR(item.querySelector('.flChild')?.value, c, r);
+    childWithBed += childTicket;
+    childWithoutBed += childTicket;
+    infant += toPKR(item.querySelector('.flInfant')?.value, c, r);
+  });
+
+  // Hotel: nights in city x rate/night, double/2 and triple/3
+  document.querySelectorAll('#hotelsContainer .subsection').forEach(item => {
+    const c = item.querySelector('.htlCurrency')?.value || 'PKR';
+    const r = item.querySelector('.htlROE')?.value || 1;
+    const nights = toNumber(item.querySelector('.htlNights')?.value);
+    const doubleRate = toNumber(item.querySelector('.htlDouble')?.value);
+    const tripleRate = toNumber(item.querySelector('.htlTriple')?.value);
+
+    const perAdultDoubleHotel = toPKR((doubleRate * nights) / 2, c, r);
+    const perAdultTripleHotel = toPKR((tripleRate * nights) / 3, c, r);
+
+    adultDouble += perAdultDoubleHotel;
+    adultTriple += perAdultTripleHotel;
+
+    // Child with bed same as adult hotel share
+    childWithBed += perAdultDoubleHotel;
+  });
+
+  // Transfer + Tour (your rule block had transfer repeated; this applies same logic to both)
+  const applyMoveService = (item, prefix) => {
+    const currency = item.querySelector(`.${prefix}Currency`)?.value || 'PKR';
+    const roe = item.querySelector(`.${prefix}ROE`)?.value || 1;
+    const perVehicleRaw = toNumber(item.querySelector(`.${prefix}PerVehicle`)?.value);
+    const perVehicle = toPKR(perVehicleRaw, currency, roe);
+
+    if (perVehicleRaw > 0) {
+      // Adult: divide vehicle price by total adults; others: no charge
+      const totalAdultsForSplit = 1;
+      const adultPart = totalAdultsForSplit > 0 ? perVehicle / totalAdultsForSplit : 0;
+      adultDouble += adultPart;
+      adultTriple += adultPart;
+      return;
+    }
+
+    // Per person case
+    const a = toPKR(item.querySelector(`.${prefix}Adult`)?.value, currency, roe);
+    const cnb = toPKR(item.querySelector(`.${prefix}ChildNoBed`)?.value, currency, roe);
+
+    adultDouble += a;
+    adultTriple += a;
+    childWithoutBed += cnb;
+
+    // Child with bed: if explicit child-bed exists use it, else use child-no-bed as closest per-person input.
+    const cwbRaw = item.querySelector(`.${prefix}ChildBed`)?.value;
+    childWithBed += cwbRaw !== null && cwbRaw !== undefined && cwbRaw !== ''
+      ? toPKR(cwbRaw, currency, roe)
+      : cnb;
+  };
+
+  document.querySelectorAll('#transfersContainer .subsection').forEach(item => applyMoveService(item, 'tf'));
+  document.querySelectorAll('#toursContainer .subsection').forEach(item => applyMoveService(item, 'tr'));
+
+  // Visa
+  document.querySelectorAll('#visasContainer .subsection').forEach(item => {
+    const c = item.querySelector('.vsCurrency')?.value || 'PKR';
+    const r = item.querySelector('.vsROE')?.value || 1;
+    const a = toPKR(item.querySelector('.vsAdult')?.value, c, r);
+    const ch = toPKR(item.querySelector('.vsChild')?.value, c, r);
+    const inf = toPKR(item.querySelector('.vsInfant')?.value, c, r);
+    adultDouble += a;
+    adultTriple += a;
+    childWithBed += ch;
+    childWithoutBed += ch;
+    infant += inf;
+  });
+
+  // Service Charges
+  adultDouble += toNumber(document.getElementById('chargeAdult')?.value);
+  adultTriple += toNumber(document.getElementById('chargeAdult')?.value);
+  childWithBed += toNumber(document.getElementById('chargeChildBed')?.value);
+  childWithoutBed += toNumber(document.getElementById('chargeChildNoBed')?.value);
+  infant += toNumber(document.getElementById('chargeInfant')?.value);
+
+  // ========= INCLUSIONS / EXCLUSIONS =========
+  const inclusions = [];
+
+  const titleCase = (txt = '') => String(txt)
+    .toLowerCase()
+    .replace(/\b\w/g, ch => ch.toUpperCase());
+
+  const normalizeAirline = (name = '') => {
+    const v = String(name).trim();
+    if (!v) return 'Airline';
+    if (v.toLowerCase() === 'airasia') return 'Air Asia';
+    return titleCase(v);
+  };
+
+  const normalizeHotelCategory = (cat = '') => {
+    const v = String(cat).trim().toLowerCase();
+    if (!v) return 'Hotel';
+    if (v.includes('3')) return '3-Star';
+    if (v.includes('4')) return '4-Star';
+    if (v.includes('5')) return '5-Star';
+    return titleCase(cat);
+  };
+
+  const normalizeVehicle = (vehicle = '') => {
+    const v = String(vehicle).trim();
+    return v ? titleCase(v) : 'Vehicle';
+  };
+
+  const normalizeRoute = (route = '') => String(route)
+    .trim()
+    .replace(/\s+/g, '')
+    .replace(/-/g, ' - ')
+    .toUpperCase();
+
+  document.querySelectorAll('#flightsContainer .subsection').forEach(item => {
+    const airline = normalizeAirline(item.querySelector('.flAirline')?.value || 'Airline');
+    const sector = normalizeRoute(item.querySelector('.flSector')?.value || '');
+    const flightType = item.querySelector('.flType')?.value || 'Flight';
+    inclusions.push(`${titleCase(flightType)} Flight${sector ? ` ${sector}` : ''} by ${airline}`);
+  });
+
+  document.querySelectorAll('#hotelsContainer .subsection').forEach(item => {
+    const category = normalizeHotelCategory(item.querySelector('.htlCategory')?.value || 'Hotel');
+    const city = titleCase(item.querySelector('.htlCity')?.value || 'Destination City');
+    const mealPlan = item.querySelector('.htlMealPlan')?.value || 'Breakfast Included';
+    const nights = item.querySelector('.htlNights')?.value || '';
+    inclusions.push(`${category} hotel in ${city} (${nights ? nights + ' nights, ' : ''}${mealPlan})`);
+  });
+
+  document.querySelectorAll('#toursContainer .subsection').forEach(item => {
+    const name = titleCase(item.querySelector('.trName')?.value || 'Tour');
+    const city = titleCase(item.querySelector('.trCity')?.value || '');
+    const vehicle = normalizeVehicle(item.querySelector('.trVehicle')?.value || 'vehicle');
+    inclusions.push(`${name}${city ? ` in ${city}` : ''} by ${vehicle}`);
+  });
+
+  document.querySelectorAll('#transfersContainer .subsection').forEach(item => {
+    const from = titleCase(item.querySelector('.tfFrom')?.value || 'Point A');
+    const to = titleCase(item.querySelector('.tfTo')?.value || 'Point B');
+    const vehicle = normalizeVehicle(item.querySelector('.tfVehicle')?.value || 'vehicle');
+    inclusions.push(`Return transfer from ${from} to ${to} by ${vehicle}`);
+  });
+
+  document.querySelectorAll('#visasContainer .subsection').forEach(item => {
+    const country = titleCase(item.querySelector('.vsCountry')?.value || 'Destination');
+    const visaType = item.querySelector('.vsType')?.value || 'Visa';
+    inclusions.push(`${visaType} visa processing for ${country}`);
+  });
+
+  const exclusions = [
+    'Lunch and Dinner (if not explicitly mentioned)',
+    'Early check-in / Late check-out',
+    'Entrance tickets if not mentioned',
+    'Meals in flight if not mentioned',
+    'Personal expenses, tips, laundry, and phone calls',
+    'Any item not clearly mentioned in inclusions'
+  ];
+
+  // ========= PDF LAYOUT =========
+  pdf.setDrawColor(220, 228, 240);
+
+  // Centered logo
+  if (logo) {
+    try {
+      const w = 62;
+      const h = 22;
+      pdf.addImage(logo, 'PNG', (pageWidth - w) / 2, y, w, h);
+      y += 26;
+    } catch {
+      pdf.setFontSize(16);
+      pdf.setTextColor(11, 88, 170);
+      pdf.setFont(undefined, 'bold');
+      pdf.text('FLIGHT CONNECTION TRAVEL & TOURS', pageWidth / 2, y + 6, { align: 'center' });
+      y += 12;
+    }
+  } else {
+    pdf.setFontSize(16);
+    pdf.setTextColor(11, 88, 170);
+    pdf.setFont(undefined, 'bold');
+    pdf.text('FLIGHT CONNECTION TRAVEL & TOURS', pageWidth / 2, y + 6, { align: 'center' });
+    y += 12;
+  }
+
+  pdf.setFontSize(15);
+  pdf.setTextColor(11, 88, 170);
+  pdf.setFont(undefined, 'bold');
+  pdf.text('PACKAGE QUOTATION', pageWidth / 2, y, { align: 'center' });
+  y += 8;
+
+  // Company info in header
+  pdf.setFontSize(8.5);
+  pdf.setFont(undefined, 'normal');
+  pdf.setTextColor(55, 55, 55);
+  pdf.text('Mezzanine Floor, 17-E, Shahbaz Commercial, Phase 6. DHA', pageWidth / 2, y, { align: 'center' });
+  y += 4;
+  pdf.text(headerContactLine, pageWidth / 2, y, { align: 'center' });
+  y += 6;
+
+  pdf.setTextColor(30, 30, 30);
+  pdf.setFontSize(9.5);
+  pdf.setFont(undefined, 'normal');
+
+  const metaLines = [
+    `Package Code: ${packageCode}`,
+    `Package Name: ${pkgName}`,
+    `Destinations: ${destinationNames}`,
+    `Cities with Nights: ${cityNightText}`,
+    `${totalNights || 'N/A'} Nights / ${totalDays || 'N/A'} Days`,
+    `Travel Period: ${travelPeriod}`,
+    `Package Type: ${typeVal}`
+  ];
+
+  metaLines.forEach(line => {
+    const wrapped = pdf.splitTextToSize(line, contentWidth);
+    const h = wrapped.length * 4.2;
+    ensureSpace(h + 1);
+    pdf.text(wrapped, margin, y + 3);
+    y += h;
+  });
+
+  y += 2;
+  drawTitle('Inclusions');
+  drawBullets(inclusions.length ? inclusions : ['As per attached package service details']);
+
+  drawTitle('Exclusions');
+  drawBullets(exclusions);
+
+  drawTitle('Price (All amounts in PKR)');
+  const priceLines = [
+    `Per Person on Double bed: ${fmtPKR(adultDouble)}`,
+    `Per Person on Triple bed: ${fmtPKR(adultTriple)}`,
+    `Per Child (2-12) with bed: ${fmtPKR(childWithBed)}`,
+    `Per Child (2-12) without bed: ${fmtPKR(childWithoutBed)}`,
+    `Per Infant (0-2): ${fmtPKR(infant)}`
+  ];
+  drawBullets(priceLines);
+
+  drawTitle('Terms & Conditions');
+  const terms = [
+    'Above is just a quotation. Rates can change any time without prior notice due to supplier and exchange-rate changes.',
+    'All bookings are subject to availability at the time of confirmation and receipt of advance payment.',
+    'Cancellation and refund charges are applied as per airline, hotel, and supplier policies.',
+    'Service charges are non-refundable once processing has started.',
+    'Flight Connection acts as an intermediary with third-party service providers and is not liable for supplier-side disruptions.',
+    'Passengers are responsible for valid travel documents including passport and visa requirements.'
+  ];
+  drawBullets(terms);
+
+  // Branding on every page
+  const totalPages = pdf.getNumberOfPages();
+  for (let p = 1; p <= totalPages; p++) {
+    pdf.setPage(p);
+
+    // Top subtle brand line
+    pdf.setDrawColor(220, 228, 240);
+    pdf.line(margin, 8, pageWidth - margin, 8);
+
+    // Small logo on each page (if available)
+    if (logo) {
+      try {
+        pdf.addImage(logo, 'PNG', margin, 2.5, 24, 8);
+      } catch {
+        // Ignore logo draw failure
+      }
+    }
+
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(90, 90, 90);
+    pdf.setFont(undefined, 'normal');
+    pdf.text('Flight Connection Travel & Tours | GL No. 3423 | IATA: 27319143', pageWidth - margin, 6, { align: 'right' });
+
+    // Footer with company info + page number
+    pdf.setDrawColor(220, 228, 240);
+    pdf.line(margin, pageHeight - 10, pageWidth - margin, pageHeight - 10);
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(80, 80, 80);
+    pdf.text('Mezzanine Floor, 17-E, Shahbaz Commercial, Phase 6. DHA | www.flightconnection.net.pk', margin, pageHeight - 6);
+    pdf.text(`Page ${p} of ${totalPages}`, pageWidth - margin, pageHeight - 6, { align: 'right' });
+  }
+
+  // Open PDF in new tab with a custom download button for correct filename
+  const fileName = `${packageCode}-${pkgName}`.replace(/[^a-zA-Z0-9-_]/g, '_') + '.pdf';
+  const pdfBlob = pdf.output('blob');
+  const blobUrl = URL.createObjectURL(pdfBlob);
+  const newTab = window.open();
+  if (newTab) {
+    newTab.document.write(`
+      <html><head><title>PDF Preview</title></head>
+      <body style="margin:0;display:flex;flex-direction:column;height:100vh;">
+        <div style="padding:10px;background:#f3f6fb;display:flex;align-items:center;gap:20px;">
+          <button id="downloadPdfBtn" style="background:#0b76d1;color:#fff;padding:8px 18px;border:none;border-radius:5px;font-size:16px;cursor:pointer;">⬇️ Download PDF</button>
+          <span style="color:#333;font-size:14px;">Click the button to download with correct file name: <b>${fileName}</b></span>
+        </div>
+        <iframe src="${blobUrl}#toolbar=1&navpanes=0&scrollbar=1" style="flex:1;width:100%;border:none;"></iframe>
+        <script>
+          document.getElementById('downloadPdfBtn').onclick = function() {
+            const a = document.createElement('a');
+            a.href = '${blobUrl}';
+            a.download = '${fileName}';
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => document.body.removeChild(a), 100);
+          };
+        <\/script>
+      </body></html>
+    `);
+    newTab.document.title = fileName;
+  } else {
+    showNotification('Popup blocked! Please allow popups for PDF preview.', 'error');
+  }
+  showNotification('✅ PDF opened in new tab!', 'success');
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', async () => {
+  if (checkAdminAccess()) {
+    const editId = getEditingPackageIdFromUrl();
+    if (editId) {
+      await loadPackageForEditing(editId);
+    } else {
+      addDestination();
+      addFlight();
+      addHotel();
+      addTransfer();
+      addVisa();
+    }
+  }
+});
+</script>
+
+</body>
+</html>

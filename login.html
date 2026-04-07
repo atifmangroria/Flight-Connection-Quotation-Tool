@@ -3,16 +3,123 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Agent Login - Flight Connection</title>
+<title>Login - Flight Connection</title>
 
-<!-- Firebase SDK -->
-<script type="module">
-  // Import the functions you need from the SDKs you need
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-  import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
 
-  // Your web app's Firebase configuration
+<style>
+  :root{--accent:#0b76d1;--muted:#666;--success:#28a745;--warning:#f39c12;--danger:#e74c3c;--info:#17a2b8}
+  body{font-family:Arial,Helvetica,sans-serif;background:linear-gradient(135deg, #0b76d1, #0d5fa8);margin:0;padding:0;display:flex;justify-content:center;align-items:center;min-height:100vh;color:#111}
+  .login-container{background:#fff;padding:40px;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.2);width:100%;max-width:400px}
+  .logo{text-align:center;margin-bottom:30px}
+  .logo img{max-height:80px;margin-bottom:10px}
+  .logo h1{margin:0;font-size:24px;color:var(--accent)}
+  .logo p{margin:5px 0 0 0;color:var(--muted);font-size:14px}
+  .form-group{margin-bottom:20px}
+  .form-group label{display:block;margin-bottom:8px;font-weight:600;color:#333}
+  .form-group input, .form-group select{width:100%;padding:12px;border:1px solid #ddd;border-radius:6px;font-size:16px;box-sizing:border-box}
+  .form-group input:focus, .form-group select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(11,118,209,0.1)}
+  .btn{width:100%;padding:12px;border:none;border-radius:6px;font-size:16px;font-weight:600;cursor:pointer;transition:all 0.3s}
+  .btn-primary{background:var(--accent);color:white}
+  .btn-primary:hover{background:#085ea3;transform:translateY(-1px);box-shadow:0 4px 12px rgba(11,118,209,0.3)}
+  .message{padding:12px;border-radius:6px;margin-bottom:15px;font-size:14px;display:none}
+  .message.error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb}
+  .message.success{background:#d4edda;color:#155724;border:1px solid #c3e6cb}
+  .message.warning{background:#fff3cd;color:#856404;border:1px solid #ffeaa7}
+  .message.info{background:#d1ecf1;color:#0c5460;border:1px solid #bee5eb}
+  .tabs{display:flex;margin-bottom:20px;gap:10px}
+  .tabs button{flex:1;padding:12px;background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;font-weight:600;color:#666;transition:all 0.3s}
+  .tabs button.active{color:var(--accent);border-bottom-color:var(--accent)}
+  .tab-content{display:none}
+  .tab-content.active{display:block}
+  .signup-link{text-align:center;margin-top:15px;font-size:14px}
+  .signup-link a{color:var(--accent);text-decoration:none;font-weight:600;cursor:pointer}
+  .signup-link a:hover{text-decoration:underline}
+  .loading{display:none;text-align:center;padding:20px;color:var(--accent)}
+  .spinner{border:3px solid #f3f3f3;border-top:3px solid var(--accent);border-radius:50%;width:20px;height:20px;animation:spin 1s linear infinite;display:inline-block}
+  @keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="login-container">
+  <div class="logo">
+    <img src="https://flightconnection.net.pk/wp-content/uploads/2018/09/cropped-cropped-Flight-Connection-Travel-1.png" alt="Flight Connection">
+    <h1>Flight Connection</h1>
+    <p>User Portal</p>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('login')">Login</button>
+    <button class="tab-btn" onclick="switchTab('signup')">Agent Sign Up</button>
+  </div>
+
+  <!-- Login Tab -->
+  <div id="login" class="tab-content active">
+    <div id="loginMessage" class="message"></div>
+    <form id="loginForm" onsubmit="handleLogin(event)">
+      <div class="form-group">
+        <label for="loginEmail">Email</label>
+        <input type="email" id="loginEmail" placeholder="Enter your email" required>
+      </div>
+      <div class="form-group">
+        <label for="loginPassword">Password</label>
+        <input type="password" id="loginPassword" placeholder="Enter password" required>
+      </div>
+      <button type="submit" class="btn btn-primary">Login</button>
+    </form>
+    <div class="signup-link">
+      New agent? <a onclick="switchTab('signup'); return false;">Request Access</a>
+    </div>
+  </div>
+
+  <!-- Signup Tab -->
+  <!-- Signup Tab - Agent registration only, pending admin approval -->
+  <div id="signup" class="tab-content">
+    <div id="signupMessage" class="message"></div>
+    <div style="background:#e8f4fd;border:1px solid #bee5eb;border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:13px;color:#0c5460;">
+      📌 <strong>Agent Registration</strong> — Your request will be reviewed by the administrator before access is granted.
+    </div>
+    <form id="signupForm" onsubmit="handleSignup(event)">
+      <div class="form-group">
+        <label for="signupFullName">Full Name</label>
+        <input type="text" id="signupFullName" placeholder="Enter your full name" required>
+      </div>
+      <div class="form-group">
+        <label for="signupEmail">Email</label>
+        <input type="email" id="signupEmail" placeholder="Enter your work email" required>
+      </div>
+      <div class="form-group">
+        <label for="signupCompany">Company / Branch</label>
+        <input type="text" id="signupCompany" placeholder="Enter your company or branch name" required>
+      </div>
+      <div class="form-group">
+        <label for="signupPhone">Phone</label>
+        <input type="tel" id="signupPhone" placeholder="Enter your phone number" required>
+      </div>
+      <div class="form-group">
+        <label for="signupPassword">Password</label>
+        <input type="password" id="signupPassword" placeholder="Create a password (min 6 chars)" required>
+      </div>
+      <div class="form-group">
+        <label for="signupConfirmPassword">Confirm Password</label>
+        <input type="password" id="signupConfirmPassword" placeholder="Confirm your password" required>
+      </div>
+      <button type="submit" class="btn btn-primary">Submit Registration Request</button>
+    </form>
+    <div class="signup-link">
+      Already have an account? <a onclick="switchTab('login'); return false;">Login</a>
+    </div>
+  </div>
+
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <p>Please wait...</p>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+<script>
   const firebaseConfig = {
     apiKey: "AIzaSyDx3Qxt84vJlz_-mXuxiC0W2flaLadr9Ws",
     authDomain: "fc-quotation-tool.firebaseapp.com",
@@ -22,417 +129,193 @@
     appId: "1:370566945624:web:a84b20d5a8f99d20a6e32d"
   };
 
-  // Initialize Firebase
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
-  const auth = getAuth(app);
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
 
-  // Make db and auth global
-  window.db = db;
-  window.auth = auth;
-  window.signInWithEmailAndPassword = signInWithEmailAndPassword;
-  window.createUserWithEmailAndPassword = createUserWithEmailAndPassword;
-  window.signOut = signOut;
-  window.collection = collection;
-  window.doc = doc;
-  window.setDoc = setDoc;
-  window.getDoc = getDoc;
-  window.getDocs = getDocs;
-  window.updateDoc = updateDoc;
-  window.deleteDoc = deleteDoc;
-
-  // ========== Firebase Cloud Storage Utility Functions ==========
-  window.firebaseDB = {
-    // Save data to Firestore
-    async saveData(collection_name, docId, data) {
-      try {
-        await setDoc(doc(db, collection_name, docId), data, { merge: true });
-        return true;
-      } catch (error) {
-        console.error(`Error saving to ${collection_name}:`, error);
-        return false;
-      }
-    },
-
-    // Get data from Firestore
-    async getData(collection_name, docId) {
-      try {
-        const docSnap = await getDoc(doc(db, collection_name, docId));
-        return docSnap.exists() ? docSnap.data() : null;
-      } catch (error) {
-        console.error(`Error getting from ${collection_name}:`, error);
-        return null;
-      }
-    },
-
-    // Get all documents from a collection
-    async getAll(collection_name) {
-      try {
-        const snapshot = await getDocs(collection(db, collection_name));
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      } catch (error) {
-        console.error(`Error getting all from ${collection_name}:`, error);
-        return [];
-      }
-    },
-
-    // Delete data from Firestore
-    async deleteData(collection_name, docId) {
-      try {
-        await deleteDoc(doc(db, collection_name, docId));
-        return true;
-      } catch (error) {
-        console.error(`Error deleting from ${collection_name}:`, error);
-        return false;
-      }
-    },
-
-    // Update specific fields
-    async updateData(collection_name, docId, updates) {
-      try {
-        await updateDoc(doc(db, collection_name, docId), updates);
-        return true;
-      } catch (error) {
-        console.error(`Error updating ${collection_name}:`, error);
-        return false;
-      }
-    }
-  };
-</script>
-<!-- Firebase -->
-<style>
-  :root{--accent:#0b76d1;--muted:#666;--success:#28a745;--warning:#f39c12;--danger:#e74c3c;--info:#17a2b8}
-  body{font-family:Arial,Helvetica,sans-serif;background:#f3f6fb;margin:0;padding:0;display:flex;justify-content:center;align-items:center;min-height:100vh;color:#111}
-  .login-container{background:#fff;padding:40px;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.1);width:100%;max-width:400px}
-  .logo{text-align:center;margin-bottom:30px}
-  .logo img{max-height:80px;margin-bottom:10px}
-  .logo h1{margin:0;font-size:24px;color:var(--accent)}
-  .logo p{margin:5px 0 0 0;color:var(--muted);font-size:14px}
-  .form-group{margin-bottom:20px}
-  .form-group label{display:block;margin-bottom:8px;font-weight:600;color:#333}
-  .form-group input{width:100%;padding:12px;border:1px solid #ddd;border-radius:6px;font-size:16px;box-sizing:border-box}
-  .form-group input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(11,118,209,0.1)}
-  .btn{width:100%;padding:12px;border:none;border-radius:6px;font-size:16px;font-weight:600;cursor:pointer;transition:all 0.3s}
-  .btn-primary{background:var(--accent);color:white}
-  .btn-primary:hover{background:#085ea3;transform:translateY(-1px);box-shadow:0 4px 12px rgba(11,118,209,0.3)}
-  .btn-secondary{background:#6c757d;color:white;margin-top:10px}
-  .btn-secondary:hover{background:#5a6268}
-  .error{color:var(--danger);font-size:14px;margin-top:5px;display:none}
-  .success{color:var(--success);font-size:14px;margin-top:5px;display:none}
-  .tabs{display:flex;margin-bottom:30px;border-bottom:1px solid #eee}
-  .tab{flex:1;padding:10px;text-align:center;cursor:pointer;border-bottom:2px solid transparent;font-weight:600}
-  .tab.active{border-bottom-color:var(--accent);color:var(--accent)}
-  .tab-content{display:none}
-  .tab-content.active{display:block}
-  .register-link{text-align:center;margin-top:20px}
-  .register-link a{color:var(--accent);text-decoration:none;font-weight:600}
-  .register-link a:hover{text-decoration:underline}
-</style>
-</head>
-<body>
-<div class="login-container">
-  <div class="logo">
-    <img src="https://flightconnection.net.pk/wp-content/uploads/2018/09/cropped-cropped-Flight-Connection-Travel-1.png" alt="Flight Connection">
-    <h1>Flight Connection</h1>
-    <p>Agent Portal</p>
-  </div>
-
-  <div class="tabs">
-    <div class="tab active" onclick="switchTab('login', event)">Login</div>
-<div class="tab" onclick="switchTab('register', event)">Register</div>
-  </div>
-
-  <!-- Login Tab -->
-  <div id="loginTab" class="tab-content active">
-    <form id="loginForm" onsubmit="return false;">
-      <div class="form-group">
-        <label for="email">Email</label>
-        <input type="email" id="email" placeholder="Enter your email" required>
-      </div>
-      <div class="form-group">
-        <label for="password">Password</label>
-        <input type="password" id="password" placeholder="Enter password" required>
-      </div>
-      <div id="loginError" class="error"></div>
-      <div id="loginSuccess" class="success"></div>
-      <button type="submit" class="btn btn-primary">Login</button>
-    </form>
-  </div>
-
-  <!-- Register Tab -->
-  <div id="registerTab" class="tab-content">
-    <form id="registerForm" onsubmit="return false;">
-      <div class="form-group">
-        <label for="regEmail">Email</label>
-        <input type="email" id="regEmail" placeholder="e.g. user@example.com" required>
-      </div>
-      <div class="form-group">
-        <label for="regName">Full Name</label>
-        <input type="text" id="regName" placeholder="Enter full name" required>
-      </div>
-      <div class="form-group">
-        <label for="regPhone">Phone Number</label>
-        <input type="text" id="regPhone" placeholder="e.g. 03001234567" required>
-      </div>
-      <div class="form-group">
-        <label for="regPassword">Password</label>
-        <input type="password" id="regPassword" placeholder="Enter password" required>
-      </div>
-      <div class="form-group">
-        <label for="regConfirmPassword">Confirm Password</label>
-        <input type="password" id="regConfirmPassword" placeholder="Confirm password" required>
-      </div>
-      <div id="registerError" class="error"></div>
-      <div id="registerSuccess" class="success"></div>
-      <button type="submit" class="btn btn-primary">Register</button>
-    </form>
-  </div>
-
-  <div class="register-link">
-    <p>Need help? Contact support at <a href="mailto:info@flightconnection.net.pk">info@flightconnection.net.pk</a></p>
-  </div>
-</div>
-
-<script>
-// Predefined agents
-const predefinedAgents = [
-  { email: "atif@fc.com", name: "Muhammad Atif", phone: "03002022713", password: "atif123", role: "admin" },
-  { email: "owais@fc.com", name: "Owais Shah", phone: "0300202992", password: "owais123", role: "agent" }
-];
-
-// Switch between tabs
-function switchTab(tabName) {
-  // Update tab buttons
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  event.target.classList.add('active');
-  
-  // Update tab content
-  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-  document.getElementById(tabName + 'Tab').classList.add('active');
-  
-  // Clear messages
-  document.getElementById('loginError').style.display = 'none';
-  document.getElementById('loginSuccess').style.display = 'none';
-  document.getElementById('registerError').style.display = 'none';
-  document.getElementById('registerSuccess').style.display = 'none';
-}
-
-// Show message
-function showMessage(elementId, message, isError = false) {
-  const element = document.getElementById(elementId);
-  element.textContent = message;
-  element.style.display = 'block';
-  
-  if (isError) {
-    element.className = 'error';
-  } else {
-    element.className = 'success';
+  function showMessage(tabId, message, type = 'info') {
+    const msgEl = document.getElementById(tabId + 'Message');
+    msgEl.textContent = message;
+    msgEl.className = 'message ' + type;
+    msgEl.style.display = 'block';
+    setTimeout(() => msgEl.style.display = 'none', 5000);
   }
-  
-  // Hide after 5 seconds
-  setTimeout(() => {
-    element.style.display = 'none';
-  }, 5000);
-}
 
-// Login form submission
-document.getElementById('loginForm').addEventListener('submit', function(e) {
-  e.preventDefault();
-  
-  const email = document.getElementById('email').value.trim();
-  const password = document.getElementById('password').value;
-  
-  // Try Firebase Auth first
-  window.signInWithEmailAndPassword(window.auth, email, password)
-  .then(async (userCredential) => {
-    // Signed in
-    const user = userCredential.user;
-    
-    // Fetch agent data from Firestore
-    const agentDoc = await window.getDoc(window.doc(window.db, 'agents', user.uid));
-    let agent;
-    if (agentDoc.exists()) {
-      agent = agentDoc.data();
-      if (!agent.role) {
-        agent.role = 'agent';
-      }
-    } else {
-      // Create agent doc if it doesn't exist (for existing Firebase users)
-      agent = {
-        email: user.email,
-        name: user.displayName || user.email.split('@')[0],  // Fallback name
-        phone: '',  // Can be updated later
-        role: 'agent',
-        registeredAt: new Date().toISOString()
-      };
-      await window.setDoc(window.doc(window.db, 'agents', user.uid), agent);
-    }
-    agent.id = user.uid;  // Ensure id is set
-    agent.uid = user.uid;
-    // Also keep in localStorage for instant access
-    localStorage.setItem("loggedInAgent", JSON.stringify(agent));
-    localStorage.setItem("agentLoggedIn", "true");
-    localStorage.setItem("loginTime", new Date().toISOString());
-    
-    showMessage('loginSuccess', 'Login successful! Redirecting to dashboard...');
-    
-    // Redirect to dashboard after 2 seconds
-    setTimeout(() => {
-      window.location.href = 'dashboard.html';
-    }, 2000);
-  })
-  .catch((error) => {
-    // Check predefined agents
-    let agent = predefinedAgents.find(a => a.email === email && a.password === password);
-    
-    if (agent) {
-      // Add uid and timestamp for Firebase
-      agent.uid = agent.email.replace('@', '_').replace('.', '_');
-      agent.id = agent.uid;
+  function switchTab(tabName) {
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(tabName).classList.add('active');
+    event.target.classList.add('active');
+  }
+
+  function showLoading(show) {
+    document.getElementById('loading').style.display = show ? 'block' : 'none';
+  }
+
+  async function handleLogin(e) {
+    e.preventDefault();
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+
+    showLoading(true);
+
+    try {
+      // Sign in with Firebase Auth
+      const userCredential = await auth.signInWithEmailAndPassword(email, password);
+      const user = userCredential.user;
+
+      // Check user approval status in Firestore
+      const userDoc = await db.collection('users').doc(user.uid).get();
       
-      // Store agent data to Firebase
-      window.firebaseDB.saveData('agents', agent.uid, {
-        ...agent,
-        loginTime: new Date().toISOString(),
-        updatedAt: new Date()
-      }).catch(err => console.error('Firebase save error:', err));
-      
-      // Also keep in localStorage for instant access
-      localStorage.setItem("loggedInAgent", JSON.stringify(agent));
-      localStorage.setItem("agentLoggedIn", "true");
-      localStorage.setItem("loginTime", new Date().toISOString());
-      
-      showMessage('loginSuccess', 'Login successful! Redirecting to dashboard...');
-      
-      // Redirect to dashboard after 2 seconds
-      setTimeout(() => {
-        window.location.href = 'dashboard.html';
-      }, 2000);
-    } else {
-      showMessage('loginError', 'Invalid email or password', true);
-    }
-  });
-});
-
-// Register form submission
-document.getElementById('registerForm').addEventListener('submit', function(e) {
-  e.preventDefault();
-  
-  const email = document.getElementById('regEmail').value.trim();
-  const name = document.getElementById('regName').value.trim();
-  const phone = document.getElementById('regPhone').value.trim();
-  const password = document.getElementById('regPassword').value;
-  const confirmPassword = document.getElementById('regConfirmPassword').value;
-  
-  // Validation
-  if (!email || !name || !phone || !password || !confirmPassword) {
-    showMessage('registerError', 'All fields are required', true);
-    return;
-  }
-  
-  if (password.length < 6) {
-    showMessage('registerError', 'Password must be at least 6 characters long', true);
-    return;
-  }
-  
-  if (password !== confirmPassword) {
-    showMessage('registerError', 'Passwords do not match', true);
-    return;
-  }
-  
-  if (!/^03\d{9}$/.test(phone)) {
-    showMessage('registerError', 'Please enter a valid Pakistani phone number (e.g., 03001234567)', true);
-    return;
-  }
-  
-  // Create user with Firebase Auth
-  window.createUserWithEmailAndPassword(window.auth, email, password)
-  .then((userCredential) => {
-    // Signed in 
-    const user = userCredential.user;
-    
-    // Add agent data to Firestore
-    window.setDoc(window.doc(window.db, 'agents', user.uid), {
-      email: email,
-      name: name,
-      phone: phone,
-      role: 'agent',
-      registeredAt: new Date().toISOString()
-    });
-    
-    // Set localStorage for instant access
-    const agent = {
-      uid: user.uid,
-      email: email,
-      name: name,
-      phone: phone,
-      role: 'agent',
-      id: user.uid
-    };
-    localStorage.setItem("loggedInAgent", JSON.stringify(agent));
-    localStorage.setItem("agentLoggedIn", "true");
-    localStorage.setItem("loginTime", new Date().toISOString());
-    
-    showMessage('registerSuccess', 'Registration successful! Redirecting to dashboard...');
-    
-    // Redirect to dashboard after 2 seconds
-    setTimeout(() => {
-      window.location.href = 'dashboard.html';
-    }, 2000);
-  })
-  .catch((error) => {
-    showMessage('registerError', error.message, true);
-  });
-});
-
-// Check if user is already logged in
-document.addEventListener('DOMContentLoaded', function() {
-  // Check Firebase Auth
-  auth.onAuthStateChanged(async (user) => {
-    if (user) {
-      // Fetch agent data and set localStorage
-      const agentDoc = await window.getDoc(window.doc(window.db, 'agents', user.uid));
-      let agent;
-      if (agentDoc.exists()) {
-        agent = agentDoc.data();
-      } else {
-        // Create agent doc if it doesn't exist
-        agent = {
-          email: user.email,
-          name: user.displayName || user.email.split('@')[0],
-          phone: '',
-          registeredAt: new Date().toISOString()
-        };
-        await window.setDoc(window.doc(window.db, 'agents', user.uid), agent);
-      }
-      agent.id = user.uid;
-      agent.uid = user.uid;
-      localStorage.setItem("loggedInAgent", JSON.stringify(agent));
-      localStorage.setItem("agentLoggedIn", "true");
-      localStorage.setItem("loginTime", new Date().toISOString());
-      // Redirect to dashboard
-      window.location.href = 'dashboard.html';
-      return;
-    }
-  });
-  
-  // Check predefined login
-  const agent = JSON.parse(localStorage.getItem("loggedInAgent"));
-  if (agent) {
-    if (!agent.role) agent.role = 'agent';
-    localStorage.setItem("loggedInAgent", JSON.stringify(agent));
-    // Check if login is recent (within 24 hours)
-    const loginTime = localStorage.getItem("loginTime");
-    if (loginTime) {
-      const hoursSinceLogin = (new Date() - new Date(loginTime)) / (1000 * 60 * 60);
-      if (hoursSinceLogin < 24) {
-        // Redirect to dashboard
-        window.location.href = 'dashboard.html';
+      if (!userDoc.exists) {
+        showLoading(false);
+        showMessage('login', 'User profile not found. Please sign up first.', 'error');
+        await auth.signOut();
         return;
       }
+
+      const userData = userDoc.data();
+
+      if (userData.status === 'pending') {
+        showLoading(false);
+        showMessage('login', '⏳ Your account is pending admin approval.', 'warning');
+        await auth.signOut();
+        return;
+      }
+
+      if (userData.status === 'rejected') {
+        showLoading(false);
+        showMessage('login', '❌ Your account has been rejected. Please contact admin.', 'error');
+        await auth.signOut();
+        return;
+      }
+
+      if (userData.status === 'inactive') {
+        showLoading(false);
+        showMessage('login', '⏸️ Your account is inactive. Please contact admin.', 'warning');
+        await auth.signOut();
+        return;
+      }
+
+      if (userData.status !== 'approved') {
+        showLoading(false);
+        showMessage('login', 'Invalid account status.', 'error');
+        await auth.signOut();
+        return;
+      }
+
+      // Account is approved - proceed with login
+      const sessionUser = {
+        id: user.uid,
+        uid: user.uid,
+        email: user.email,
+        name: userData.fullName,
+        fullName: userData.fullName,
+        phone: userData.phone,
+        role: userData.role || 'user',
+        company: userData.company,
+        userType: userData.userType || 'agency'
+      };
+      localStorage.setItem('loggedInUser', JSON.stringify(sessionUser));
+      localStorage.setItem('loggedInAgent', JSON.stringify(sessionUser));
+
+      showMessage('login', '✅ Login successful! Redirecting...', 'success');
+      setTimeout(() => {
+        window.location.href = 'dashboard.html';
+      }, 1500);
+    } catch (error) {
+      showLoading(false);
+      console.error('Login error:', error);
+      showMessage('login', 'Login failed: ' + error.message, 'error');
     }
   }
-});
+
+  async function handleSignup(e) {
+    e.preventDefault();
+
+    const fullName = document.getElementById('signupFullName').value.trim();
+    const email = document.getElementById('signupEmail').value.trim();
+    const company = document.getElementById('signupCompany').value.trim();
+    const phone = document.getElementById('signupPhone').value.trim();
+    const password = document.getElementById('signupPassword').value;
+    const confirmPassword = document.getElementById('signupConfirmPassword').value;
+
+    if (password.length < 6) {
+      showMessage('signup', 'Password must be at least 6 characters', 'error');
+      return;
+    }
+    if (password !== confirmPassword) {
+      showMessage('signup', 'Passwords do not match', 'error');
+      return;
+    }
+
+    showLoading(true);
+
+    try {
+      // Create Firebase Auth user for the new agent
+      const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+      const user = userCredential.user;
+      await user.getIdToken(true);
+
+      // Save agent profile — status: pending, role: agent
+      await db.collection('users').doc(user.uid).set({
+        uid: user.uid,
+        fullName: fullName,
+        email: email,
+        company: company,
+        phone: phone,
+        userType: 'agent',
+        role: 'agent',
+        status: 'pending',
+        createdAt: new Date().toISOString()
+      });
+
+      // Sign out immediately — agent cannot access system until admin approves
+      await auth.signOut();
+
+      showLoading(false);
+      document.getElementById('signupForm').reset();
+      showMessage('signup', '✅ Registration submitted! Your account is pending admin approval. You will be able to login once approved.', 'success');
+
+    } catch (error) {
+      showLoading(false);
+      console.error('Signup error:', error);
+      if (error.code === 'auth/email-already-in-use') {
+        showMessage('signup', 'This email is already registered. Please login instead.', 'error');
+      } else if (error.code === 'permission-denied' || error.message.toLowerCase().includes('permission')) {
+        showMessage('signup', 'Registration failed: Firestore permissions error. Please contact admin.', 'error');
+      } else {
+        showMessage('signup', 'Registration failed: ' + error.message, 'error');
+      }
+    }
+  }
+
+  // Check if user is already logged in and approved
+  auth.onAuthStateChanged(async (user) => {
+    if (user) {
+      try {
+        const userDoc = await db.collection('users').doc(user.uid).get();
+        if (userDoc.exists && userDoc.data().status === 'approved') {
+          const sessionUser = {
+            id: user.uid,
+            uid: user.uid,
+            email: user.email,
+            name: userDoc.data().fullName,
+            fullName: userDoc.data().fullName,
+            phone: userDoc.data().phone,
+            role: userDoc.data().role || 'user',
+            company: userDoc.data().company,
+            userType: userDoc.data().userType || 'agency'
+          };
+          localStorage.setItem('loggedInUser', JSON.stringify(sessionUser));
+          localStorage.setItem('loggedInAgent', JSON.stringify(sessionUser));
+          window.location.href = 'dashboard.html';
+        }
+      } catch (error) {
+        console.error('Auth check error:', error);
+      }
+    }
+  });
 </script>
 </body>
 </html>

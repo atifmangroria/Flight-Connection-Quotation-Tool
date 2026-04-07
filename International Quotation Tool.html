@@ -197,6 +197,9 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus, 
     opacity: 1;
     visibility: visible;
   }
+  #custom-modal {
+    z-index: 2000 !important;
+  }
   .modal-content {
     background: #fff;
     padding: 30px;
@@ -826,7 +829,7 @@ async function loadPackages(type = 'international') {
     filtered.forEach(pkg => {
       const opt = document.createElement('option');
       opt.value = pkg.id || pkg.name.replace(/\s+/g, '_').toLowerCase();
-      opt.textContent = `${pkg.name} (${pkg.type})`;
+      opt.textContent = `${pkg.name} (Travel Month: ${pkg.travelMonth || 'Any'})`;
       packageSelect.appendChild(opt);
     });
   } catch (error) {
@@ -835,23 +838,259 @@ async function loadPackages(type = 'international') {
   }
 }
 
-function applyPackageToForm(pkg) {
+function checkPackageMonthMatch(pkg) {
+  const startDate = document.getElementById('dateFrom')?.value;
+  if (!startDate || !pkg.travelMonth) return true; // No validation if no date selected
+  
+  const selectedMonth = new Date(startDate).getMonth() + 1;
+  const packageMonth = parseInt(pkg.travelMonth);
+  
+  if (selectedMonth !== packageMonth) {
+    const warning = confirm(
+      `⚠️ Package travel month is ${pkg.travelMonth}, but you selected ${String(selectedMonth).padStart(2, '0')}.\n\nContinue anyway?`
+    );
+    return warning;
+  }
+  return true;
+}
+
+function wait(ms = 0) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function resetAppliedPackageSections() {
+  if (document.getElementById("flightContainer")) document.getElementById("flightContainer").innerHTML = "";
+  if (document.getElementById("hotelContainer")) document.getElementById("hotelContainer").innerHTML = "";
+  if (document.getElementById("transferContainer")) document.getElementById("transferContainer").innerHTML = "";
+  if (document.getElementById("visaContainer")) document.getElementById("visaContainer").innerHTML = "";
+  if (document.getElementById("directFlightContainer")) document.getElementById("directFlightContainer").innerHTML = "";
+  if (document.getElementById("mealTypeContainer")) document.getElementById("mealTypeContainer").innerHTML = "";
+  if (document.getElementById("toursContainer")) document.getElementById("toursContainer").innerHTML = "";
+  if (document.getElementById("addonToursContainer")) document.getElementById("addonToursContainer").innerHTML = "";
+
+  nextFlightNumber = 0;
+  flights = [];
+  nextHotelNumber = 0;
+  hotels = [];
+  nextTransferNumber = 0;
+  transfers = [];
+  nextTourNumber = 0;
+  mainTours = [];
+  visaAdded = false;
+  dfIndex = 0;
+  mealIndex = 0;
+  tourIndex = 0;
+  tours = [];
+}
+
+function addDaysToDateString(dateString, days) {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return '';
+  date.setDate(date.getDate() + days);
+  return date.toISOString().split('T')[0];
+}
+
+function mapFlightType(packageFlightType = '') {
+  return String(packageFlightType).toLowerCase() === 'layover' ? 'Stopover' : 'Direct';
+}
+
+function mapMealPlan(packageMealPlan = '') {
+  const value = String(packageMealPlan).trim().toLowerCase();
+  if (value === 'breakfast included' || value === 'with breakfast' || value === 'breakfast') return 'With Breakfast';
+  if (value === 'half board') return 'Half Board';
+  if (value === 'full board' || value === 'all inclusive') return 'Full Board';
+  return 'Room Only';
+}
+
+function mapVehicleType(vehicle = '') {
+  const value = String(vehicle).trim().toLowerCase();
+  if (value === 'car') return 'Sedan';
+  if (value === 'bus') return 'Bus';
+  if (value === 'van') return 'Van';
+  if (value === 'suv') return 'SUV';
+  return 'Sedan';
+}
+
+function mapTourDuration(type = '') {
+  const value = String(type).trim().toLowerCase();
+  if (value.includes('full')) return 'full-day';
+  return 'half-day';
+}
+
+function getPackageDestinationText(pkg) {
+  if (!Array.isArray(pkg.destinations)) return '';
+  return pkg.destinations
+    .map(dest => dest?.city)
+    .filter(Boolean)
+    .join(', ');
+}
+
+function canAutoSaveClientPax() {
+  return !!(
+    document.getElementById('clientName')?.value.trim() &&
+    document.getElementById('reference')?.value &&
+    document.getElementById('clientPhone')?.value.trim() &&
+    document.getElementById('dateFrom')?.value &&
+    document.getElementById('dateTo')?.value &&
+    document.getElementById('tourDestination')?.value.trim() &&
+    parseInt(document.getElementById('numAdult')?.value || 0) > 0
+  );
+}
+
+async function ensureClientDataReadyForPackage(pkg) {
+  const destinationText = getPackageDestinationText(pkg);
+  const destinationField = document.getElementById('tourDestination');
+  if (destinationField && destinationText) {
+    destinationField.value = destinationText;
+  }
+
+  const dateFromField = document.getElementById('dateFrom');
+  const dateToField = document.getElementById('dateTo');
+  if (dateFromField?.value && dateToField && !dateToField.value && Number(pkg.totalNights) > 0) {
+    dateToField.value = addDaysToDateString(dateFromField.value, Number(pkg.totalNights));
+  }
+
+  if (!isClientDataSaved && canAutoSaveClientPax()) {
+    document.getElementById('btnSaveClient')?.click();
+    await wait(50);
+  }
+
+  return isClientDataSaved;
+}
+
+async function applyPackageToForm(pkg) {
   if (!pkg) return;
-  if (document.getElementById('numAdult')) document.getElementById('numAdult').value = pkg.pax.adults || 0;
-  if (document.getElementById('numChildBed')) document.getElementById('numChildBed').value = pkg.pax.children || 0;
-  if (document.getElementById('numChildNoBed')) document.getElementById('numChildNoBed').value = pkg.pax.children || 0;
-  if (document.getElementById('numInfant')) document.getElementById('numInfant').value = pkg.pax.infants || 0;
 
-  const flightCostAdult = document.getElementById('flightCostAdult_0');
-  if (flightCostAdult) flightCostAdult.value = pkg.prices?.air || '';
-  const flightCostChildBed = document.getElementById('flightCostChildBed_0');
-  if (flightCostChildBed) flightCostChildBed.value = pkg.prices?.air || '';
-  const flightCostChildNoBed = document.getElementById('flightCostChildNoBed_0');
-  if (flightCostChildNoBed) flightCostChildNoBed.value = pkg.prices?.air || '';
-  const flightCostInf = document.getElementById('flightCostInf_0');
-  if (flightCostInf) flightCostInf.value = pkg.prices?.air || '';
+  // Check month match
+  if (!checkPackageMonthMatch(pkg)) return;
 
-  // More mapping can be added
+  showNotification(`📦 Applying package: ${pkg.name}`, 'success');
+
+  if (document.getElementById('numAdult') && !document.getElementById('numAdult').value) document.getElementById('numAdult').value = 2;
+  if (document.getElementById('numChildBed') && !document.getElementById('numChildBed').value) document.getElementById('numChildBed').value = 0;
+  if (document.getElementById('numChildNoBed') && !document.getElementById('numChildNoBed').value) document.getElementById('numChildNoBed').value = 0;
+  if (document.getElementById('numInfant') && !document.getElementById('numInfant').value) document.getElementById('numInfant').value = 0;
+
+  const clientReady = await ensureClientDataReadyForPackage(pkg);
+  if (!clientReady) {
+    showNotification('Package destination filled. Please complete and save Client & Pax first, then select the package again.', 'error');
+    return;
+  }
+
+  resetAppliedPackageSections();
+
+  const startDate = document.getElementById('dateFrom')?.value || '';
+  let hotelDateCursor = startDate;
+
+  for (const flight of (pkg.flights || [])) {
+    await addFlight();
+    await wait(20);
+    const idx = nextFlightNumber;
+    if (document.getElementById(`flightItinerary_${idx}`)) {
+      document.getElementById(`flightItinerary_${idx}`).value = [flight.airline, flight.sector, flight.type].filter(Boolean).join(' | ');
+    }
+    if (document.getElementById(`airline_${idx}`)) document.getElementById(`airline_${idx}`).value = flight.airline || '';
+    if (document.getElementById(`flightDirect_${idx}`)) document.getElementById(`flightDirect_${idx}`).value = mapFlightType(flight.type);
+    if (document.getElementById(`flightCurrency_${idx}`)) document.getElementById(`flightCurrency_${idx}`).value = flight.currency || 'USD';
+    if (document.getElementById(`flightCostAdult_${idx}`)) document.getElementById(`flightCostAdult_${idx}`).value = flight.priceAdult || 0;
+    if (document.getElementById(`flightCostChildBed_${idx}`)) document.getElementById(`flightCostChildBed_${idx}`).value = flight.priceChild || 0;
+    if (document.getElementById(`flightCostChildNoBed_${idx}`)) document.getElementById(`flightCostChildNoBed_${idx}`).value = flight.priceChild || 0;
+    if (document.getElementById(`flightCostInf_${idx}`)) document.getElementById(`flightCostInf_${idx}`).value = flight.priceInfant || 0;
+    if (document.getElementById(`flightSvcAdult_${idx}`)) document.getElementById(`flightSvcAdult_${idx}`).value = 0;
+    if (document.getElementById(`flightSvcChildBed_${idx}`)) document.getElementById(`flightSvcChildBed_${idx}`).value = 0;
+    if (document.getElementById(`flightSvcChildNoBed_${idx}`)) document.getElementById(`flightSvcChildNoBed_${idx}`).value = 0;
+    if (document.getElementById(`flightSvcInf_${idx}`)) document.getElementById(`flightSvcInf_${idx}`).value = 0;
+  }
+
+  for (const hotel of (pkg.hotels || [])) {
+    if (nextHotelNumber >= hotelLimit) break;
+    nextHotelNumber++;
+    createHotelSection(nextHotelNumber);
+    await wait(20);
+    const idx = nextHotelNumber;
+    if (document.getElementById(`hotelName_${idx}`)) document.getElementById(`hotelName_${idx}`).value = hotel.name || '';
+    if (document.getElementById(`hotelCity_${idx}`)) document.getElementById(`hotelCity_${idx}`).value = hotel.city || '';
+    if (document.getElementById(`hotelRoomName_${idx}`)) document.getElementById(`hotelRoomName_${idx}`).value = hotel.category || '';
+    if (document.getElementById(`hotelService_${idx}`)) document.getElementById(`hotelService_${idx}`).value = mapMealPlan(hotel.mealPlan);
+    if (document.getElementById(`hotelCostNight_${idx}`)) document.getElementById(`hotelCostNight_${idx}`).value = hotel.doubleRate || hotel.tripleRate || hotel.quadRate || 0;
+    if (document.getElementById(`hotelCurrency_${idx}`)) document.getElementById(`hotelCurrency_${idx}`).value = hotel.currency || 'USD';
+    if (document.getElementById(`hotelSvcNight_${idx}`)) document.getElementById(`hotelSvcNight_${idx}`).value = 0;
+
+    const hotelNights = Number(hotel.nights) || 0;
+    const checkInField = document.getElementById(`hotelCheckIn_${idx}`);
+    const checkOutField = document.getElementById(`hotelCheckOut_${idx}`);
+    if (checkInField && checkOutField && hotelDateCursor && hotelNights > 0) {
+      checkInField.value = hotelDateCursor;
+      checkOutField.value = addDaysToDateString(hotelDateCursor, hotelNights);
+      checkInField.dispatchEvent(new Event('change'));
+      checkOutField.dispatchEvent(new Event('change'));
+      hotelDateCursor = checkOutField.value || hotelDateCursor;
+    }
+  }
+
+  for (let transferIndex = 0; transferIndex < (pkg.transfers || []).length; transferIndex++) {
+    const transfer = pkg.transfers[transferIndex];
+    await addTransfer();
+    await wait(20);
+    const idx = nextTransferNumber;
+    if (document.getElementById(`tDate_${idx}`)) document.getElementById(`tDate_${idx}`).value = transferIndex === 0 ? startDate : '';
+    if (document.getElementById(`tFrom_${idx}`)) document.getElementById(`tFrom_${idx}`).value = transfer.from || '';
+    if (document.getElementById(`tTo_${idx}`)) document.getElementById(`tTo_${idx}`).value = transfer.to || '';
+    if (document.getElementById(`tCar_${idx}`)) document.getElementById(`tCar_${idx}`).value = mapVehicleType(transfer.vehicle);
+    const isPrivateTransfer = (transfer.pricePerVehicle || 0) > 0;
+    if (document.getElementById(`tType_${idx}`)) document.getElementById(`tType_${idx}`).value = isPrivateTransfer ? 'Private' : 'Sharing';
+    if (document.getElementById(`tDirection_${idx}`)) document.getElementById(`tDirection_${idx}`).value = String(transfer.type || '').toLowerCase().includes('round') ? 'Return' : 'One Way';
+    if (document.getElementById(`tCost_${idx}`)) document.getElementById(`tCost_${idx}`).value = transfer.pricePerVehicle || 0;
+    if (document.getElementById(`tShareCostAdult_${idx}`)) document.getElementById(`tShareCostAdult_${idx}`).value = transfer.priceAdult || 0;
+    if (document.getElementById(`tShareCostChild_${idx}`)) document.getElementById(`tShareCostChild_${idx}`).value = transfer.priceChild || 0;
+    if (document.getElementById(`tShareCostInf_${idx}`)) document.getElementById(`tShareCostInf_${idx}`).value = transfer.priceInfant || 0;
+    if (document.getElementById(`tCurrency_${idx}`)) document.getElementById(`tCurrency_${idx}`).value = transfer.currency || 'USD';
+    if (document.getElementById(`tSvc_${idx}`)) document.getElementById(`tSvc_${idx}`).value = 0;
+    if (document.getElementById(`tShareSvcAdult_${idx}`)) document.getElementById(`tShareSvcAdult_${idx}`).value = 0;
+    if (document.getElementById(`tShareSvcChild_${idx}`)) document.getElementById(`tShareSvcChild_${idx}`).value = 0;
+    if (document.getElementById(`tShareSvcInf_${idx}`)) document.getElementById(`tShareSvcInf_${idx}`).value = 0;
+    toggleTransferRateFields(idx);
+    const directionSelect = document.getElementById(`tDirection_${idx}`);
+    if (directionSelect) directionSelect.dispatchEvent(new Event('change'));
+  }
+
+  for (const tour of (pkg.tours || [])) {
+    await addTour();
+    await wait(20);
+    const idx = nextTourNumber;
+    const dayMatch = String(tour.day || '').match(/day\s*(\d+)/i);
+    const tourDate = startDate && dayMatch ? addDaysToDateString(startDate, Math.max(parseInt(dayMatch[1], 10) - 1, 0)) : '';
+    if (document.getElementById(`tourDate_${idx}`)) document.getElementById(`tourDate_${idx}`).value = tourDate;
+    if (document.getElementById(`tourName_${idx}`)) document.getElementById(`tourName_${idx}`).value = tour.name || '';
+    if (document.getElementById(`tourCity_${idx}`)) document.getElementById(`tourCity_${idx}`).value = tour.city || '';
+    if (document.getElementById(`tourDuration_${idx}`)) document.getElementById(`tourDuration_${idx}`).value = mapTourDuration(tour.type);
+    const isPrivateTour = (tour.pricePerVehicle || 0) > 0;
+    if (document.getElementById(`tourMode_${idx}`)) document.getElementById(`tourMode_${idx}`).value = isPrivateTour ? 'private' : 'sharing';
+    if (document.getElementById(`tourVehicle_${idx}`)) document.getElementById(`tourVehicle_${idx}`).value = mapVehicleType(tour.vehicle);
+    if (document.getElementById(`tourCost_${idx}`)) document.getElementById(`tourCost_${idx}`).value = tour.pricePerVehicle || 0;
+    if (document.getElementById(`tourShareCostAdult_${idx}`)) document.getElementById(`tourShareCostAdult_${idx}`).value = tour.priceAdult || 0;
+    if (document.getElementById(`tourShareCostChild_${idx}`)) document.getElementById(`tourShareCostChild_${idx}`).value = tour.priceChild || 0;
+    if (document.getElementById(`tourShareCostInf_${idx}`)) document.getElementById(`tourShareCostInf_${idx}`).value = tour.priceInfant || 0;
+    if (document.getElementById(`tourCurrency_${idx}`)) document.getElementById(`tourCurrency_${idx}`).value = tour.currency || 'USD';
+    if (document.getElementById(`tourSvc_${idx}`)) document.getElementById(`tourSvc_${idx}`).value = 0;
+    if (document.getElementById(`tourShareSvcAdult_${idx}`)) document.getElementById(`tourShareSvcAdult_${idx}`).value = 0;
+    if (document.getElementById(`tourShareSvcChild_${idx}`)) document.getElementById(`tourShareSvcChild_${idx}`).value = 0;
+    if (document.getElementById(`tourShareSvcInf_${idx}`)) document.getElementById(`tourShareSvcInf_${idx}`).value = 0;
+    toggleTourRateFields(idx, false);
+  }
+
+  if ((pkg.visas || []).length > 0) {
+    await addVisa();
+    await wait(20);
+    const visa = pkg.visas[0];
+    if (document.getElementById('visaCountry')) document.getElementById('visaCountry').value = visa.country || 'Other';
+    if (document.getElementById('visaCost')) document.getElementById('visaCost').value = visa.priceAdult || 0;
+    if (document.getElementById('visaCurrency')) document.getElementById('visaCurrency').value = visa.currency || 'USD';
+    if (document.getElementById('visaSvc')) document.getElementById('visaSvc').value = 0;
+  }
+
+  showNotification(`✅ Package "${pkg.name}" applied! Edit fields as needed for your quotation.`, 'success');
 }
 
 // --- DASHBOARD BUTTON ---
@@ -874,11 +1113,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const packageSelect = document.getElementById('packageSelect');
     if (packageSelect) {
-      packageSelect.addEventListener('change', function () {
+      packageSelect.addEventListener('change', async function () {
         const val = this.value;
         if (!val) return;
-        const pkg = availablePackages.find(p => (p.id === val) || (p.name.replace(/\s+/g, '_').toLowerCase() === val));
-        if (pkg) applyPackageToForm(pkg);
+        const pkg = availablePackages.find(p => (p.id === val) || ((p.name || '').replace(/\s+/g, '_').toLowerCase() === val));
+        if (pkg) {
+          await applyPackageToForm(pkg);
+        } else {
+          showNotification('Selected package could not be loaded.', 'error');
+        }
       });
     }
 
@@ -910,16 +1153,6 @@ document.addEventListener('DOMContentLoaded', function() {
   </header>
 </div>
 
-<!-- PACKAGE SELECTION -->
-<div class="section">
-  <h3>Package Selection (Optional)</h3>
-  <div>
-    <label for="packageSelect">Select Package</label>
-    <select id="packageSelect">
-      <option value="">-- No Package --</option>
-    </select>
-  </div>
-</div>
 
   <!-- CLIENT & PAX -->
   <div class="section">
@@ -999,6 +1232,17 @@ document.addEventListener('DOMContentLoaded', function() {
       <button id="btnCheckClient" type="button">Check Data</button>
     </div>
   </div>
+
+<!-- PACKAGE SELECTION -->
+<div class="section">
+  <h3>Package Selection (Optional)</h3>
+  <div>
+    <label for="packageSelect">Select Package</label>
+    <select id="packageSelect">
+      <option value="">-- No Package --</option>
+    </select>
+  </div>
+</div>
 
 <script>
   let isClientDataSaved = false;
@@ -1928,6 +2172,108 @@ function getRecommendedVehicle() {
   return 'Bus';
 }
 
+function toggleTransferRateFields(index) {
+  const type = (document.getElementById(`tType_${index}`)?.value || 'Private').toLowerCase();
+  const privateWrap = document.getElementById(`tPrivateRates_${index}`);
+  const sharingWrap = document.getElementById(`tSharingRates_${index}`);
+  if (privateWrap) privateWrap.style.display = type === 'private' ? 'contents' : 'none';
+  if (sharingWrap) sharingWrap.style.display = type === 'sharing' ? 'contents' : 'none';
+}
+
+function toggleTourRateFields(index, isAddon = false) {
+  const prefix = isAddon ? 'tourAddon' : 'tour';
+  const mode = (document.getElementById(`${prefix}Mode_${index}`)?.value || 'private').toLowerCase();
+  const privateWrap = document.getElementById(`${prefix}PrivateRates_${index}`);
+  const privateWrapSvc = document.getElementById(`${prefix}PrivateRates_${index}_svc`);
+  const sharingWrap = document.getElementById(`${prefix}SharingRates_${index}`);
+  if (privateWrap) privateWrap.style.display = mode === 'private' ? 'contents' : 'none';
+  if (privateWrapSvc) privateWrapSvc.style.display = mode === 'private' ? 'contents' : 'none';
+  if (sharingWrap) sharingWrap.style.display = mode === 'sharing' ? 'contents' : 'none';
+}
+
+function numVal(id) {
+  return parseFloat(document.getElementById(id)?.value || 0) || 0;
+}
+
+function getTransferPricing(index, paxDataOverride = null) {
+  const p = paxDataOverride || getCurrentPaxData();
+  const type = (document.getElementById(`tType_${index}`)?.value || 'Private').toLowerCase();
+  const currency = document.getElementById(`tCurrency_${index}`)?.value || 'USD';
+  const childCount = (p.childBed || 0) + (p.childNoBed || 0);
+
+  let costOrig = 0;
+  let svcOrig = 0;
+  let perAdultPKR = 0;
+  let perChildPKR = 0;
+  let perInfantPKR = 0;
+
+  if (type === 'sharing') {
+    const costAdult = numVal(`tShareCostAdult_${index}`);
+    const svcAdult = numVal(`tShareSvcAdult_${index}`);
+    const costChild = numVal(`tShareCostChild_${index}`);
+    const svcChild = numVal(`tShareSvcChild_${index}`);
+    const costInf = numVal(`tShareCostInf_${index}`);
+    const svcInf = numVal(`tShareSvcInf_${index}`);
+
+    costOrig = (costAdult * (p.adults || 0)) + (costChild * childCount) + (costInf * (p.infants || 0));
+    svcOrig = (svcAdult * (p.adults || 0)) + (svcChild * childCount) + (svcInf * (p.infants || 0));
+
+    perAdultPKR = convertToPKR(costAdult + svcAdult, currency);
+    perChildPKR = convertToPKR(costChild + svcChild, currency);
+    perInfantPKR = convertToPKR(costInf + svcInf, currency);
+  } else {
+    costOrig = numVal(`tCost_${index}`);
+    svcOrig = numVal(`tSvc_${index}`);
+    const payingPax = (p.adults || 0) + childCount;
+    const perPersonPKR = payingPax > 0 ? convertToPKR(costOrig + svcOrig, currency) / payingPax : 0;
+    perAdultPKR = perPersonPKR;
+    perChildPKR = perPersonPKR;
+    perInfantPKR = 0;
+  }
+
+  return { type, currency, costOrig, svcOrig, totalOrig: costOrig + svcOrig, perAdultPKR, perChildPKR, perInfantPKR };
+}
+
+function getTourPricing(index, isAddon = false, paxDataOverride = null) {
+  const p = paxDataOverride || getCurrentPaxData();
+  const prefix = isAddon ? 'tourAddon' : 'tour';
+  const mode = (document.getElementById(`${prefix}Mode_${index}`)?.value || 'private').toLowerCase();
+  const currency = document.getElementById(`${prefix}Currency_${index}`)?.value || 'USD';
+  const childCount = (p.childBed || 0) + (p.childNoBed || 0);
+
+  let costOrig = 0;
+  let svcOrig = 0;
+  let perAdultPKR = 0;
+  let perChildPKR = 0;
+  let perInfantPKR = 0;
+
+  if (mode === 'sharing') {
+    const costAdult = numVal(`${prefix}ShareCostAdult_${index}`);
+    const svcAdult = numVal(`${prefix}ShareSvcAdult_${index}`);
+    const costChild = numVal(`${prefix}ShareCostChild_${index}`);
+    const svcChild = numVal(`${prefix}ShareSvcChild_${index}`);
+    const costInf = numVal(`${prefix}ShareCostInf_${index}`);
+    const svcInf = numVal(`${prefix}ShareSvcInf_${index}`);
+
+    costOrig = (costAdult * (p.adults || 0)) + (costChild * childCount) + (costInf * (p.infants || 0));
+    svcOrig = (svcAdult * (p.adults || 0)) + (svcChild * childCount) + (svcInf * (p.infants || 0));
+
+    perAdultPKR = convertToPKR(costAdult + svcAdult, currency);
+    perChildPKR = convertToPKR(costChild + svcChild, currency);
+    perInfantPKR = convertToPKR(costInf + svcInf, currency);
+  } else {
+    costOrig = numVal(`${prefix}Cost_${index}`);
+    svcOrig = numVal(`${prefix}Svc_${index}`);
+    const payingPax = (p.adults || 0) + childCount + (p.infants || 0);
+    const perPersonPKR = payingPax > 0 ? convertToPKR(costOrig + svcOrig, currency) / payingPax : 0;
+    perAdultPKR = perPersonPKR;
+    perChildPKR = perPersonPKR;
+    perInfantPKR = perPersonPKR;
+  }
+
+  return { mode, currency, costOrig, svcOrig, totalOrig: costOrig + svcOrig, perAdultPKR, perChildPKR, perInfantPKR };
+}
+
 // Added function to check if transfer date is within travel dates
 function checkDateRange(dateInput, clientData) {
   const transferDate = new Date(dateInput.value);
@@ -2040,9 +2386,15 @@ async function addTransfer(){
         <label>Return Date</label>
         <input id="tReturnDate_${nextTransferNumber}" type="date">
       </div>
-      <div>
-        <label>Cost</label>
-        <input id="tCost_${nextTransferNumber}" type="number" placeholder="Cost">
+      <div id="tPrivateRates_${nextTransferNumber}" style="display: contents;">
+        <div>
+          <label>Private Cost (Total)</label>
+          <input id="tCost_${nextTransferNumber}" type="number" placeholder="Total private cost" value="0" min="0">
+        </div>
+        <div>
+          <label>Private Service (Total)</label>
+          <input id="tSvc_${nextTransferNumber}" type="number" placeholder="Total private service" value="0" min="0">
+        </div>
       </div>
       <div>
         <label>Currency</label>
@@ -2053,9 +2405,31 @@ async function addTransfer(){
           <option value="PKR">PKR</option>
         </select>
       </div>
-      <div>
-        <label>Service</label>
-        <input id="tSvc_${nextTransferNumber}" type="number" placeholder="Service">
+      <div id="tSharingRates_${nextTransferNumber}" style="display: none;">
+        <div>
+          <label>Per Person Adult Cost</label>
+          <input id="tShareCostAdult_${nextTransferNumber}" type="number" value="0" min="0">
+        </div>
+        <div>
+          <label>Per Person Adult Service</label>
+          <input id="tShareSvcAdult_${nextTransferNumber}" type="number" value="0" min="0">
+        </div>
+        <div>
+          <label>Per Person Child Cost</label>
+          <input id="tShareCostChild_${nextTransferNumber}" type="number" value="0" min="0">
+        </div>
+        <div>
+          <label>Per Person Child Service</label>
+          <input id="tShareSvcChild_${nextTransferNumber}" type="number" value="0" min="0">
+        </div>
+        <div>
+          <label>Per Person Infant Cost</label>
+          <input id="tShareCostInf_${nextTransferNumber}" type="number" value="0" min="0">
+        </div>
+        <div>
+          <label>Per Person Infant Service</label>
+          <input id="tShareSvcInf_${nextTransferNumber}" type="number" value="0" min="0">
+        </div>
       </div>
     </div>
   `;
@@ -2101,6 +2475,12 @@ async function addTransfer(){
         checkDateRange(returnDateInput, clientData);
       }
     });
+  }
+
+  const typeSelect = div.querySelector(`#tType_${nextTransferNumber}`);
+  if (typeSelect) {
+    typeSelect.addEventListener('change', () => toggleTransferRateFields(nextTransferNumber));
+    toggleTransferRateFields(nextTransferNumber);
   }
 }
 
@@ -2216,9 +2596,11 @@ async function addTour(){
           <option>Jeep</option>
         </select>
       </div>
-      <div>
-        <label>Cost per Person</label>
-        <input id="tourCost_${nextTourNumber}" type="number" value="0" min="0">
+      <div id="tourPrivateRates_${nextTourNumber}" style="display: contents;">
+        <div>
+          <label>Private Cost (Total)</label>
+          <input id="tourCost_${nextTourNumber}" type="number" value="0" min="0">
+        </div>
       </div>
       <div>
         <label>Currency</label>
@@ -2229,14 +2611,48 @@ async function addTour(){
           <option value="PKR">PKR</option>
         </select>
       </div>
-      <div>
-        <label>Service Fee per Person</label>
-        <input id="tourSvc_${nextTourNumber}" type="number" value="0" min="0">
+      <div id="tourPrivateRates_${nextTourNumber}_svc" style="display: contents;">
+        <div>
+          <label>Private Service (Total)</label>
+          <input id="tourSvc_${nextTourNumber}" type="number" value="0" min="0">
+        </div>
+      </div>
+      <div id="tourSharingRates_${nextTourNumber}" style="display: none;">
+        <div>
+          <label>Per Person Adult Cost</label>
+          <input id="tourShareCostAdult_${nextTourNumber}" type="number" value="0" min="0">
+        </div>
+        <div>
+          <label>Per Person Adult Service</label>
+          <input id="tourShareSvcAdult_${nextTourNumber}" type="number" value="0" min="0">
+        </div>
+        <div>
+          <label>Per Person Child Cost</label>
+          <input id="tourShareCostChild_${nextTourNumber}" type="number" value="0" min="0">
+        </div>
+        <div>
+          <label>Per Person Child Service</label>
+          <input id="tourShareSvcChild_${nextTourNumber}" type="number" value="0" min="0">
+        </div>
+        <div>
+          <label>Per Person Infant Cost</label>
+          <input id="tourShareCostInf_${nextTourNumber}" type="number" value="0" min="0">
+        </div>
+        <div>
+          <label>Per Person Infant Service</label>
+          <input id="tourShareSvcInf_${nextTourNumber}" type="number" value="0" min="0">
+        </div>
       </div>
     </div>
   `;
 
   container.appendChild(div);
+
+  const modeSelect = document.getElementById(`tourMode_${nextTourNumber}`);
+  if (modeSelect) {
+    modeSelect.addEventListener('change', () => toggleTourRateFields(nextTourNumber, false));
+    toggleTourRateFields(nextTourNumber, false);
+  }
 }
 
 function removeTour(index) {
@@ -2679,9 +3095,11 @@ async function addTourAddon(){
           <option>Jeep</option>
         </select>
       </div>
-      <div>
-        <label>Cost per Person</label>
-        <input id="tourAddonCost_${tourIndex}" type="number" value="0" min="0">
+      <div id="tourAddonPrivateRates_${tourIndex}" style="display: contents;">
+        <div>
+          <label>Private Cost (Total)</label>
+          <input id="tourAddonCost_${tourIndex}" type="number" value="0" min="0">
+        </div>
       </div>
       <div>
         <label>Currency</label>
@@ -2692,14 +3110,48 @@ async function addTourAddon(){
           <option value="PKR">PKR</option>
         </select>
       </div>
-      <div>
-        <label>Service Fee per Person</label>
-        <input id="tourAddonSvc_${tourIndex}" type="number" value="0" min="0">
+      <div id="tourAddonPrivateRates_${tourIndex}_svc" style="display: contents;">
+        <div>
+          <label>Private Service (Total)</label>
+          <input id="tourAddonSvc_${tourIndex}" type="number" value="0" min="0">
+        </div>
+      </div>
+      <div id="tourAddonSharingRates_${tourIndex}" style="display: none;">
+        <div>
+          <label>Per Person Adult Cost</label>
+          <input id="tourAddonShareCostAdult_${tourIndex}" type="number" value="0" min="0">
+        </div>
+        <div>
+          <label>Per Person Adult Service</label>
+          <input id="tourAddonShareSvcAdult_${tourIndex}" type="number" value="0" min="0">
+        </div>
+        <div>
+          <label>Per Person Child Cost</label>
+          <input id="tourAddonShareCostChild_${tourIndex}" type="number" value="0" min="0">
+        </div>
+        <div>
+          <label>Per Person Child Service</label>
+          <input id="tourAddonShareSvcChild_${tourIndex}" type="number" value="0" min="0">
+        </div>
+        <div>
+          <label>Per Person Infant Cost</label>
+          <input id="tourAddonShareCostInf_${tourIndex}" type="number" value="0" min="0">
+        </div>
+        <div>
+          <label>Per Person Infant Service</label>
+          <input id="tourAddonShareSvcInf_${tourIndex}" type="number" value="0" min="0">
+        </div>
       </div>
     </div>
   `;
   
   container.appendChild(div);
+
+  const modeSelect = document.getElementById(`tourAddonMode_${tourIndex}`);
+  if (modeSelect) {
+    modeSelect.addEventListener('change', () => toggleTourRateFields(tourIndex, true));
+    toggleTourRateFields(tourIndex, true);
+  }
 }
 
 function removeTourAddon(index) {
@@ -3052,33 +3504,25 @@ function performCalculation() {
     const to = document.getElementById(`tTo_${idx}`)?.value || "Not specified";
     const vehicle = document.getElementById(`tCar_${idx}`)?.value || "Not specified";
     const type = document.getElementById(`tType_${idx}`)?.value || "Not specified";
-    const currency = document.getElementById(`tCurrency_${idx}`)?.value || "USD";
-    
-    // Get costs in ORIGINAL currency
-    const costOrig = parseFloat(document.getElementById(`tCost_${idx}`)?.value || 0);
-    const svcOrig = parseFloat(document.getElementById(`tSvc_${idx}`)?.value || 0);
-    
-    const payingPax = paxData.adults + paxData.childBed + paxData.childNoBed;
-    const perPersonCost = payingPax > 0 ? convertToPKR(costOrig + svcOrig, currency) / payingPax : 0;
-    
-    const perAdult = paxData.adults > 0 ? perPersonCost : 0;
-    const perChildBed = paxData.childBed > 0 ? perPersonCost : 0;
-    const perChildNoBed = paxData.childNoBed > 0 ? perPersonCost : 0;
+    const pricing = getTransferPricing(idx, paxData);
     
     const details = `Date: ${formatDateToDMY(date)}<br>
                     Route: ${from} → ${to}<br>
                     Vehicle: ${vehicle} (${type})<br>
-                    Rate: ${currency} ${fmt(costOrig)}<br>
-                    Charged to: Adults (${paxData.adults}) + Children with bed (${paxData.childBed}) + Children without bed (${paxData.childNoBed})`;
+                    ${pricing.type === 'sharing'
+                      ? `Rate: ${pricing.currency} Adult ${fmt(numVal(`tShareCostAdult_${idx}`))} + Svc ${fmt(numVal(`tShareSvcAdult_${idx}`))}, Child ${fmt(numVal(`tShareCostChild_${idx}`))} + Svc ${fmt(numVal(`tShareSvcChild_${idx}`))}, Infant ${fmt(numVal(`tShareCostInf_${idx}`))} + Svc ${fmt(numVal(`tShareSvcInf_${idx}`))}<br>Charged by passenger type`
+                      : `Rate: ${pricing.currency} ${fmt(pricing.costOrig)} + Service ${fmt(pricing.svcOrig)}<br>Charged to: Adults (${paxData.adults}) + Children with bed (${paxData.childBed}) + Children without bed (${paxData.childNoBed})`
+                    }`;
 
     let perPersonText = [];
-    if (paxData.adults > 0) perPersonText.push(`Adult x${paxData.adults}: PKR ${fmt(perAdult)}`);
-    if (paxData.childBed > 0) perPersonText.push(`Child (with bed) x${paxData.childBed}: PKR ${fmt(perChildBed)}`);
-    if (paxData.childNoBed > 0) perPersonText.push(`Child (no bed) x${paxData.childNoBed}: PKR ${fmt(perChildNoBed)}`);
+    if (paxData.adults > 0) perPersonText.push(`Adult x${paxData.adults}: PKR ${fmt(pricing.perAdultPKR)}`);
+    if (paxData.childBed > 0) perPersonText.push(`Child (with bed) x${paxData.childBed}: PKR ${fmt(pricing.perChildPKR)}`);
+    if (paxData.childNoBed > 0) perPersonText.push(`Child (no bed) x${paxData.childNoBed}: PKR ${fmt(pricing.perChildPKR)}`);
+    if (paxData.infants > 0 && pricing.perInfantPKR > 0) perPersonText.push(`Infant x${paxData.infants}: PKR ${fmt(pricing.perInfantPKR)}`);
     perPersonText = perPersonText.join(', ');
 
-    if (costOrig + svcOrig > 0) {
-      addDetailedRow(`Transfer ${idx}`, `${from} to ${to}`, details, currency, costOrig, svcOrig, perPersonText, false);
+    if (pricing.totalOrig > 0) {
+      addDetailedRow(`Transfer ${idx}`, `${from} to ${to}`, details, pricing.currency, pricing.costOrig, pricing.svcOrig, perPersonText, false);
     }
   });
 
@@ -3091,37 +3535,27 @@ function performCalculation() {
     const duration = document.getElementById(`tourDuration_${idx}`)?.value || "Not specified";
     const mode = document.getElementById(`tourMode_${idx}`)?.value || "Not specified";
     const vehicle = document.getElementById(`tourVehicle_${idx}`)?.value || "Not specified";
-    const currency = document.getElementById(`tourCurrency_${idx}`)?.value || "USD";
-    
-    // Get costs in ORIGINAL currency
-    const costOrig = parseFloat(document.getElementById(`tourCost_${idx}`)?.value || 0);
-    const svcOrig = parseFloat(document.getElementById(`tourSvc_${idx}`)?.value || 0);
-    
-    const payingPax = paxData.adults + paxData.childBed + paxData.childNoBed + paxData.infants;
-    const perPersonCost = payingPax > 0 ? convertToPKR(costOrig + svcOrig, currency) / payingPax : 0;
-    
-    const perAdult = paxData.adults > 0 ? perPersonCost : 0;
-    const perChildBed = paxData.childBed > 0 ? perPersonCost : 0;
-    const perChildNoBed = paxData.childNoBed > 0 ? perPersonCost : 0;
-    const perInfant = paxData.infants > 0 ? perPersonCost : 0;
+    const pricing = getTourPricing(idx, false, paxData);
     
     const details = `Date: ${formatDateToDMY(date)}<br>
                     City: ${city}<br>
                     Duration: ${duration}<br>
                     Mode: ${mode}<br>
                     Vehicle: ${vehicle}<br>
-                    Rate: ${currency} ${fmt(costOrig)} per person<br>
-                    Charged to: All passengers (${payingPax})`;
+                    ${pricing.mode === 'sharing'
+                      ? `Rate: ${pricing.currency} Adult ${fmt(numVal(`tourShareCostAdult_${idx}`))} + Svc ${fmt(numVal(`tourShareSvcAdult_${idx}`))}, Child ${fmt(numVal(`tourShareCostChild_${idx}`))} + Svc ${fmt(numVal(`tourShareSvcChild_${idx}`))}, Infant ${fmt(numVal(`tourShareCostInf_${idx}`))} + Svc ${fmt(numVal(`tourShareSvcInf_${idx}`))}<br>Charged by passenger type`
+                      : `Rate: ${pricing.currency} ${fmt(pricing.costOrig)} + Service ${fmt(pricing.svcOrig)} (Private total distributed per pax)<br>Charged to: All passengers (${paxData.adults + paxData.childBed + paxData.childNoBed + paxData.infants})`
+                    }`;
 
     let perPersonText = [];
-    if (paxData.adults > 0) perPersonText.push(`Adult x${paxData.adults}: PKR ${fmt(perAdult)}`);
-    if (paxData.childBed > 0) perPersonText.push(`Child (with bed) x${paxData.childBed}: PKR ${fmt(perChildBed)}`);
-    if (paxData.childNoBed > 0) perPersonText.push(`Child (no bed) x${paxData.childNoBed}: PKR ${fmt(perChildNoBed)}`);
-    if (paxData.infants > 0) perPersonText.push(`Infant x${paxData.infants}: PKR ${fmt(perInfant)}`);
+    if (paxData.adults > 0) perPersonText.push(`Adult x${paxData.adults}: PKR ${fmt(pricing.perAdultPKR)}`);
+    if (paxData.childBed > 0) perPersonText.push(`Child (with bed) x${paxData.childBed}: PKR ${fmt(pricing.perChildPKR)}`);
+    if (paxData.childNoBed > 0) perPersonText.push(`Child (no bed) x${paxData.childNoBed}: PKR ${fmt(pricing.perChildPKR)}`);
+    if (paxData.infants > 0) perPersonText.push(`Infant x${paxData.infants}: PKR ${fmt(pricing.perInfantPKR)}`);
     perPersonText = perPersonText.join(', ');
 
-    if (costOrig + svcOrig > 0) {
-      addDetailedRow(`Tour ${idx}`, name, details, currency, costOrig * payingPax, svcOrig * payingPax, perPersonText, false);
+    if (pricing.totalOrig > 0) {
+      addDetailedRow(`Tour ${idx}`, name, details, pricing.currency, pricing.costOrig, pricing.svcOrig, perPersonText, false);
     }
   });
 
@@ -3182,16 +3616,17 @@ function performCalculation() {
     addDetailedRow(
         `Agent Service Fee`, 
         svcDescription,
-        'PKR', 
-        0, 
-        totalExtraServicePKR, 
+        '',
+        'PKR',
+        0,
+        totalExtraServicePKR,
         '',
         false
     );
   }
 
   // --- FINAL PACKAGE TOTALS & SUMMARY ---
-  const finalPackageServicePKR = totalServicePKR + totalExtraServicePKR;
+  const finalPackageServicePKR = totalServicePKR;
   const finalPackageSellPKR = totalCostPKR + finalPackageServicePKR;
 
   const perPersonCosts = calculatePerPersonCosts(totalCostPKR, finalPackageServicePKR, paxData);
@@ -3332,40 +3767,27 @@ function performCalculation() {
     const tourDuration = document.getElementById(`tourAddonDuration_${idx}`)?.value || 'Not specified';
     const tourMode = document.getElementById(`tourAddonMode_${idx}`)?.value || 'Not specified';
     const tourVehicle = document.getElementById(`tourAddonVehicle_${idx}`)?.value || 'Not specified';
-    const currency = document.getElementById(`tourAddonCurrency_${idx}`)?.value || "USD";
-    
-    // Get costs in ORIGINAL currency
-    const costOrig = parseFloat(document.getElementById(`tourAddonCost_${idx}`)?.value || 0);
-    const svcOrig = parseFloat(document.getElementById(`tourAddonSvc_${idx}`)?.value || 0);
-    
-    const payingPax = paxData.adults + paxData.childBed + paxData.childNoBed + paxData.infants;
-    const perPersonCost = payingPax > 0 ? convertToPKR(costOrig + svcOrig, currency) / payingPax : 0;
-    
-    const perAdult = paxData.adults > 0 ? perPersonCost : 0;
-    const perChildBed = paxData.childBed > 0 ? perPersonCost : 0;
-    const perChildNoBed = paxData.childNoBed > 0 ? perPersonCost : 0;
-    const perInfant = paxData.infants > 0 ? perPersonCost : 0;
-    
-    const totalCostOrig = costOrig * payingPax;
-    const totalSvcOrig = svcOrig * payingPax;
+    const pricing = getTourPricing(idx, true, paxData);
     
     const details = `Date: ${formatDateToDMY(tourDate)}<br>
                     City: ${tourCity}<br>
                     Duration: ${tourDuration}<br>
                     Mode: ${tourMode}<br>
                     Vehicle: ${tourVehicle}<br>
-                    Rate: ${currency} ${fmt(costOrig)} per person<br>
-                    Charged to: All passengers (${payingPax})`;
+                    ${pricing.mode === 'sharing'
+                      ? `Rate: ${pricing.currency} Adult ${fmt(numVal(`tourAddonShareCostAdult_${idx}`))} + Svc ${fmt(numVal(`tourAddonShareSvcAdult_${idx}`))}, Child ${fmt(numVal(`tourAddonShareCostChild_${idx}`))} + Svc ${fmt(numVal(`tourAddonShareSvcChild_${idx}`))}, Infant ${fmt(numVal(`tourAddonShareCostInf_${idx}`))} + Svc ${fmt(numVal(`tourAddonShareSvcInf_${idx}`))}<br>Charged by passenger type`
+                      : `Rate: ${pricing.currency} ${fmt(pricing.costOrig)} + Service ${fmt(pricing.svcOrig)} (Private total distributed per pax)<br>Charged to: All passengers (${paxData.adults + paxData.childBed + paxData.childNoBed + paxData.infants})`
+                    }`;
     
     let perPersonText = [];
-    if (paxData.adults > 0) perPersonText.push(`Adult x${paxData.adults}: PKR ${fmt(perAdult)}`);
-    if (paxData.childBed > 0) perPersonText.push(`Child (with bed) x${paxData.childBed}: PKR ${fmt(perChildBed)}`);
-    if (paxData.childNoBed > 0) perPersonText.push(`Child (no bed) x${paxData.childNoBed}: PKR ${fmt(perChildNoBed)}`);
-    if (paxData.infants > 0) perPersonText.push(`Infant x${paxData.infants}: PKR ${fmt(perInfant)}`);
+    if (paxData.adults > 0) perPersonText.push(`Adult x${paxData.adults}: PKR ${fmt(pricing.perAdultPKR)}`);
+    if (paxData.childBed > 0) perPersonText.push(`Child (with bed) x${paxData.childBed}: PKR ${fmt(pricing.perChildPKR)}`);
+    if (paxData.childNoBed > 0) perPersonText.push(`Child (no bed) x${paxData.childNoBed}: PKR ${fmt(pricing.perChildPKR)}`);
+    if (paxData.infants > 0) perPersonText.push(`Infant x${paxData.infants}: PKR ${fmt(pricing.perInfantPKR)}`);
     perPersonText = perPersonText.join(', ');
     
-    if (costOrig + svcOrig > 0) {
-      addDetailedRow(`Add-on - Tour ${idx}`, tourName, details, currency, totalCostOrig, totalSvcOrig, perPersonText, true);
+    if (pricing.totalOrig > 0) {
+      addDetailedRow(`Add-on - Tour ${idx}`, tourName, details, pricing.currency, pricing.costOrig, pricing.svcOrig, perPersonText, true);
     }
   });
 
@@ -3493,17 +3915,13 @@ function calculatePerPersonCosts(packageCostPKR, packageServicePKR, paxData) {
   
   document.querySelectorAll("[id^='transferBlock_']").forEach((el) => {
     const idx = el.id.split("_")[1];
-    const cost = parseFloat(document.getElementById(`tCost_${idx}`)?.value || 0);
-    const svc = parseFloat(document.getElementById(`tSvc_${idx}`)?.value || 0);
-    const currency = document.getElementById(`tCurrency_${idx}`)?.value || "USD";
-    const totalTransferCost = convertToPKR(cost + svc, currency);
+    const pricing = getTransferPricing(idx, paxData);
     
     if (transferPayingPax > 0) {
-      const perPersonCost = totalTransferCost / transferPayingPax;
-      
-      if (numAdult > 0) perAdultCost += perPersonCost;
-      if (numChildBed > 0) perChildBedCost += perPersonCost;
-      if (numChildNoBed > 0) perChildNoBedCost += perPersonCost;
+      if (numAdult > 0) perAdultCost += pricing.perAdultPKR;
+      if (numChildBed > 0) perChildBedCost += pricing.perChildPKR;
+      if (numChildNoBed > 0) perChildNoBedCost += pricing.perChildPKR;
+      if (numInfant > 0) perInfantCost += pricing.perInfantPKR;
     }
   });
   
@@ -3512,18 +3930,13 @@ function calculatePerPersonCosts(packageCostPKR, packageServicePKR, paxData) {
   
   document.querySelectorAll("[id^='tourBlock_']").forEach((el) => {
     const idx = el.id.split("_")[1];
-    const cost = parseFloat(document.getElementById(`tourCost_${idx}`)?.value || 0);
-    const svc = parseFloat(document.getElementById(`tourSvc_${idx}`)?.value || 0);
-    const currency = document.getElementById(`tourCurrency_${idx}`)?.value || "USD";
-    const totalTourCost = convertToPKR(cost + svc, currency);
+    const pricing = getTourPricing(idx, false, paxData);
     
     if (tourPayingPax > 0) {
-      const perPersonCost = totalTourCost / tourPayingPax;
-      
-      if (numAdult > 0) perAdultCost += perPersonCost;
-      if (numChildBed > 0) perChildBedCost += perPersonCost;
-      if (numChildNoBed > 0) perChildNoBedCost += perPersonCost;
-      if (numInfant > 0) perInfantCost += perPersonCost;
+      if (numAdult > 0) perAdultCost += pricing.perAdultPKR;
+      if (numChildBed > 0) perChildBedCost += pricing.perChildPKR;
+      if (numChildNoBed > 0) perChildNoBedCost += pricing.perChildPKR;
+      if (numInfant > 0) perInfantCost += pricing.perInfantPKR;
     }
   });
   
@@ -3743,231 +4156,177 @@ function showQuotationModal() {
   const modalContent = document.getElementById('quotationModalContent');
   const modalButtons = document.getElementById('quotationModalButtons');
 
-function printQuotation() {
+function getQuotationPreviewClone() {
+  const modalContent = document.getElementById("quotationModalContent");
+  if (!modalContent) {
+    return null;
+  }
+
+  const clonedContent = modalContent.cloneNode(true);
+  clonedContent.querySelectorAll('style, button, #printQuotationBtn, #closeQuotationModalBtn').forEach(el => el.remove());
+
+  const sectionIds = ['calculationSummarySection', 'flightSection', 'hotelSection', 'addonSection', 'priceBreakupSection'];
+  sectionIds.forEach(id => {
+    const div = clonedContent.querySelector('#' + id);
+    if (div && div.style.display === 'none') {
+      div.remove();
+    }
+  });
+
+  return clonedContent;
+}
+
+async function waitForRenderedImages(container) {
+  const images = Array.from(container.querySelectorAll('img'));
+  if (!images.length) {
+    return;
+  }
+
+  await Promise.all(images.map((img) => {
+    if (img.complete && img.naturalWidth > 0) {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+      const done = () => resolve();
+      img.addEventListener('load', done, { once: true });
+      img.addEventListener('error', done, { once: true });
+    });
+  }));
+
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+}
+
+function openPdfPreviewWindow(pdfWindow, blobUrl, fileName) {
+  pdfWindow.document.write(`
+    <html>
+    <head><title>${fileName}</title></head>
+    <body style="margin:0;display:flex;flex-direction:column;height:100vh;background:#eef3f9;">
+      <div style="padding:10px 14px;background:#f3f6fb;display:flex;align-items:center;gap:16px;flex-wrap:wrap;border-bottom:1px solid #d7e2f0;">
+        <button id="downloadPdfBtn" style="background:#0b76d1;color:#fff;padding:8px 18px;border:none;border-radius:5px;font-size:14px;cursor:pointer;">⬇️ Download PDF</button>
+        <span style="color:#333;font-size:14px;">PDF Preview: <b>${fileName}</b></span>
+      </div>
+      <iframe src="${blobUrl}#toolbar=1&navpanes=0&scrollbar=1" style="flex:1;width:100%;border:none;background:#fff;"></iframe>
+      <script>
+        document.getElementById('downloadPdfBtn').onclick = function() {
+          const a = document.createElement('a');
+          a.href = '${blobUrl}';
+          a.download = '${fileName}';
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(() => document.body.removeChild(a), 100);
+        };
+      <\/script>
+    </body>
+    </html>
+  `);
+  pdfWindow.document.close();
+}
+
+async function printQuotation() {
   try {
-    const modalContent = document.getElementById("quotationModalContent");
-    if (!modalContent) {
+    const pdfAgent = getCurrentAgent();
+    const previewWindow = window.open('', '_blank');
+    if (!previewWindow) {
+      showAlert('Popup blocked. Please allow popups to preview the PDF.', 'Error');
+      return;
+    }
+    previewWindow.document.write('<html><body style="font-family:Calibri,Arial,sans-serif;padding:20px;color:#333;">Generating PDF preview...</body></html>');
+    previewWindow.document.close();
+
+    const clonedContent = getQuotationPreviewClone();
+    if (!clonedContent) {
+      previewWindow.close();
       showAlert("Quotation preview not found!", "Error");
       return;
     }
-    
-    setTimeout(() => {
-      let clonedContent = modalContent.cloneNode(true);
-      // Remove toggle buttons
-      const buttons = clonedContent.querySelectorAll('button[onclick*="toggle"]');
-      buttons.forEach(btn => btn.remove());
-      // Remove hidden sections
-      const sectionIds = ['calculationSummarySection', 'flightSection', 'hotelSection', 'addonSection', 'priceBreakupSection'];
-      sectionIds.forEach(id => {
-        const div = clonedContent.querySelector('#' + id);
-        if (div && div.style.display === 'none') {
-          div.remove();
-        }
-      });
-      let html = clonedContent.innerHTML;
-      // Improve PDF readability by adjusting margins and padding
-      html = html.replace(/margin-bottom:\s*20px/g, 'margin-bottom: 20px');
-      html = html.replace(/padding:\s*15px/g, 'padding: 15px');
-      html = html.replace(/margin:\s*15px/g, 'margin: 15px');
-      
-      const printWindow = window.open('', '_blank');
-      
-      const printHTML = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Quotation #${currentQuotationId}</title>
-          <style>
-            /* Force colors with multiple methods */
-            * {
-              -webkit-print-color-adjust: exact !important;
-              color-adjust: exact !important;
-              print-color-adjust: exact !important;
-            }
-            
-            body { 
-              font-family: 'Calibri', Arial, sans-serif;
-              margin: 0px;
-              color: #111;
-              background: white !important;
-              font-size: 14px;
-              line-height: 1.5;
-            }
-            
-            * {
-              margin: 0;
-              padding: 0;
-              box-sizing: border-box;
-            }
-            
-            /* Headers - no blue background, just color */
-            h1, h2, h3 { 
-              color: #0b76d1 !important;
-              padding: 0px 0 !important;
-              margin: 0px 0 15px 0 !important;
-              display: block !important;
-              font-size: 18px !important;
-              page-break-after: avoid !important;
-              page-break-inside: avoid !important;
-              page-break-before: avoid !important;
-            }
-            
-            h4 {
-              page-break-after: avoid !important;
-            }
-            
-            /* Tables - keep exactly as original */
-            table { 
-              width: 100%;
-              border-collapse: collapse;
-              margin: 10px 0 15px 0;
-              border: 0.5px solid #ddd !important;
-              page-break-inside: avoid !important;
-              page-break-before: avoid !important;
-              page-break-after: avoid !important;
-            }
-            
-            th, td { 
-              border: 0.5px solid #ddd !important;
-              padding: 8px 10px;
-              text-align: left;
-              font-size: 13px;
-            }
-            
-            th { 
-              background: linear-gradient(to right, #0b76d1, #0a6bbd) !important;
-              color: white !important;
-              font-weight: bold;
-            }
-            
-            p {
-              margin: 8px 0;
-            }
-            
-            /* Sections - NO blue background or borders */
-            div[style*="border: 1px solid #eee"],
-            div[style*="border: 1px solid #ddd"] {
-              margin: 0px 0 20px 0 !important;
-              padding: 15px !important;
-              border: none !important;
-              border-radius: 0px !important;
-              background: white !important;
-              page-break-inside: avoid !important;
-              page-break-after: auto !important;
-              page-break-before: avoid !important;
-              display: block !important;
-              position: relative !important;
-            }
-            
-            /* Keep green sections */
-            div[style*="background-color: #e8f5e8"], 
-            div[style*="background-color: #e8f5e9"] {
-              background: #e8f5e8 !important;
-              border: 2px solid #2e7d32 !important;
-              color: #2e7d32 !important;
-              page-break-inside: avoid !important;
-            }
-            
-            /* Keep gray sections */
-            div[style*="background-color: #f8f9fa"] {
-              background: #f8f9fa !important;
-              border: 1px solid #ddd !important;
-              color: #666 !important;
-              page-break-inside: avoid !important;
-            }
-            
-            /* Keep table rows exactly as original - no alternating colors */
-            table tbody tr {
-              /* Keep original styling - don't add or remove grey */
-            }
-            
-            /* Total rows with light blue */
-            table tfoot tr,
-            tr[style*="background-color: #e3f2fd"] {
-              background: #e3f2fd !important;
-              color: #0b76d1 !important;
-              font-weight: bold !important;
-            }
-            
-            /* Remove blue from package total section */
-            div[style*="background-color: #e3f2fd"]:not(table tr) {
-              background: white !important;
-              border: 1px solid #ddd !important;
-            }
-            
-            /* Image styling */
-            img {
-              max-width: 100% !important;
-              height: auto !important;
-              page-break-inside: avoid !important;
-            }
-            
-            /* Print settings */
-            @media print {
-              @page { 
-                margin: 0.5in; 
-                size: A4;
-                
-                /* Header and Footer */
-                @top-center {
-                  content: "Flight Connection Travel & Tours";
-                  font-size: 12px;
-                  color: #0b76d1;
-                  font-weight: bold;
-                }
-                
-                @bottom-center {
-                  content: "Page " counter(page);
-                  font-size: 10px;
-                  color: #666;
-                }
-              }
-              
-              /* Force everything to print with colors */
-              * {
-                -webkit-print-color-adjust: exact !important;
-                color-adjust: exact !important;
-                print-color-adjust: exact !important;
-              }
-              
-              /* Prevent breaks */
-              .section, table, h1, h2, h3, h4, img {
-                page-break-inside: avoid !important;
-              }
-              
-              /* Additional print-specific break prevention */
-              div {
-                page-break-inside: auto !important;
-              }
-              
-              /* Ensure no orphans */
-              p, li {
-                page-break-inside: avoid !important;
-              }
-            }
-          </style>
-        </head>
-        <body>
-          ${html}
-        </body>
-        </html>
-      `;
-      
-      printWindow.document.write(printHTML);
-      printWindow.document.close();
-      
-      printWindow.onload = function() {
-        setTimeout(() => {
-          printWindow.print();
-          printWindow.close();
-        }, 1000);
-      };
-      
-    }, 1000);
-    
+
+    const renderHost = document.createElement('div');
+    renderHost.style.position = 'fixed';
+    renderHost.style.left = '-100000px';
+    renderHost.style.top = '0';
+    renderHost.style.width = '794px';
+    renderHost.style.background = '#ffffff';
+    renderHost.style.padding = '0';
+    renderHost.style.zIndex = '-1';
+    renderHost.appendChild(clonedContent);
+    document.body.appendChild(renderHost);
+
+    await waitForRenderedImages(renderHost);
+
+    if (document.fonts && document.fonts.ready) {
+      await document.fonts.ready;
+    }
+
+    const canvas = await html2canvas(renderHost, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+      windowWidth: renderHost.scrollWidth,
+      width: renderHost.scrollWidth,
+      height: renderHost.scrollHeight
+    });
+
+    document.body.removeChild(renderHost);
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 6;
+    const usableWidth = pageWidth - (margin * 2);
+    const footerReserve = 9;
+    const usableHeight = pageHeight - (margin * 2) - footerReserve;
+    const pxPerMm = canvas.width / usableWidth;
+    const pageHeightPx = Math.floor(usableHeight * pxPerMm);
+
+    let pageIndex = 0;
+    for (let offsetY = 0; offsetY < canvas.height; offsetY += pageHeightPx) {
+      const sliceHeight = Math.min(pageHeightPx, canvas.height - offsetY);
+      const pageCanvas = document.createElement('canvas');
+      pageCanvas.width = canvas.width;
+      pageCanvas.height = sliceHeight;
+
+      const pageCtx = pageCanvas.getContext('2d');
+      pageCtx.fillStyle = '#ffffff';
+      pageCtx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+      pageCtx.drawImage(canvas, 0, offsetY, canvas.width, sliceHeight, 0, 0, canvas.width, sliceHeight);
+
+      if (pageIndex > 0) {
+        pdf.addPage();
+      }
+
+      const imgHeightMm = sliceHeight / pxPerMm;
+      pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.95), 'JPEG', margin, margin, usableWidth, imgHeightMm, undefined, 'FAST');
+      pageIndex += 1;
+    }
+
+    const totalPages = pdf.getNumberOfPages();
+    const preparedLine = `Prepared by: ${sanitizeInput(pdfAgent?.name || 'N/A')}  |  Phone: ${sanitizeInput(pdfAgent?.phone || 'N/A')}`;
+    const addressLine = 'Mezzanine Floor, 17-E, Shahbaz Commercial, Phase 6. DHA  |  www.flightconnection.net.pk';
+    for (let p = 1; p <= totalPages; p++) {
+      pdf.setPage(p);
+      pdf.setDrawColor(220, 228, 240);
+      pdf.line(margin, pageHeight - 11, pageWidth - margin, pageHeight - 11);
+      pdf.setTextColor(70, 70, 70);
+      pdf.setFontSize(8.6);
+      pdf.setFont(undefined, 'bold');
+      pdf.text(preparedLine, pageWidth / 2, pageHeight - 7.2, { align: 'center' });
+      pdf.setFont(undefined, 'normal');
+      pdf.setFontSize(8.1);
+      pdf.text(addressLine, pageWidth / 2, pageHeight - 3.4, { align: 'center' });
+      pdf.setFontSize(7.3);
+      pdf.text(`Page ${p} of ${totalPages}`, pageWidth - margin, pageHeight - 1.2, { align: 'right' });
+    }
+
+    const fileName = `Quotation-${currentQuotationId || 'Preview'}.pdf`;
+    const blob = pdf.output('blob');
+    const blobUrl = URL.createObjectURL(blob);
+    openPdfPreviewWindow(previewWindow, blobUrl, fileName);
   } catch (error) {
-    console.error('Error printing quotation:', error);
-    showAlert("Failed to print. Please try again.", "Error");
+    console.error('Error generating PDF:', error);
+    showAlert("Failed to generate PDF. Please try again.", "Error");
   }
 }
   
@@ -3980,6 +4339,7 @@ function printQuotation() {
   
   let totalCostPKR = 0;
   let totalServicePKR = 0;
+  let agentServicePKR = 0;
   let addonCostPKR = 0;
   let addonServicePKR = 0;
   
@@ -3994,6 +4354,8 @@ function printQuotation() {
       if (section.includes("Add-on")) {
         addonCostPKR += costBase;
         addonServicePKR += svcBase;
+      } else if (section.includes("Agent Service Fee")) {
+        agentServicePKR += svcBase;
       } else {
         totalCostPKR += costBase;
         totalServicePKR += svcBase;
@@ -4001,7 +4363,7 @@ function printQuotation() {
     }
   });
   
-  const finalTotalSellPKR = totalCostPKR + totalServicePKR;
+  const finalTotalSellPKR = totalCostPKR + totalServicePKR + agentServicePKR;
   const grandTotalPKR = finalTotalSellPKR + addonCostPKR + addonServicePKR;
 
   // Calculate per person costs
@@ -4013,21 +4375,25 @@ function printQuotation() {
   const totalPax = numAdult + numChildBed + numChildNoBed + numInfant;
   
   // Calculate per person costs using the same logic as package calculation
-  const perPersonCosts = calculatePerPersonCosts(totalCostPKR, totalServicePKR, paxData);
+  const perPersonCosts = calculatePerPersonCosts(totalCostPKR, totalServicePKR + agentServicePKR, paxData);
   const perAdultCost = perPersonCosts.perAdult;
   const perChildBedCost = perPersonCosts.perChildBed;
   const perChildNoBedCost = perPersonCosts.perChildNoBed;
   const perInfantCost = perPersonCosts.perInfant;
+  const computedPackageAmount =
+    (perAdultCost * numAdult) +
+    (perChildBedCost * numChildBed) +
+    (perChildNoBedCost * numChildNoBed) +
+    (perInfantCost * numInfant);
+  const totalPackageAmount = finalTotalSellPKR > 0 ? finalTotalSellPKR : computedPackageAmount;
 
   // Build the HTML for the quotation preview
   let quotationHTML = `
-    <div style="text-align: center; margin-bottom: 20px;">
-      <img src="https://flightconnection.net.pk/wp-content/uploads/2018/09/cropped-cropped-Flight-Connection-Travel-1.png" alt="Company Logo" style="max-height: 80px;">
-      <h2 style="margin: 5px 0; color: #0b76d1;">Flight Connection Travel & Tours</h2>
-      <div style="font-size: 18px; font-weight: bold; color: #333; margin-top: 10px;">
+    <div style="text-align: center; margin-bottom: 12px; border-bottom: 1px solid #dbe6f3; padding-bottom: 8px;">
+      <h2 style="margin: 2px 0 4px; color: #0b76d1;">Flight Connection Travel & Tours</h2>
+      <div style="font-size: 12px; color: #555; margin-bottom: 6px;">GL No. 3423 &nbsp;|&nbsp; IATA: 27319143</div>
+      <div style="font-size: 17px; font-weight: bold; color: #333; margin-top: 4px;">
         International Tour Quotation Number: <span style="color: #0b76d1;">${currentQuotationId}</span>
-      </div>
-      <div style="font-size: 14px; color: #666; margin-top: 5px;">
       </div>
     </div>
     
@@ -4052,184 +4418,51 @@ function printQuotation() {
       <div><strong>Passengers:</strong> Adults: ${clientData.adults || 0}, Children (with bed): ${clientData.childBed || 0}, Children (without bed): ${clientData.childNoBed || 0}, Infants: ${clientData.infants || 0}</div>
     </div>
     
-    <div style="margin-bottom: 20px; border: 1px solid #eee; padding: 15px; border-radius: 8px;">
-      <h3 style="margin-top: 0; color: #0b76d1;">Package Price</h3>
-      <table style="width:100%; border-collapse: collapse;">
-        <tr>
-          <td style="border: 1px solid #ddd; padding: 8px;"><strong>Per Adult</strong></td>
-          <td style="border: 1px solid #ddd; padding: 8px;">PKR ${fmt(perAdultCost)}</td>
-        </tr>
-        ${numChildBed > 0 ? `
-        <tr>
-          <td style="border: 1px solid #ddd; padding: 8px;"><strong>Per Child (with bed)</strong></td>
-          <td style="border: 1px solid #ddd; padding: 8px;">PKR ${fmt(perChildBedCost)}</td>
-        </tr>` : ''}
-        ${numChildNoBed > 0 ? `
-        <tr>
-          <td style="border: 1px solid #ddd; padding: 8px;"><strong>Per Child (without bed)</strong></td>
-          <td style="border: 1px solid #ddd; padding: 8px;">PKR ${fmt(perChildNoBedCost)}</td>
-        </tr>` : ''}
-        ${numInfant > 0 ? `
-        <tr>
-          <td style="border: 1px solid #ddd; padding: 8px;"><strong>Per Infant</strong></td>
-          <td style="border: 1px solid #ddd; padding: 8px;">PKR ${fmt(perInfantCost)}</td>
-        </tr>` : ''}
-        <tr style="background-color: #f9f9f9;">
-          <td style="border: 1px solid #ddd; padding: 8px;"><strong>Total Package Amount</strong></td>
-          <td style="border: 1px solid #ddd; padding: 8px;"><strong>PKR ${fmt(finalTotalSellPKR)}</strong></td>
-        </tr>
-      </table>
+    <div style="margin-bottom: 10px; border: 1px solid #eee; padding: 8px 12px; border-radius: 6px;">
+      <h3 style="margin-top: 0; color: #0b76d1; border-bottom: 2px solid #0b76d1; padding-bottom: 3px; margin-bottom: 6px;">Package Price</h3>
+      <ul style="list-style: disc; padding-left: 18px; margin: 0; line-height: 1.8;">
+        <li>Per Adult: <strong>PKR ${fmt(perAdultCost)}</strong></li>
+        ${numChildBed > 0 ? `<li>Per Child (with bed): <strong>PKR ${fmt(perChildBedCost)}</strong></li>` : ''}
+        ${numChildNoBed > 0 ? `<li>Per Child (without bed): <strong>PKR ${fmt(perChildNoBedCost)}</strong></li>` : ''}
+        ${numInfant > 0 ? `<li>Per Infant: <strong>PKR ${fmt(perInfantCost)}</strong></li>` : ''}
+      </ul>
+      <div style="margin-top: 5px; padding-top: 5px; border-top: 1px solid #ddd; font-weight: bold; color: #0b76d1;">Total Package Amount: PKR ${fmt(totalPackageAmount)}</div>
     </div>
         
     <!-- Service Details -->
-<div style="margin-bottom: 20px; border: 1px solid #eee; padding: 15px; border-radius: 8px;">
-  <h3 style="margin-top: 0; color: #0b76d1;">Service Details</h3>
-  
-  <!-- Flight Details - Only show if flights are included -->
+<div style="margin-bottom: 10px; border: 1px solid #eee; padding: 8px 12px; border-radius: 6px;">
+  <h3 style="margin-top: 0; color: #0b76d1; border-bottom: 2px solid #0b76d1; padding-bottom: 3px; margin-bottom: 6px;">Service Details</h3>
   ${document.querySelectorAll("[id^='flightBlock_']").length > 0 ? `
-  <div style="margin-bottom: 15px;">
-    <h4 style="color: #0b76d1; margin-bottom: 8px;">Flight</h4>
-    <table style="width:100%; border-collapse: collapse;">
-      <tr>
-        <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold; width: 150px;">Airline</td>
-        <td style="border: 1px solid #ddd; padding: 8px;">${getFlightDetails().airline}</td>
-      </tr>
-      <tr>
-        <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Flight Type</td>
-        <td style="border: 1px solid #ddd; padding: 8px;">${getFlightDetails().direct}</td>
-      </tr>
-      <tr>
-        <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold; vertical-align: top;">Flight Itinerary</td>
-        <td style="border: 1px solid #ddd; padding: 8px; white-space: pre-wrap; font-family: monospace; font-size: 13px;">${getFlightDetails().itinerary}</td>
-      </tr>
-    </table>
+  <div style="margin-bottom: 5px; padding: 4px 6px; background:#f0f7ff; border-left:3px solid #0b76d1; border-radius:3px;">
+    <strong>✈️ Flight</strong> &mdash; ${getFlightDetails().airline} &bull; ${getFlightDetails().direct}<br>
+    <span style="font-size:11px;color:#444;white-space:pre-wrap;font-family:monospace;">${getFlightDetails().itinerary}</span>
   </div>` : ''}
-  
-  <!-- Hotel Details - Only show if hotels are included -->
   ${document.querySelectorAll("[id^='hotelBlock_']").length > 0 ? 
     getHotelDetails().map((hotel, index) => `
-    <div style="margin-bottom: 15px;">
-      <h4 style="color: #0b76d1; margin-bottom: 8px;">${hotel.city} Hotel</h4>
-      <table style="width:100%; border-collapse: collapse;">
-        <tr>
-          <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold; width: 150px;">Hotel Name</td>
-          <td style="border: 1px solid #ddd; padding: 8px;">${hotel.name}</td>
-        </tr>
-        <tr>
-          <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Check-in</td>
-          <td style="border: 1px solid #ddd; padding: 8px;">${formatDateToDMY(hotel.checkIn)}</td>
-        </tr>
-        <tr>
-          <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Check-out</td>
-          <td style="border: 1px solid #ddd; padding: 8px;">${formatDateToDMY(hotel.checkOut)}</td>
-        </tr>
-        <tr>
-          <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Total Nights</td>
-          <td style="border: 1px solid #ddd; padding: 8px;">${hotel.nights}</td>
-        </tr>
-        <tr>
-          <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Room Type</td>
-          <td style="border: 1px solid #ddd; padding: 8px;">${hotel.roomType}</td>
-        </tr>
-        ${hotel.roomName ? `
-        <tr>
-          <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Room Name</td>
-          <td style="border: 1px solid #ddd; padding: 8px;">${hotel.roomName}</td>
-        </tr>` : ''}
-        <tr>
-          <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Service Type</td>
-          <td style="border: 1px solid #ddd; padding: 8px;">${hotel.serviceType}</td>
-        </tr>
-        <tr>
-          <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Number of Rooms</td>
-          <td style="border: 1px solid #ddd; padding: 8px;">${hotel.rooms}</td>
-        </tr>
-      </table>
-    </div>
+  <div style="margin-bottom: 5px; padding: 4px 6px; background:#f0f7ff; border-left:3px solid #0b76d1; border-radius:3px;">
+    <strong>🏨 ${hotel.city} Hotel</strong> &mdash; ${hotel.name} &bull; ${hotel.nights} nights &bull; ${hotel.roomType}${hotel.roomName ? ` (${hotel.roomName})` : ''} (${hotel.rooms} rooms) &bull; ${hotel.serviceType}<br>
+    <span style="font-size:11px;color:#555;">Check-in: ${formatDateToDMY(hotel.checkIn)} &bull; Check-out: ${formatDateToDMY(hotel.checkOut)}</span>
+  </div>
     `).join('') : ''}
-  
-  <!-- Visa Details - Only show if visa is included -->
   ${document.getElementById('visaBlock') ? `
-  <div style="margin-bottom: 15px;">
-    <h4 style="color: #0b76d1; margin-bottom: 8px;">Visa</h4>
-    <table style="width:100%; border-collapse: collapse;">
-      <tr>
-        <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold; width: 150px;">Visa Type</td>
-        <td style="border: 1px solid #ddd; padding: 8px;">${getVisaDetails().type}</td>
-      </tr>
-      <tr>
-        <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Country</td>
-        <td style="border: 1px solid #ddd; padding: 8px;">${getVisaDetails().country}</td>
-      </tr>
-      <tr>
-        <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Number of Visas</td>
-        <td style="border: 1px solid #ddd; padding: 8px;">${getVisaDetails().count}</td>
-      </tr>
-    </table>
+  <div style="margin-bottom: 5px; padding: 4px 6px; background:#f0f7ff; border-left:3px solid #0b76d1; border-radius:3px;">
+    <strong>🛂 Visa</strong> &mdash; ${getVisaDetails().type} (${getVisaDetails().country}) &bull; ${getVisaDetails().count} visas
   </div>` : ''}
-  
-  <!-- Transfer Details - Only show if transfers are included -->
   ${document.querySelectorAll("[id^='transferBlock_']").length > 0 ? `
-  <div style="margin-bottom: 15px;">
-    <h4 style="color: #0b76d1; margin-bottom: 8px;">Transfer</h4>
-    <div style="border: 1px solid #ddd; padding: 15px; border-radius: 5px; text-align: left; font-family: Arial, Helvetica, sans-serif; font-size: 13px; line-height: 1.6;">
-      ${getTransferDetails()}
-    </div>
+  <div style="margin-bottom: 5px; padding: 4px 6px; background:#f0f7ff; border-left:3px solid #0b76d1; border-radius:3px;">
+    <strong>🚗 Transfer</strong><br><span style="font-size:11px;color:#444;white-space:pre-wrap;">${getTransferDetails()}</span>
   </div>` : ''}
-  
-  <!-- Tours & Activities Details - Only show if main tours are included -->
-  ${document.querySelectorAll("[id^='tourBlock_']").length > 0 ? `
-  <div style="margin-bottom: 20px;">
-    <h4 style="color: #0b76d1; margin-bottom: 15px;">Tours & Activities</h4>
-    
-    <!-- Main Tours -->
-    ${document.querySelectorAll("[id^='tourBlock_']").length > 0 ? 
-      getTourDetails().map((tour, index) => `
-      <div style="margin-bottom: 15px; border: 1px solid #ddd; padding: 15px; border-radius: 5px;">
-        <h5 style="color: #0b76d1; margin-bottom: 8px; margin-top: 0;">${tour.city} Tour</h5>
-        <table style="width:100%; border-collapse: collapse;">
-          <tr>
-            <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold; width: 150px;">Tour Name</td>
-            <td style="border: 1px solid #ddd; padding: 8px;">${tour.name}</td>
-          </tr>
-          <tr>
-            <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Tour Date</td>
-            <td style="border: 1px solid #ddd; padding: 8px;">${formatDateToDMY(tour.date)}</td>
-          </tr>
-          <tr>
-            <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Duration</td>
-            <td style="border: 1px solid #ddd; padding: 8px;">${tour.duration}</td>
-          </tr>
-          <tr>
-            <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Mode</td>
-            <td style="border: 1px solid #ddd; padding: 8px;">${tour.mode}</td>
-          </tr>
-          <tr>
-            <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Vehicle Type</td>
-            <td style="border: 1px solid #ddd; padding: 8px;">${tour.vehicle}</td>
-          </tr>
-        </table>
-      </div>
-      `).join('') : ''}
-  </div>` : ''}
+  ${document.querySelectorAll("[id^='tourBlock_']").length > 0 ? 
+    getTourDetails().map((tour, index) => `
+  <div style="margin-bottom: 5px; padding: 4px 6px; background:#f0f7ff; border-left:3px solid #0b76d1; border-radius:3px;">
+    <strong>🏛️ Tours</strong> &mdash; ${tour.name} &bull; ${tour.duration} &bull; ${tour.mode} &bull; ${tour.vehicle}${tour.date ? ` &bull; Date: ${formatDateToDMY(tour.date)}` : ''}
+  </div>
+    `).join('') : ''}
 </div>
   
-  <button onclick="toggleCalculationSummary()" style="margin-bottom: 10px; padding: 5px 10px; background: #0b76d1; color: white; border: none; border-radius: 4px; cursor: pointer;">Show/Hide Calculation Summary</button>
-  <div id="calculationSummarySection" style="margin-bottom: 20px;">
-    <h3 style="color: #0b76d1; text-align: center; margin-bottom: 15px; font-size: 18px;">Package Price</h3>
-    <table style="width:100%; border-collapse: collapse; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden;">
-      <thead>
-        <tr style="background: linear-gradient(to right, #0b76d1, #0a6bbd); color: white;">
-          <th style="border: none; padding: 12px 8px; text-align: left; font-weight: 600;">Service</th>
-          <th style="border: none; padding: 12px 8px; text-align: left; font-weight: 600;">Details</th>
-          <th style="border: none; padding: 12px 8px; text-align: left; font-weight: 600;">Price per Adult</th>
-          <th style="border: none; padding: 12px 8px; text-align: left; font-weight: 600;">Price per Child (with bed)</th>
-          <th style="border: none; padding: 12px 8px; text-align: left; font-weight: 600;">Price per Child (no bed)</th>
-          <th style="border: none; padding: 12px 8px; text-align: left; font-weight: 600;">Price per Infant</th>
-          <th style="border: none; padding: 12px 8px; text-align: left; font-weight: 600;">Total Price</th>
-        </tr>
-      </thead>
-      <tbody>
+  <button onclick="toggleCalculationSummary()" style="margin-bottom: 6px; padding: 3px 10px; background: #0b76d1; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Show/Hide Price Breakdown</button>
+  <div id="calculationSummarySection" style="margin-bottom: 10px; display: none;">
+    <h3 style="color: #0b76d1; border-bottom: 2px solid #0b76d1; padding-bottom: 3px; margin-bottom: 6px;">Price Breakdown</h3>
   `;
   
   // Add flight details
@@ -4262,15 +4495,10 @@ function printQuotation() {
     const totalFlight = totalAdult + totalChildBed + totalChildNoBed + totalInf;
     
     quotationHTML += `
-  <tr style="background-color: #f8f9fa;">
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 500;">✈️ Flight ${idx}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${sanitizeInput(airline)}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numAdult > 0 ? `<div style="font-size: 12px; color: #666;">Adult x${numAdult}</div><div style="font-weight: 600;">PKR ${fmt(perAdultCost)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numChildBed > 0 ? `<div style="font-size: 12px; color: #666;">Child (bed) x${numChildBed}</div><div style="font-weight: 600;">PKR ${fmt(perChildBedCost)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numChildNoBed > 0 ? `<div style="font-size: 12px; color: #666;">Child (no bed) x${numChildNoBed}</div><div style="font-weight: 600;">PKR ${fmt(perChildNoBedCost)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numInfant > 0 ? `<div style="font-size: 12px; color: #666;">Infant x${numInfant}</div><div style="font-weight: 600;">PKR ${fmt(perInfantCost)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 600; color: #0b76d1;">PKR ${fmt(totalFlight)}</td>
-  </tr>
+  <div style="margin:2px 0;padding:4px 8px;background:#f8f9fa;border-left:3px solid #0b76d1;border-radius:3px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
+    <span><b>✈️ Flight ${idx}</b> &mdash; ${sanitizeInput(airline)} &nbsp; <span style="color:#555;font-size:11px;">${numAdult>0?`Adult: PKR ${fmt(perAdultCost)}`:''}${numChildBed>0?` &bull; Child(bed): PKR ${fmt(perChildBedCost)}`:''}${numChildNoBed>0?` &bull; Child(no bed): PKR ${fmt(perChildNoBedCost)}`:''}${numInfant>0?` &bull; Infant: PKR ${fmt(perInfantCost)}`:''}</span></span>
+    <b style="color:#0b76d1;white-space:nowrap;">PKR ${fmt(totalFlight)}</b>
+  </div>
 `;
   });
   
@@ -4300,18 +4528,10 @@ function printQuotation() {
     const costPerInfant = 0; // Infants don't pay for hotels
     
     quotationHTML += `
-  <tr style="background-color: #fff;">
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 500;">🏨 ${city} Hotel ${idx}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">
-      <div style="font-weight: 500;">${sanitizeInput(name)}</div>
-      <div style="font-size: 12px; color: #666;">${sanitizeInput(roomType)} × ${rooms} rooms | ${nights} nights | ${sanitizeInput(serviceType)}</div>
-    </td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numAdult > 0 ? `<div style="font-size: 12px; color: #666;">Adult x${numAdult}</div><div style="font-weight: 600;">PKR ${fmt(costPerAdult)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numChildBed > 0 ? `<div style="font-size: 12px; color: #666;">Child (bed) x${numChildBed}</div><div style="font-weight: 600;">PKR ${fmt(costPerChildBed)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;"><span style="color: #999;">N/A</span></td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;"><span style="color: #999;">N/A</span></td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 600; color: #0b76d1;">PKR ${fmt(totalHotel)}</td>
-  </tr>
+  <div style="margin:2px 0;padding:4px 8px;background:#fff;border-left:3px solid #0b76d1;border-radius:3px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
+    <span><b>🏨 ${city} Hotel ${idx}</b> &mdash; ${sanitizeInput(name)} &bull; ${sanitizeInput(roomType)} &times;${rooms} &bull; ${nights}N &bull; ${sanitizeInput(serviceType)} &nbsp; <span style="color:#555;font-size:11px;">${numAdult>0?`Adult: PKR ${fmt(costPerAdult)}`:''}${numChildBed>0?` &bull; Child(bed): PKR ${fmt(costPerChildBed)}`:''}</span></span>
+    <b style="color:#0b76d1;white-space:nowrap;">PKR ${fmt(totalHotel)}</b>
+  </div>
 `;
   });
   
@@ -4321,33 +4541,18 @@ function printQuotation() {
     const from = document.getElementById(`tFrom_${idx}`)?.value || "Not specified";
     const to = document.getElementById(`tTo_${idx}`)?.value || "Not specified";
     const direction = document.getElementById(`tDirection_${idx}`)?.value || "One Way";
-    const cost = parseFloat(document.getElementById(`tCost_${idx}`)?.value || 0);
-    const svc = parseFloat(document.getElementById(`tSvc_${idx}`)?.value || 0);
-    const currency = document.getElementById(`tCurrency_${idx}`)?.value || "USD";
-    
-    // Adults, Children with bed, and Children without bed pay for transfers
-    const payingPax = numAdult + numChildBed + numChildNoBed;
-    const totalTransfer = convertToPKR(cost + svc, currency);
-    
-    // Calculate per person costs
-    const costPerAdult = numAdult > 0 ? totalTransfer / payingPax : 0;
-    const costPerChildBed = numChildBed > 0 ? totalTransfer / payingPax : 0;
-    const costPerChildNoBed = numChildNoBed > 0 ? totalTransfer / payingPax : 0;
-    const costPerInfant = 0; // Infants don't pay for transfers
+    const pricing = getTransferPricing(idx, { adults: numAdult, childBed: numChildBed, childNoBed: numChildNoBed, infants: numInfant });
+    const totalTransfer = convertToPKR(pricing.costOrig + pricing.svcOrig, pricing.currency);
+    const costPerAdult = pricing.perAdultPKR;
+    const costPerChildBed = pricing.perChildPKR;
+    const costPerChildNoBed = pricing.perChildPKR;
+    const costPerInfant = pricing.perInfantPKR;
     
     quotationHTML += `
-  <tr style="background-color: #fff;">
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 500;">🚗 Transfer ${idx}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">
-      <div style="font-weight: 500;">${sanitizeInput(from)} → ${sanitizeInput(to)}</div>
-      <div style="font-size: 12px; color: #666;">${direction}</div>
-    </td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numAdult > 0 ? `<div style="font-size: 12px; color: #666;">Adult x${numAdult}</div><div style="font-weight: 600;">PKR ${fmt(costPerAdult)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numChildBed > 0 ? `<div style="font-size: 12px; color: #666;">Child (bed) x${numChildBed}</div><div style="font-weight: 600;">PKR ${fmt(costPerChildBed)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numChildNoBed > 0 ? `<div style="font-size: 12px; color: #666;">Child (no bed) x${numChildNoBed}</div><div style="font-weight: 600;">PKR ${fmt(costPerChildNoBed)}` : '<span style="color: #999;">N/A</span>'}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;"><span style="color: #999;">N/A</span></td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 600; color: #0b76d1;">PKR ${fmt(totalTransfer)}</td>
-  </tr>
+  <div style="margin:2px 0;padding:4px 8px;background:#f8f9fa;border-left:3px solid #0b76d1;border-radius:3px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
+    <span><b>🚗 Transfer ${idx}</b> &mdash; ${sanitizeInput(from)} &rarr; ${sanitizeInput(to)} &bull; ${direction} &nbsp; <span style="color:#555;font-size:11px;">${numAdult>0?`Adult: PKR ${fmt(costPerAdult)}`:''}${numChildBed>0?` &bull; Child(bed): PKR ${fmt(costPerChildBed)}`:''}${numChildNoBed>0?` &bull; Child(no bed): PKR ${fmt(costPerChildNoBed)}`:''}${numInfant>0&&costPerInfant>0?` &bull; Infant: PKR ${fmt(costPerInfant)}`:''}</span></span>
+    <b style="color:#0b76d1;white-space:nowrap;">PKR ${fmt(totalTransfer)}</b>
+  </div>
 `;
   });
   
@@ -4370,18 +4575,10 @@ if (visaCost > 0 || visaSvc > 0) {
   const costPerInfant = numInfant > 0 ? costPerVisa : 0;
   
 quotationHTML += `
-  <tr style="background-color: #f8f9fa;">
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 500;">🛂 Visa</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">
-      <div style="font-weight: 500;">${visaType} (${visaCountry})</div>
-      <div style="font-size: 12px; color: #666;">${visaCount} visas</div>
-    </td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numAdult > 0 ? `<div style="font-size: 12px; color: #666;">Adult x${numAdult}</div><div style="font-weight: 600;">PKR ${fmt(costPerAdult)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numChildBed > 0 ? `<div style="font-size: 12px; color: #666;">Child (bed) x${numChildBed}</div><div style="font-weight: 600;">PKR ${fmt(costPerChildBed)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numChildNoBed > 0 ? `<div style="font-size: 12px; color: #666;">Child (no bed) x${numChildNoBed}</div><div style="font-weight: 600;">PKR ${fmt(costPerChildNoBed)}` : '<span style="color: #999;">N/A</span>'}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numInfant > 0 ? `<div style="font-size: 12px; color: #666;">Infant x${numInfant}</div><div style="font-weight: 600;">PKR ${fmt(costPerInfant)}` : '<span style="color: #999;">N/A</span>'}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 600; color: #0b76d1;">PKR ${fmt(totalVisa)}</td>
-  </tr>
+  <div style="margin:2px 0;padding:4px 8px;background:#f8f9fa;border-left:3px solid #0b76d1;border-radius:3px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
+    <span><b>🛂 Visa</b> &mdash; ${visaType} (${visaCountry}) &bull; ${visaCount} visas &nbsp; <span style="color:#555;font-size:11px;">${numAdult>0?`Adult: PKR ${fmt(costPerAdult)}`:''}${numChildBed>0?` &bull; Child(bed): PKR ${fmt(costPerChildBed)}`:''}${numChildNoBed>0?` &bull; Child(no bed): PKR ${fmt(costPerChildNoBed)}`:''}${numInfant>0?` &bull; Infant: PKR ${fmt(costPerInfant)}`:''}</span></span>
+    <b style="color:#0b76d1;white-space:nowrap;">PKR ${fmt(totalVisa)}</b>
+  </div>
 `;
 }
   
@@ -4394,44 +4591,22 @@ quotationHTML += `
     const tourDuration = document.getElementById(`tourDuration_${idx}`)?.value || "Not specified";
     const tourMode = document.getElementById(`tourMode_${idx}`)?.value || "Not specified";
     const tourVehicle = document.getElementById(`tourVehicle_${idx}`)?.value || "Not specified";
-    const currency = document.getElementById(`tourCurrency_${idx}`)?.value || "USD";
-    
-    const costPerPerson = parseFloat(document.getElementById(`tourCost_${idx}`)?.value || 0);
-    const svcPerPerson = parseFloat(document.getElementById(`tourSvc_${idx}`)?.value || 0);
-    
-    // Calculate per person costs
-    const perAdultCost = convertToPKR(costPerPerson + svcPerPerson, currency);
-    const perChildBedCost = convertToPKR(costPerPerson + svcPerPerson, currency);
-    const perChildNoBedCost = convertToPKR(costPerPerson + svcPerPerson, currency);
-    const perInfantCost = convertToPKR(costPerPerson + svcPerPerson, currency); // All passengers pay for tours
-    
-    // Calculate total costs
-    const totalAdult = perAdultCost * numAdult;
-    const totalChildBed = perChildBedCost * numChildBed;
-    const totalChildNoBed = perChildNoBedCost * numChildNoBed;
-    const totalInfant = perInfantCost * numInfant;
-    const totalTour = totalAdult + totalChildBed + totalChildNoBed + totalInfant;
+    const pricing = getTourPricing(idx, false, { adults: numAdult, childBed: numChildBed, childNoBed: numChildNoBed, infants: numInfant });
+    const perAdultCost = pricing.perAdultPKR;
+    const perChildBedCost = pricing.perChildPKR;
+    const perChildNoBedCost = pricing.perChildPKR;
+    const perInfantCost = pricing.perInfantPKR;
+    const totalTour = convertToPKR(pricing.costOrig + pricing.svcOrig, pricing.currency);
     
     quotationHTML += `
-  <tr style="background-color: #f0f8ff;">
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 500;">🏛️ Tour ${idx}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">
-      <div style="font-weight: 500;">${sanitizeInput(tourName)}</div>
-      <div style="font-size: 12px; color: #666;">${tourCity} • ${tourDuration} • ${tourMode}</div>
-      ${tourDate ? `<div style="font-size: 12px; color: #666;">Date: ${formatDateToDMY(tourDate)}</div>` : ''}
-    </td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numAdult > 0 ? `<div style="font-size: 12px; color: #666;">Adult x${numAdult}</div><div style="font-weight: 600;">PKR ${fmt(perAdultCost)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numChildBed > 0 ? `<div style="font-size: 12px; color: #666;">Child (bed) x${numChildBed}</div><div style="font-weight: 600;">PKR ${fmt(perChildBedCost)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numChildNoBed > 0 ? `<div style="font-size: 12px; color: #666;">Child (no bed) x${numChildNoBed}</div><div style="font-weight: 600;">PKR ${fmt(perChildNoBedCost)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numInfant > 0 ? `<div style="font-size: 12px; color: #666;">Infant x${numInfant}</div><div style="font-weight: 600;">PKR ${fmt(perInfantCost)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 600; color: #0b76d1;">PKR ${fmt(totalTour)}</td>
-  </tr>
+  <div style="margin:2px 0;padding:4px 8px;background:#f0f8ff;border-left:3px solid #0b76d1;border-radius:3px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
+    <span><b>🏛️ Tour ${idx}</b> &mdash; ${sanitizeInput(tourName)} &bull; ${sanitizeInput(tourCity)} &bull; ${sanitizeInput(tourDuration)} &bull; ${sanitizeInput(tourMode)} &bull; ${sanitizeInput(tourVehicle)}${tourDate ? ` &bull; ${formatDateToDMY(tourDate)}` : ''} &nbsp; <span style="color:#555;font-size:11px;">${numAdult>0?`Adult: PKR ${fmt(perAdultCost)}`:''}${numChildBed>0?` &bull; Child(bed): PKR ${fmt(perChildBedCost)}`:''}${numChildNoBed>0?` &bull; Child(no bed): PKR ${fmt(perChildNoBedCost)}`:''}${numInfant>0?` &bull; Infant: PKR ${fmt(perInfantCost)}`:''}</span></span>
+    <b style="color:#0b76d1;white-space:nowrap;">PKR ${fmt(totalTour)}</b>
+  </div>
 `;
   });
   
   quotationHTML += `
-        </tbody>
-      </table>
     </div>
   `;
   
@@ -4440,21 +4615,8 @@ const hasAddons = document.querySelectorAll("[id^='dfAddon_'], [id^='mealAddon_'
 
 if (hasAddons) {
     quotationHTML += `
-      <div style="margin-bottom: 20px; border: 1px solid #e0e0e0; padding: 15px; border-radius: 8px; background-color: #ffffff; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-        <h3 style="margin-top: 0; color: #0b76d1; text-align: center; margin-bottom: 15px; font-size: 18px;">Add-Ons (Optional)</h3>
-        <table style="width:100%; border-collapse: collapse; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden;">
-          <thead>
-            <tr style="background: linear-gradient(to right, #28a745, #218838); color: white;">
-              <th style="border: none; padding: 12px 8px; text-align: left; font-weight: 600;">Add-On</th>
-              <th style="border: none; padding: 12px 8px; text-align: left; font-weight: 600;">Details</th>
-              <th style="border: none; padding: 12px 8px; text-align: left; font-weight: 600;">Price per Adult</th>
-              <th style="border: none; padding: 12px 8px; text-align: left; font-weight: 600;">Price per Child (with bed)</th>
-              <th style="border: none; padding: 12px 8px; text-align: left; font-weight: 600;">Price per Child (no bed)</th>
-              <th style="border: none; padding: 12px 8px; text-align: left; font-weight: 600;">Price per Infant</th>
-              <th style="border: none; padding: 12px 8px; text-align: left; font-weight: 600;">Total Price</th>
-            </tr>
-          </thead>
-          <tbody>
+      <div style="margin-bottom: 10px; border: 1px solid #c8e6c9; padding: 8px 12px; border-radius: 6px; background:#fff;">
+        <h3 style="margin-top: 0; color: #28a745; border-bottom: 2px solid #28a745; padding-bottom: 3px; margin-bottom: 6px;">Add-Ons (Optional)</h3>
     `;
     
     // Direct Flight Add-ons
@@ -4476,18 +4638,10 @@ if (hasAddons) {
       const costPerInfant = numInfant > 0 ? totalCost / numInfant : 0;
       
       quotationHTML += `
-        <tr style="background-color: #fff;">
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 500;">✈️ ${name} ${idx}</td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">
-            <div style="font-weight: 500;">Flight Upgrade</div>
-            <div style="font-size: 12px; color: #666;">${currency}</div>
-          </td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numAdult > 0 ? `<div style="font-size: 12px; color: #666;">Adult x${numAdult}</div><div style="font-weight: 600;">PKR ${fmt(costPerAdult)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numChildBed > 0 ? `<div style="font-size: 12px; color: #666;">Child (bed) x${numChildBed}</div><div style="font-weight: 600;">PKR ${fmt(costPerChildBed)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numChildNoBed > 0 ? `<div style="font-size: 12px; color: #666;">Child (no bed) x${numChildNoBed}</div><div style="font-weight: 600;">PKR ${fmt(costPerChildNoBed)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numInfant > 0 ? `<div style="font-size: 12px; color: #666;">Infant x${numInfant}</div><div style="font-weight: 600;">PKR ${fmt(costPerInfant)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 600; color: #28a745;">PKR ${fmt(totalCost)}</td>
-        </tr>
+        <div style="margin:2px 0;padding:4px 8px;background:#f8fff8;border-left:3px solid #28a745;border-radius:3px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
+          <span><b>✈️ ${name} ${idx}</b> &mdash; Flight Upgrade (${currency}) &nbsp; <span style="color:#555;font-size:11px;">${numAdult>0?`Adult: PKR ${fmt(costPerAdult)}`:''}${numChildBed>0?` &bull; Child(bed): PKR ${fmt(costPerChildBed)}`:''}${numChildNoBed>0?` &bull; Child(no bed): PKR ${fmt(costPerChildNoBed)}`:''}${numInfant>0?` &bull; Infant: PKR ${fmt(costPerInfant)}`:''}</span></span>
+          <b style="color:#28a745;white-space:nowrap;">PKR ${fmt(totalCost)}</b>
+        </div>
       `;
     });
     
@@ -4514,18 +4668,10 @@ if (hasAddons) {
       const costPerInfant = 0; // Infants don't pay for meals
       
       quotationHTML += `
-        <tr style="background-color: #f8f9fa;">
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 500;">🍽️ ${name} ${idx}</td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">
-            <div style="font-weight: 500;">${hotelName} Meal</div>
-            <div style="font-size: 12px; color: #666;">${currency}</div>
-          </td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numAdult > 0 ? `<div style="font-size: 12px; color: #666;">Adult x${numAdult}</div><div style="font-weight: 600;">PKR ${fmt(costPerAdult)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numChildBed > 0 ? `<div style="font-size: 12px; color: #666;">Child (bed) x${numChildBed}</div><div style="font-weight: 600;">PKR ${fmt(costPerChildBed)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px;"><span style="color: #999;">N/A</span></td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px;"><span style="color: #999;">N/A</span></td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 600; color: #28a745;">PKR ${fmt(totalCost)}</td>
-        </tr>
+        <div style="margin:2px 0;padding:4px 8px;background:#f8fff8;border-left:3px solid #28a745;border-radius:3px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
+          <span><b>🍽️ ${name} ${idx}</b> &mdash; ${hotelName} Meal (${currency}) &nbsp; <span style="color:#555;font-size:11px;">${numAdult>0?`Adult: PKR ${fmt(costPerAdult)}`:''}${numChildBed>0?` &bull; Child(bed): PKR ${fmt(costPerChildBed)}`:''}</span></span>
+          <b style="color:#28a745;white-space:nowrap;">PKR ${fmt(totalCost)}</b>
+        </div>
       `;
     });
     
@@ -4534,60 +4680,27 @@ if (hasAddons) {
       const idx = i + 1;
       const name = "Tour";
       const tourName = document.getElementById(`tourAddonName_${idx}`)?.value || 'Not specified';
-      const inputs = el.querySelectorAll("input[type='number']");
-      
-      const costPerPerson = parseFloat(document.getElementById(`tourAddonCost_${idx}`)?.value || 0);
-      const svcPerPerson = parseFloat(document.getElementById(`tourAddonSvc_${idx}`)?.value || 0);
-      
-      const currency = document.getElementById(`tourAddonCurrency_${idx}`)?.value || "USD";
-      
-      const totalAdultCost = convertToPKR((costPerPerson + svcPerPerson) * numAdult, currency);
-      const totalChildBedCost = convertToPKR((costPerPerson + svcPerPerson) * numChildBed, currency);
-      const totalChildNoBedCost = convertToPKR((costPerPerson + svcPerPerson) * numChildNoBed, currency);
-      const totalInfantCost = convertToPKR((costPerPerson + svcPerPerson) * numInfant, currency);
-      
-      const totalCost = totalAdultCost + totalChildBedCost + totalChildNoBedCost + totalInfantCost;
-      
-      // Calculate per person costs
-      const costPerAdult = numAdult > 0 ? totalAdultCost / numAdult : 0;
-      const costPerChildBed = numChildBed > 0 ? totalChildBedCost / numChildBed : 0;
-      const costPerChildNoBed = numChildNoBed > 0 ? totalChildNoBedCost / numChildNoBed : 0;
-      const costPerInfant = numInfant > 0 ? totalInfantCost / numInfant : 0;
+      const pricing = getTourPricing(idx, true, { adults: numAdult, childBed: numChildBed, childNoBed: numChildNoBed, infants: numInfant });
+      const totalCost = convertToPKR(pricing.costOrig + pricing.svcOrig, pricing.currency);
+      const costPerAdult = pricing.perAdultPKR;
+      const costPerChildBed = pricing.perChildPKR;
+      const costPerChildNoBed = pricing.perChildPKR;
+      const costPerInfant = pricing.perInfantPKR;
       
       quotationHTML += `
-        <tr style="background-color: #fff;">
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 500;">🏛️ ${name} ${idx}</td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">
-            <div style="font-weight: 500;">${tourName}</div>
-            <div style="font-size: 12px; color: #666;">${currency}</div>
-          </td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numAdult > 0 ? `<div style="font-size: 12px; color: #666;">Adult x${numAdult}</div><div style="font-weight: 600;">PKR ${fmt(costPerAdult)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numChildBed > 0 ? `<div style="font-size: 12px; color: #666;">Child (bed) x${numChildBed}</div><div style="font-weight: 600;">PKR ${fmt(costPerChildBed)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numChildNoBed > 0 ? `<div style="font-size: 12px; color: #666;">Child (no bed) x${numChildNoBed}</div><div style="font-weight: 600;">PKR ${fmt(costPerChildNoBed)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${numInfant > 0 ? `<div style="font-size: 12px; color: #666;">Infant x${numInfant}</div><div style="font-weight: 600;">PKR ${fmt(costPerInfant)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 600; color: #28a745;">PKR ${fmt(totalCost)}</td>
-        </tr>
+        <div style="margin:2px 0;padding:4px 8px;background:#f8fff8;border-left:3px solid #28a745;border-radius:3px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
+          <span><b>🏛️ ${name} ${idx}</b> &mdash; ${tourName} (${pricing.currency}) &nbsp; <span style="color:#555;font-size:11px;">${numAdult>0?`Adult: PKR ${fmt(costPerAdult)}`:''}${numChildBed>0?` &bull; Child(bed): PKR ${fmt(costPerChildBed)}`:''}${numChildNoBed>0?` &bull; Child(no bed): PKR ${fmt(costPerChildNoBed)}`:''}${numInfant>0?` &bull; Infant: PKR ${fmt(costPerInfant)}`:''}</span></span>
+          <b style="color:#28a745;white-space:nowrap;">PKR ${fmt(totalCost)}</b>
+        </div>
       `;
     });
     
     quotationHTML += `
-          </tbody>
-        </table>
-        
-<!-- Add-ons Summary -->
-<div style="background-color: #e8f5e9; border-radius: 8px; padding: 15px; margin-top: 15px;">
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-  <div style="font-weight: 600; color: #2e7d32;">Package Total:</div>
-  <div style="font-weight: 600; color: #2e7d32;">PKR ${fmt(finalTotalSellPKR)}</div>
+<div style="background-color:#e8f5e9;border-radius:6px;padding:8px 12px;margin-top:8px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;">
+  <span style="color:#2e7d32;font-weight:600;">Package Total: PKR ${fmt(finalTotalSellPKR)}</span>
+  <span style="color:#2e7d32;font-weight:600;">Add-ons: PKR ${fmt(addonCostPKR + addonServicePKR)}</span>
+  <span style="color:#2e7d32;font-weight:700;font-size:13px;">Grand Total: PKR ${fmt(finalTotalSellPKR + addonCostPKR + addonServicePKR)}</span>
 </div>
-  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-    <div style="font-weight: 600; color: #2e7d32;">Add-ons Subtotal:</div>
-    <div style="font-weight: 600; color: #2e7d32;">PKR ${fmt(addonCostPKR + addonServicePKR)}</div>
-  </div>
-  <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px solid #c8e6c9;">
-    <div style="font-size: 16px; font-weight: bold; color: #2e7d32;">Grand Total (Package + Add-ons):</div>
-    <div style="font-size: 16px; font-weight: bold; color: #2e7d32;">PKR ${fmt(finalTotalSellPKR + addonCostPKR + addonServicePKR)}</div>
-  </div>
 </div>
     `;
   }
@@ -4758,57 +4871,59 @@ quotationHTML += `
   </div>
 `;
 
-// Get stored content
-const section1Content = localStorage.getItem('section1Content_international') || '';
-const section2Content = localStorage.getItem('section2Content_international') || '';
-
-// Add Section 1
-quotationHTML += `
-  <div style="margin-bottom: 20px; border: 1px solid #e3f2fd; padding: 15px; border-radius: 8px; background-color: #ffffff;">
-    <div style="font-size: 13px; line-height: 1.6; text-align: left;">
-      ${section1Content}
-    </div>
-  </div>
-  
-  <!-- Add Section 2 -->
-  <div style="margin-bottom: 20px; border: 1px solid #e3f2fd; padding: 15px; border-radius: 8px; background-color: #ffffff;">
-    <div style="font-size: 13px; line-height: 1.6; text-align: left;">
-      ${section2Content}
-    </div>
-  </div>
-`;
-
 // Add terms and conditions
 quotationHTML += `
    <div style="margin-bottom: 20px; border: 1px solid #e3f2fd; padding: 15px; border-radius: 8px; background-color: #ffffff;">
+    <h3 style="margin-top:0; color:#0b76d1; text-align:left; margin-bottom:10px;">Terms & Conditions</h3>
     <div style="font-size: 13px; line-height: 1.6; text-align: left;">
-    ${customTerms}
+    <ul style="padding-left: 18px; margin: 0; text-align: left;">
+      <li>50% advance required to confirm booking; remaining 50% before ticket/voucher issuance. Non-payment may result in cancellation &amp; loss of advance.</li>
+      <li>Rates are subject to change due to fares, exchange rate, taxes, and availability. Booking is confirmed only after payment.</li>
+      <li>Most services are non-refundable and non-changeable. Please confirm cancellation/change policy before payment. Once issued, non-refundable/non-changeable services will be fully lost in case of cancellation or no-show.</li>
+      <li>We recommend confirming all services (tickets, hotels, transport, etc.) after visa approval. If issued/confirmed before visa approval and visa is refused, refund will be as per respective supplier policy; for non-refundable services, no refund will be applicable.</li>
+      <li>Standard hotel check-in is usually 14:00–15:00 and check-out 11:00–12:00; however, in some destinations (e.g. Saudi Arabia) check-in may be 16:00–18:00. Early check-in/late check-out subject to availability and extra charges.</li>
+      <li>Flight Connection Travel facilitates bookings with airlines and hotels; all services are subject to respective supplier terms and conditions.</li>
+      <li>Passenger must have valid passport, visa, and travel documents. No liability for denied boarding/entry.</li>
+      <li>Any increase in taxes or supplier charges before confirmation will be applicable. Payment confirms acceptance of terms.</li>
+    </ul>
   </div>
   </div>
 
-  <!-- Add your image right after Terms and Conditions -->
-<div style="text-align: center; margin-bottom: 30px;">
-  <img src="https://flightconnection.net.pk/wp-content/uploads/2020/08/flight-connection.jpeg" 
-       alt="Flight Connection Travel & Tours" 
-       style="max-width: 800px; width: 100%; height: auto; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.2);">
-</div>
-
-  <div style="text-align: center; margin-top: 30px; color: #666; font-size: 16px;">
-    <p>For any queries, please contact us</p>
-    <p style="margin-bottom: 5px;">Prepared by: <strong>${sanitizeInput(agentData?.name || 'N/A')}</strong></p>
-    <p style="margin-bottom: 5px;">Phone: <strong>${sanitizeInput(agentData?.phone || 'N/A')}</strong></p>
-    <p>Mezzanine Floor, 17-E, Shahbaz Commercial, Phase 6. DHA</p>
+  <div style="text-align: center; margin-top: 12px; color: #666; font-size: 12.5px; border-top: 1px solid #dbe6f3; padding-top: 8px;">
+    <p style="margin: 2px 0;"><strong>Prepared by:</strong> ${sanitizeInput(agentData?.name || 'N/A')} &nbsp;|&nbsp; <strong>Phone:</strong> ${sanitizeInput(agentData?.phone || 'N/A')}</p>
+    <p style="margin: 2px 0;">Mezzanine Floor, 17-E, Shahbaz Commercial, Phase 6. DHA &nbsp;|&nbsp; www.flightconnection.net.pk</p>
   </div>
 
   `;
   
   // Set modal content
   modalTitle.textContent = "Quotation Preview";
-  modalContent.innerHTML = quotationHTML;
+  modalContent.innerHTML = `
+    <style>
+      .compact-quotation{font-family:Calibri,Arial,sans-serif;font-size:12px;line-height:1.32;color:#111;text-align:left!important}
+      .compact-quotation > div:first-child{text-align:center!important}
+      .compact-quotation h2{font-size:18px!important;margin:4px 0 6px!important;line-height:1.2}
+      .compact-quotation h3{font-size:14px!important;margin:0 0 6px!important;line-height:1.2}
+      .compact-quotation h4,.compact-quotation h5{font-size:12.5px!important;margin:0 0 4px!important;line-height:1.2}
+      .compact-quotation p{margin:3px 0!important}
+      .compact-quotation ul,.compact-quotation ol{margin:4px 0!important;padding-left:18px!important}
+      .compact-quotation li{margin:1px 0!important}
+      .compact-quotation table{width:100%!important;border-collapse:collapse!important;margin:5px 0 8px!important}
+      .compact-quotation th,.compact-quotation td{padding:5px 6px!important;font-size:11.5px!important;vertical-align:top}
+      .compact-quotation div[style*="border: 1px solid #eee"],
+      .compact-quotation div[style*="border: 1px solid #ddd"],
+      .compact-quotation div[style*="border: 1px solid #e3f2fd"],
+      .compact-quotation div[style*="border: 1px solid #f5e6e6"]{margin-bottom:10px!important;padding:8px!important;border-radius:6px!important}
+      .compact-quotation div[style*="text-align: center; margin-bottom: 20px"]{margin-bottom:10px!important}
+      .compact-quotation div[style*="margin-top: 30px"]{margin-top:12px!important}
+      .compact-quotation img{max-width:100%!important;height:auto!important}
+      .compact-quotation img[alt="Flight Connection Travel & Tours"]{box-shadow:none!important;border-radius:6px!important}
+    </style>
+    <div class="compact-quotation">${quotationHTML}</div>
+  `;
   
 // Add buttons
 modalButtons.innerHTML = `
-  <button id="editContentBtn" class="ghost">📝 Edit Content</button>
   <button id="printQuotationBtn" class="green-btn" style="margin-right: 10px;">🖨️ Print Quotation</button>
   <button id="shareWhatsAppBtn" class="whatsapp-btn">📱 Share on WhatsApp</button>
   <button id="closeQuotationBtn" class="ghost">Close</button>
@@ -4816,14 +4931,6 @@ modalButtons.innerHTML = `
 
 // Add event listeners after modal is shown
 setTimeout(() => {
-// Edit Content button
-document.getElementById('editContentBtn').onclick = function() {
-  document.getElementById('quotationModal').classList.remove('visible');
-  setTimeout(() => {
-    showContentEditor();
-  }, 300);
-};
-
   // Print Quotation button
   document.getElementById('printQuotationBtn').onclick = function() {
     printQuotation();
@@ -4846,7 +4953,22 @@ document.getElementById('editContentBtn').onclick = function() {
 
 function toggleCalculationSummary() {
   const div = document.getElementById('calculationSummarySection');
-  if (div.style.display === 'none') {
+  const isHidden = div.style.display === 'none';
+
+  // If trying to show, block when Agent Service Charge is added
+  if (isHidden) {
+    const svcOption = document.querySelector('input[name="svcOption"]:checked')?.value || 'none';
+    const svcPerAdult = parseFloat(document.getElementById('svcPerAdult')?.value || 0);
+    const svcPerChild = parseFloat(document.getElementById('svcPerChild')?.value || 0);
+    const svcPerInfant = parseFloat(document.getElementById('svcPerInfant')?.value || 0);
+    const hasAgentFeeByInput = (svcOption === 'perPerson' && (svcPerAdult > 0 || svcPerChild > 0 || svcPerInfant > 0));
+    const hasAgentFeeRow = Array.from(document.querySelectorAll('#calcSummaryBody tr td:first-child')).some(td => (td.textContent || '').includes('Agent Service Fee'));
+
+    if (hasAgentFeeByInput || hasAgentFeeRow) {
+      showAlert('Please remove Agent Service Fee and add service charge in each service section to view Price Breakdown.', 'Price Breakdown');
+      return;
+    }
+
     div.style.display = 'block';
   } else {
     div.style.display = 'none';
@@ -5180,8 +5302,14 @@ function saveQuotation() {
         direction: document.getElementById(`tDirection_${idx}`)?.value || "",
         returnDate: document.getElementById(`tReturnDate_${idx}`)?.value || "",
         cost: parseFloat(document.getElementById(`tCost_${idx}`)?.value || 0),
+        shareCostAdult: parseFloat(document.getElementById(`tShareCostAdult_${idx}`)?.value || 0),
+        shareCostChild: parseFloat(document.getElementById(`tShareCostChild_${idx}`)?.value || 0),
+        shareCostInf: parseFloat(document.getElementById(`tShareCostInf_${idx}`)?.value || 0),
         currency: document.getElementById(`tCurrency_${idx}`)?.value || "USD",
-        service: parseFloat(document.getElementById(`tSvc_${idx}`)?.value || 0)
+        service: parseFloat(document.getElementById(`tSvc_${idx}`)?.value || 0),
+        shareSvcAdult: parseFloat(document.getElementById(`tShareSvcAdult_${idx}`)?.value || 0),
+        shareSvcChild: parseFloat(document.getElementById(`tShareSvcChild_${idx}`)?.value || 0),
+        shareSvcInf: parseFloat(document.getElementById(`tShareSvcInf_${idx}`)?.value || 0)
       };
       transfersData.push(transferData);
     });
@@ -5211,8 +5339,14 @@ function saveQuotation() {
         mode: document.getElementById(`tourMode_${idx}`)?.value || "",
         vehicle: document.getElementById(`tourVehicle_${idx}`)?.value || "",
         cost: parseFloat(document.getElementById(`tourCost_${idx}`)?.value || 0),
+        shareCostAdult: parseFloat(document.getElementById(`tourShareCostAdult_${idx}`)?.value || 0),
+        shareCostChild: parseFloat(document.getElementById(`tourShareCostChild_${idx}`)?.value || 0),
+        shareCostInf: parseFloat(document.getElementById(`tourShareCostInf_${idx}`)?.value || 0),
         currency: document.getElementById(`tourCurrency_${idx}`)?.value || "USD",
-        service: parseFloat(document.getElementById(`tourSvc_${idx}`)?.value || 0)
+        service: parseFloat(document.getElementById(`tourSvc_${idx}`)?.value || 0),
+        shareSvcAdult: parseFloat(document.getElementById(`tourShareSvcAdult_${idx}`)?.value || 0),
+        shareSvcChild: parseFloat(document.getElementById(`tourShareSvcChild_${idx}`)?.value || 0),
+        shareSvcInf: parseFloat(document.getElementById(`tourShareSvcInf_${idx}`)?.value || 0)
       };
       toursData.push(tourData);
     });
@@ -5279,8 +5413,14 @@ function saveQuotation() {
         mode: document.getElementById(`tourAddonMode_${idx}`)?.value || "",
         vehicle: document.getElementById(`tourAddonVehicle_${idx}`)?.value || "",
         cost: parseFloat(document.getElementById(`tourAddonCost_${idx}`)?.value || 0),
+        shareCostAdult: parseFloat(document.getElementById(`tourAddonShareCostAdult_${idx}`)?.value || 0),
+        shareCostChild: parseFloat(document.getElementById(`tourAddonShareCostChild_${idx}`)?.value || 0),
+        shareCostInf: parseFloat(document.getElementById(`tourAddonShareCostInf_${idx}`)?.value || 0),
         currency: document.getElementById(`tourAddonCurrency_${idx}`)?.value || "USD",
-        service: parseFloat(document.getElementById(`tourAddonSvc_${idx}`)?.value || 0)
+        service: parseFloat(document.getElementById(`tourAddonSvc_${idx}`)?.value || 0),
+        shareSvcAdult: parseFloat(document.getElementById(`tourAddonShareSvcAdult_${idx}`)?.value || 0),
+        shareSvcChild: parseFloat(document.getElementById(`tourAddonShareSvcChild_${idx}`)?.value || 0),
+        shareSvcInf: parseFloat(document.getElementById(`tourAddonShareSvcInf_${idx}`)?.value || 0)
       };
       addonsData.tours.push(addonData);
     });
@@ -5312,7 +5452,14 @@ const customSectionsData = {
   section2: localStorage.getItem('section2Content_international') || '',
   section1Disabled: localStorage.getItem('sectionDisabled_1') === 'true',
   section2Disabled: localStorage.getItem('sectionDisabled_2') === 'true'
-};    
+};
+    const packageSelectEl = document.getElementById('packageSelect');
+    const selectedPackageId = packageSelectEl ? packageSelectEl.value : '';
+    const selectedPackageName = (packageSelectEl && packageSelectEl.selectedOptions && packageSelectEl.selectedOptions[0])
+      ? packageSelectEl.selectedOptions[0].textContent
+      : '';
+    const selectedSvcOption = document.querySelector('input[name="svcOption"]:checked')?.value || 'none';
+
     // Create a complete quotation object
     const quotationData = {
       id: currentQuotationId || 'INT-' + Date.now().toString().slice(-6),
@@ -5337,6 +5484,12 @@ const customSectionsData = {
       updatedAt: new Date().toISOString(),
       expiresAt: expiryDate.toISOString(),
       status: document.getElementById('quotationStatus')?.value || 'pending',
+      pricingSettings: {
+        svcOption: selectedSvcOption,
+        svcPerAdult: parseFloat(document.getElementById('svcPerAdult')?.value || 0),
+        svcPerChild: parseFloat(document.getElementById('svcPerChild')?.value || 0),
+        svcPerInfant: parseFloat(document.getElementById('svcPerInfant')?.value || 0)
+      },
       totalAmount: finalTotalSellPKR,
       flights: flightsData,
       hotels: hotelsData,
@@ -5346,6 +5499,13 @@ const customSectionsData = {
       addons: addonsData,
       customSections: customSectionsData  // Add this line
     };
+
+    if (selectedPackageId) {
+      quotationData.packageSelection = {
+        id: selectedPackageId,
+        name: selectedPackageName || ''
+      };
+    }
     
     // Get ALL existing quotations from localStorage
     let allQuotations = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
@@ -5403,6 +5563,23 @@ function loadQuotation(quotationId) {
     
     // Set the current quotation ID
     currentQuotationId = quotationId;
+
+    // Restore selected package from quotation data (or clear stale selection)
+    const packageSelect = document.getElementById('packageSelect');
+    if (packageSelect) {
+      if (quotation.packageSelection && quotation.packageSelection.id) {
+        let option = Array.from(packageSelect.options).find(opt => opt.value === quotation.packageSelection.id);
+        if (!option) {
+          option = document.createElement('option');
+          option.value = quotation.packageSelection.id;
+          option.textContent = quotation.packageSelection.name || quotation.packageSelection.id;
+          packageSelect.appendChild(option);
+        }
+        packageSelect.value = quotation.packageSelection.id;
+      } else {
+        packageSelect.value = '';
+      }
+    }
     
     // Store the expiry date if it exists
     if (quotation.expiresAt) {
@@ -5469,6 +5646,28 @@ function loadQuotation(quotationId) {
           localStorage.setItem('sectionDisabled_2', 'false');
         }
       }
+    }
+    else {
+      // Clear stale custom section state when this quotation does not contain custom sections
+      customTerms = defaultTerms;
+      localStorage.setItem('customTerms_international', customTerms);
+      localStorage.setItem('section1Content_international', '');
+      localStorage.setItem('section2Content_international', '');
+      localStorage.setItem('sectionDisabled_1', 'false');
+      localStorage.setItem('sectionDisabled_2', 'false');
+    }
+
+    // Restore saved pricing settings (agent fee option)
+    const pricing = quotation.pricingSettings || {};
+    const svcOptionToSet = pricing.svcOption || 'none';
+    const svcOptionInput = document.querySelector(`input[name="svcOption"][value="${svcOptionToSet}"]`) || document.querySelector('input[name="svcOption"][value="none"]');
+    if (svcOptionInput) svcOptionInput.checked = true;
+    if (document.getElementById('svcPerAdult')) document.getElementById('svcPerAdult').value = parseFloat(pricing.svcPerAdult || 0);
+    if (document.getElementById('svcPerChild')) document.getElementById('svcPerChild').value = parseFloat(pricing.svcPerChild || 0);
+    if (document.getElementById('svcPerInfant')) document.getElementById('svcPerInfant').value = parseFloat(pricing.svcPerInfant || 0);
+    toggleServiceOption(svcOptionToSet);
+    if (document.getElementById('quotationStatus')) {
+      document.getElementById('quotationStatus').value = quotation.status || 'pending';
     }
     
     // Clear existing sections
@@ -5614,10 +5813,24 @@ function loadQuotation(quotationId) {
               document.getElementById(`tReturnDate_${idx}`).value = transferData.returnDate || "";
             if (document.getElementById(`tCost_${idx}`)) 
               document.getElementById(`tCost_${idx}`).value = transferData.cost || 0;
+            if (document.getElementById(`tShareCostAdult_${idx}`)) 
+              document.getElementById(`tShareCostAdult_${idx}`).value = transferData.shareCostAdult || 0;
+            if (document.getElementById(`tShareCostChild_${idx}`)) 
+              document.getElementById(`tShareCostChild_${idx}`).value = transferData.shareCostChild || 0;
+            if (document.getElementById(`tShareCostInf_${idx}`)) 
+              document.getElementById(`tShareCostInf_${idx}`).value = transferData.shareCostInf || 0;
             if (document.getElementById(`tCurrency_${idx}`)) 
               document.getElementById(`tCurrency_${idx}`).value = transferData.currency || "USD";
             if (document.getElementById(`tSvc_${idx}`)) 
               document.getElementById(`tSvc_${idx}`).value = transferData.service || 0;
+            if (document.getElementById(`tShareSvcAdult_${idx}`)) 
+              document.getElementById(`tShareSvcAdult_${idx}`).value = transferData.shareSvcAdult || 0;
+            if (document.getElementById(`tShareSvcChild_${idx}`)) 
+              document.getElementById(`tShareSvcChild_${idx}`).value = transferData.shareSvcChild || 0;
+            if (document.getElementById(`tShareSvcInf_${idx}`)) 
+              document.getElementById(`tShareSvcInf_${idx}`).value = transferData.shareSvcInf || 0;
+
+            toggleTransferRateFields(idx);
 
             // Trigger change event on direction select to show/hide return date
             const directionSelect = document.getElementById(`tDirection_${idx}`);
@@ -5662,10 +5875,24 @@ function loadQuotation(quotationId) {
               document.getElementById(`tourVehicle_${idx}`).value = tourData.vehicle || "";
             if (document.getElementById(`tourCost_${idx}`)) 
               document.getElementById(`tourCost_${idx}`).value = tourData.cost || 0;
+            if (document.getElementById(`tourShareCostAdult_${idx}`)) 
+              document.getElementById(`tourShareCostAdult_${idx}`).value = tourData.shareCostAdult || 0;
+            if (document.getElementById(`tourShareCostChild_${idx}`)) 
+              document.getElementById(`tourShareCostChild_${idx}`).value = tourData.shareCostChild || 0;
+            if (document.getElementById(`tourShareCostInf_${idx}`)) 
+              document.getElementById(`tourShareCostInf_${idx}`).value = tourData.shareCostInf || 0;
             if (document.getElementById(`tourCurrency_${idx}`)) 
               document.getElementById(`tourCurrency_${idx}`).value = tourData.currency || "USD";
             if (document.getElementById(`tourSvc_${idx}`)) 
               document.getElementById(`tourSvc_${idx}`).value = tourData.service || 0;
+            if (document.getElementById(`tourShareSvcAdult_${idx}`)) 
+              document.getElementById(`tourShareSvcAdult_${idx}`).value = tourData.shareSvcAdult || 0;
+            if (document.getElementById(`tourShareSvcChild_${idx}`)) 
+              document.getElementById(`tourShareSvcChild_${idx}`).value = tourData.shareSvcChild || 0;
+            if (document.getElementById(`tourShareSvcInf_${idx}`)) 
+              document.getElementById(`tourShareSvcInf_${idx}`).value = tourData.shareSvcInf || 0;
+
+            toggleTourRateFields(idx, false);
           }, 100);
         }, 200 * tourIndex);
       });
@@ -5824,10 +6051,24 @@ function loadQuotation(quotationId) {
                 document.getElementById(`tourAddonVehicle_${idx}`).value = addonData.vehicle || "";
               if (document.getElementById(`tourAddonCost_${idx}`)) 
                 document.getElementById(`tourAddonCost_${idx}`).value = addonData.cost || 0;
+              if (document.getElementById(`tourAddonShareCostAdult_${idx}`)) 
+                document.getElementById(`tourAddonShareCostAdult_${idx}`).value = addonData.shareCostAdult || 0;
+              if (document.getElementById(`tourAddonShareCostChild_${idx}`)) 
+                document.getElementById(`tourAddonShareCostChild_${idx}`).value = addonData.shareCostChild || 0;
+              if (document.getElementById(`tourAddonShareCostInf_${idx}`)) 
+                document.getElementById(`tourAddonShareCostInf_${idx}`).value = addonData.shareCostInf || 0;
               if (document.getElementById(`tourAddonCurrency_${idx}`)) 
                 document.getElementById(`tourAddonCurrency_${idx}`).value = addonData.currency || "USD";
               if (document.getElementById(`tourAddonSvc_${idx}`)) 
                 document.getElementById(`tourAddonSvc_${idx}`).value = addonData.service || 0;
+              if (document.getElementById(`tourAddonShareSvcAdult_${idx}`)) 
+                document.getElementById(`tourAddonShareSvcAdult_${idx}`).value = addonData.shareSvcAdult || 0;
+              if (document.getElementById(`tourAddonShareSvcChild_${idx}`)) 
+                document.getElementById(`tourAddonShareSvcChild_${idx}`).value = addonData.shareSvcChild || 0;
+              if (document.getElementById(`tourAddonShareSvcInf_${idx}`)) 
+                document.getElementById(`tourAddonShareSvcInf_${idx}`).value = addonData.shareSvcInf || 0;
+
+              toggleTourRateFields(idx, true);
             }, 100);
           }, 300 * (addonIndex + 1));
         });
@@ -5836,6 +6077,11 @@ function loadQuotation(quotationId) {
     
     // Show status section
     showStatusSection();
+
+    // Recalculate after async section restores to ensure loaded quotation totals are exact
+    setTimeout(() => {
+      try { performCalculation(); } catch (e) { console.error('Recalculate after load failed:', e); }
+    }, 1200);
     
     showNotification("Quotation loaded successfully!", "success");
     

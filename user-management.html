@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>User Management - Flight Connection</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg,#0d5ea2,#104a8c); color: #1a202c; margin:0; padding:0; }
+    .header { background: linear-gradient(135deg, #0a68b1, #0b5ca4); color: #fff; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; gap: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18); border-bottom: 4px solid #1ba4ff; }
+    .header-left { max-width: 70%; }
+    .header-left h1 { font-size: 28px; margin: 0; letter-spacing: 1px; }
+    .header-left .subheading { color: #d8ebff; margin: 5px 0 0; font-size: 14px; }
+    .header-right { display: flex; align-items: center; gap: 10px; }
+    .btn-logout,.btn-create-agent,.btn-back { font-family: inherit; border: none; color: #fff; padding: 10px 18px; border-radius: 8px; cursor: pointer; font-weight: 700; box-shadow: 0 4px 12px rgba(0,0,0,0.2); transition: transform .2s ease, background .2s ease; }
+    .btn-logout:hover, .btn-create-agent:hover, .btn-back:hover { transform: translateY(-1px); }
+    .btn-back { background: #1485d9; }
+    .btn-back:hover { background: #0f76bc; }
+    .btn-logout { background: #e74c3c; }
+    .btn-logout:hover { background: #c0392b; }
+    .btn-create-agent { background: #27ae60; }
+    .btn-create-agent:hover { background: #229954; }
+    .btn-back { background: #1b9af0; }
+    .btn-back:hover { background: #0b79c4; }
+    .container { max-width: 1200px; margin: 20px auto; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+    .dashboard-section { margin-top: 20px; }
+    .stats-tabs-wrapper { display: flex; flex-direction: column; gap: 20px; }
+    .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #ddd; }
+    @media (max-width: 880px) {
+      .header { flex-direction: column; align-items: flex-start; }
+      .header-right { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
+      .container { margin: 16px 12px; padding: 16px; }
+      .tabs { flex-wrap: wrap; gap: 8px; }
+      .tab { flex: 1 1 auto; text-align: center; }
+    }
+    @media (max-width: 600px) {
+      .header-left h1 { font-size: 22px; }
+      .header-left .subheading { font-size: 13px; }
+      .btn-logout, .btn-create-agent, .btn-back { padding: 8px 14px; font-size: 12px; }
+      .stats { grid-template-columns: 1fr !important; }
+    }
+    .tab { padding: 12px 20px; cursor: pointer; font-weight: 600; border-bottom: 3px solid transparent; color: #0b76d1; background: rgba(255,255,255,0.9); border-radius: 8px 8px 0 0; transition: all 0.2s ease; }
+    .tab:hover { background: #eef6ff; }
+    .tab.active { color: #0d47a1; border-bottom-color: #0b76d1; background: #fff; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 8px 22px rgba(12,18,45,0.15); }
+    table th { background: #e8f2ff; color: #0a66b3; padding: 13px 14px; text-align: left; font-weight: 700; border-bottom: 1px solid #d6e6fc; }
+    table td { padding: 12px 14px; border-bottom: 1px solid #edf3fb; color: #1f2d3e; }
+    table tr:last-child td { border-bottom: none; }
+    table tr:hover { background: #f6fbff; }
+    .badge { font-size: 11px; padding: 5px 10px; font-weight: 700; color: #fff; border-radius: 999px; display: inline-block; text-transform: uppercase; }
+    .badge.approved { background: #13ad6f; }
+    .badge.pending { background: #e0a400; color: #fff; }
+    .badge.rejected { background: #d1403a; color: #fff; }
+    .badge.inactive { background: #7f8c8d; color: #fff; }
+    .badge { display: inline-block; padding: 5px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+    .badge.pending { background: #fff3cd; color: #856404; }
+    .badge.approved { background: #d4edda; color: #155724; }
+    .badge.rejected { background: #f8d7da; color: #721c24; }
+    .badge.inactive { background: #e2e5e5; color: #3f4a4b; }
+    .btn { padding: 8px 12px; border: none; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: 600; }
+    .btn-approve { background: #27ae60; color: white; }
+    .btn-approve:hover { background: #229954; }
+    .btn-reject { background: #e74c3c; color: white; }
+    .btn-reject:hover { background: #c0392b; }
+    .btn-view { background: #3498db; color: white; }
+    .btn-view:hover { background: #2980b9; }
+    .btn-inactive { background: #7f8c8d; color: white; }
+    .btn-inactive:hover { background: #6c7a7b; }
+    .btn-reactivate { background: #27ae60; color: white; }
+    .btn-reactivate:hover { background: #229954; }
+    .btn-delete-user { background: #8e44ad; color: white; }
+    .btn-delete-user:hover { background: #7d3c98; }
+    .action-group { display: flex; gap: 6px; flex-wrap: wrap; }
+    .notification { padding: 15px; border-radius: 5px; margin-bottom: 20px; font-weight: 600; }
+    .notification.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    .notification.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    .notification.info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 25px; }
+    .stat-card { background: rgba(255,255,255,0.95); border-left: 6px solid #2085df; padding: 18px; border-radius: 14px; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12); }
+    .stat-card h3 { color: #1565c0; font-size: 14px; margin-bottom: 10px; text-transform: uppercase; letter-spacing: .8px; }
+    .stat-card .number { font-size: 34px; font-weight: 800; color: #0a66b3; line-height: 1.1; }
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999; align-items: center; justify-content: center; }
+    .modal.active { display: flex; }
+    .modal-content { background: white; padding: 30px; border-radius: 10px; max-width: 500px; width: 90%; }
+    .modal-header { font-size: 20px; font-weight: bold; margin-bottom: 20px; color: #0b76d1; }
+    .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+    .modal-actions button { flex: 1; padding: 10px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1>👥 User Management</h1>
+    <p class="subheading">Manage users, approve accounts, and create agents quickly.</p>
+  </div>
+  <div class="header-right">
+    <button class="btn-create-agent" onclick="showCreateAgentModal()">Create Agent</button>
+    <button class="btn-back" onclick="window.location.href='dashboard.html'">Dashboard</button>
+    <button class="btn-logout" onclick="logout()">Logout</button>
+  </div>
+</div>
+<div class="container">
+  <div id="notification"></div>
+
+  <div class="stats">
+    <div class="stat-card">
+      <h3>Pending Approvals</h3>
+      <div class="number" id="pendingCount">0</div>
+    </div>
+    <div class="stat-card">
+      <h3>Approved Users</h3>
+      <div class="number" id="approvedCount">0</div>
+    </div>
+    <div class="stat-card">
+      <h3>Inactive Users</h3>
+      <div class="number" id="inactiveCount">0</div>
+    </div>
+    <div class="stat-card">
+      <h3>Total Users</h3>
+      <div class="number" id="totalCount">0</div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('pending')">⏳ Pending Approval</div>
+    <div class="tab" onclick="switchTab('approved')">✅ Approved</div>
+    <div class="tab" onclick="switchTab('inactive')">⏸️ Inactive</div>
+    <div class="tab" onclick="switchTab('rejected')">❌ Rejected</div>
+    <div class="tab" onclick="switchTab('all')">📋 All Users</div>
+  </div>
+
+  <div id="pending" class="tab-content active">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Company</th>
+          <th>Type</th>
+          <th>Phone</th>
+          <th>Signup Date</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="pendingTable">
+        <tr><td colspan="7" style="text-align: center; color: #999;">No pending users</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div id="approved" class="tab-content">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Company</th>
+          <th>Type</th>
+          <th>Approved Date</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="approvedTable">
+        <tr><td colspan="6" style="text-align: center; color: #999;">No approved users</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div id="inactive" class="tab-content">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Company</th>
+          <th>Type</th>
+          <th>Inactive Date</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="inactiveTable">
+        <tr><td colspan="6" style="text-align: center; color: #999;">No inactive users</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div id="rejected" class="tab-content">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Company</th>
+          <th>Type</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="rejectedTable">
+        <tr><td colspan="5" style="text-align: center; color: #999;">No rejected users</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div id="all" class="tab-content">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Company</th>
+          <th>Status</th>
+          <th>Type</th>
+          <th>Signup Date</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="allTable">
+        <tr><td colspan="7" style="text-align: center; color: #999;">Loading...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- User Details Modal -->
+<div id="userModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">User Details</div>
+    <div id="userDetails"></div>
+    <div class="modal-actions">
+      <button onclick="closeModal()" style="background: #95a5a6; color: white;">Close</button>
+      <button id="approveBtn" onclick="approveUser()" style="background: #27ae60; color: white; display: none;">Approve</button>
+      <button id="rejectBtn" onclick="rejectUser()" style="background: #e74c3c; color: white; display: none;">Reject</button>
+    </div>
+  </div>
+</div>
+
+<!-- Create Agent Modal -->
+<div id="createAgentModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">Create New Agent</div>
+    <form id="createAgentForm" onsubmit="createAgent(event)">
+      <div style="margin-bottom: 15px;">
+        <label style="font-weight: 600; color: #333;">Full Name:</label>
+        <input type="text" id="agentFullName" placeholder="e.g., John Doe" required style="width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
+      </div>
+      <div style="margin-bottom: 15px;">
+        <label style="font-weight: 600; color: #333;">Email:</label>
+        <input type="email" id="agentEmail" placeholder="e.g., agent@example.com" required style="width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
+      </div>
+      <div style="margin-bottom: 15px;">
+        <label style="font-weight: 600; color: #333;">Password (min 6 chars):</label>
+        <input type="password" id="agentPassword" placeholder="Enter password" required style="width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;" minlength="6">
+      </div>
+      <div style="margin-bottom: 15px;">
+        <label style="font-weight: 600; color: #333;">Company:</label>
+        <input type="text" id="agentCompany" placeholder="e.g., Flight Connection" required style="width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
+      </div>
+      <div style="margin-bottom: 15px;">
+        <label style="font-weight: 600; color: #333;">Phone:</label>
+        <input type="tel" id="agentPhone" placeholder="e.g., +923001234567" required style="width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
+      </div>
+      <div class="modal-actions">
+        <button type="button" onclick="closeCreateAgentModal()" style="background: #95a5a6; color: white; padding: 10px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600;">Cancel</button>
+        <button type="submit" style="background: #27ae60; color: white; padding: 10px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600;">Create Agent</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyDx3Qxt84vJlz_-mXuxiC0W2flaLadr9Ws",
+    authDomain: "fc-quotation-tool.firebaseapp.com",
+    projectId: "fc-quotation-tool",
+    storageBucket: "fc-quotation-tool.firebasestorage.app",
+    messagingSenderId: "370566945624",
+    appId: "1:370566945624:web:a84b20d5a8f99d20a6e32d"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+  let agentCreationApp;
+  try {
+    agentCreationApp = firebase.app('AgentCreationApp');
+  } catch (error) {
+    agentCreationApp = firebase.initializeApp(firebaseConfig, 'AgentCreationApp');
+  }
+  const agentCreationAuth = agentCreationApp.auth();
+  const agentCreationDb = agentCreationApp.firestore();
+
+  let currentUser = null;
+  let selectedUserId = null;
+  let authCheckInProgress = false;
+
+  // Check if user is admin
+  auth.onAuthStateChanged(async (user) => {
+    if (!user) {
+      window.location.href = 'login.html';
+      return;
+    }
+
+    // Prevent multiple concurrent auth checks
+    if (authCheckInProgress) {
+      return;
+    }
+    authCheckInProgress = true;
+
+    try {
+      const userDoc = await db.collection('users').doc(user.uid).get();
+      if (!userDoc.exists || userDoc.data().status !== 'approved' || userDoc.data().role !== 'admin') {
+        showNotification('Access denied. Admin only.', 'error');
+        setTimeout(() => window.location.href = 'login.html', 2000);
+        return;
+      }
+
+      currentUser = user;
+      loadUsers();
+    } finally {
+      authCheckInProgress = false;
+    }
+  });
+
+  function showNotification(msg, type = 'success') {
+    const notif = document.getElementById('notification');
+    notif.textContent = msg;
+    notif.className = 'notification ' + type;
+    setTimeout(() => notif.textContent = '', 3000);
+  }
+
+  async function loadUsers() {
+    try {
+      const snapshot = await db.collection('users').get();
+      const allUsers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      // Exclude soft-deleted users from all views
+      const users = allUsers.filter(u => u.status !== 'deleted');
+
+      const pending = users.filter(u => u.status === 'pending');
+      const approved = users.filter(u => u.status === 'approved');
+      const inactive = users.filter(u => u.status === 'inactive');
+      const rejected = users.filter(u => u.status === 'rejected');
+
+      // Update stats
+      document.getElementById('pendingCount').textContent = pending.length;
+      document.getElementById('approvedCount').textContent = approved.length;
+      document.getElementById('inactiveCount').textContent = inactive.length;
+      document.getElementById('totalCount').textContent = users.length;
+
+      // Update tables
+      updateTable('pendingTable', pending, 'pending');
+      updateTable('approvedTable', approved, 'approved');
+      updateTable('inactiveTable', inactive, 'inactive');
+      updateTable('rejectedTable', rejected, 'rejected');
+      updateTable('allTable', users, 'all');
+    } catch (error) {
+      console.error('Error loading users:', error);
+      showNotification('Error loading users', 'error');
+    }
+  }
+
+  function updateTable(tableId, users, status) {
+    const tbody = document.getElementById(tableId);
+    if (users.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="${status === 'all' ? 7 : 6}" style="text-align: center; color: #999;">No users</td></tr>`;
+      return;
+    }
+
+    const getDisplayDate = (user) => {
+      if (status === 'approved') return user.approvedAt || user.createdAt;
+      if (status === 'inactive') return user.inactiveAt || user.createdAt;
+      if (status === 'rejected') return user.deletedAt || user.createdAt;
+      return user.createdAt;
+    };
+
+    tbody.innerHTML = users.map(user => `
+      <tr>
+        <td style="color: #333;">${user.fullName}</td>
+        <td style="color: #333;">${user.email}</td>
+        <td style="color: #333;">${user.company}</td>
+        ${status === 'all' ? `<td><span class="badge ${user.status}">${user.status.toUpperCase()}</span></td>` : ''}
+        <td style="color: #333;">${user.userType}</td>
+        <td style="color: #333;">${new Date(getDisplayDate(user)).toLocaleDateString()}</td>
+        <td>
+          <div class="action-group">
+            <button class="btn btn-view" onclick="viewUser('${user.id}', '${user.status}')">View</button>
+            ${user.id !== currentUser?.uid && user.status !== 'inactive' ? `<button class="btn btn-inactive" onclick="setUserInactive('${user.id}')">Inactive</button>` : ''}
+            ${user.id !== currentUser?.uid && user.status === 'inactive' ? `<button class="btn btn-reactivate" onclick="reactivateUser('${user.id}')">Reactivate</button>` : ''}
+            ${user.id !== currentUser?.uid && user.deletePending ? `<button class="btn btn-delete-user" style="background:#dc2626;" onclick="removeSoftDeleted('${user.id}', '${user.fullName || 'this user'}')">🗑️ Remove from System</button>` : ''}
+            ${user.id !== currentUser?.uid && !user.deletePending ? `<button class="btn btn-delete-user" onclick="deleteAgentUser('${user.id}')">Delete</button>` : ''}
+          </div>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  function isActiveQuotationStatus(status) {
+    return !['booked', 'cancelled', 'expired'].includes((status || 'pending').toLowerCase());
+  }
+
+  function dedupeQuotations(quotations) {
+    const byId = new Map();
+    quotations.forEach((quotation, index) => {
+      const key = quotation?.id || `${quotation?.quotationNumber || 'quotation'}-${index}`;
+      byId.set(key, quotation);
+    });
+    return Array.from(byId.values());
+  }
+
+  async function loadQuotationDocsForUser(userId) {
+    const [umrahDoc, internationalDoc] = await Promise.all([
+      db.collection('umrah_quotations').doc(userId).get(),
+      db.collection('international_quotations').doc(userId).get()
+    ]);
+
+    return {
+      umrah: umrahDoc.exists ? umrahDoc.data() : null,
+      international: internationalDoc.exists ? internationalDoc.data() : null
+    };
+  }
+
+  async function setUserInactive(userId) {
+    const userDoc = await db.collection('users').doc(userId).get();
+    const userData = userDoc.exists ? userDoc.data() : null;
+    const agentName = userData?.fullName || 'this user';
+
+    if (!confirm(`Set ${agentName} as inactive? They will not be able to log in.`)) {
+      return;
+    }
+
+    try {
+      await db.collection('users').doc(userId).update({
+        status: 'inactive',
+        inactiveAt: new Date().toISOString(),
+        inactiveBy: currentUser.uid
+      });
+      showNotification('✅ User marked inactive successfully!', 'success');
+      loadUsers();
+    } catch (error) {
+      console.error('Error setting user inactive:', error);
+      showNotification('Error setting user inactive: ' + error.message, 'error');
+    }
+  }
+
+  async function reactivateUser(userId) {
+    const userDoc = await db.collection('users').doc(userId).get();
+    const userData = userDoc.exists ? userDoc.data() : null;
+    const agentName = userData?.fullName || 'this user';
+
+    if (!confirm(`Reactivate ${agentName}? They will be able to log in again.`)) {
+      return;
+    }
+
+    try {
+      await db.collection('users').doc(userId).update({
+        status: 'approved',
+        approvedAt: new Date().toISOString(),
+        approvedBy: currentUser.uid,
+        reactivatedAt: new Date().toISOString(),
+        reactivatedBy: currentUser.uid,
+        inactiveAt: firebase.firestore.FieldValue.delete(),
+        inactiveBy: firebase.firestore.FieldValue.delete()
+      });
+      showNotification('✅ User reactivated successfully!', 'success');
+      loadUsers();
+    } catch (error) {
+      console.error('Error reactivating user:', error);
+      showNotification('Error reactivating user: ' + error.message, 'error');
+    }
+  }
+
+  async function transferQuotationCollection(collectionName, sourceUserId, sourceUserName) {
+    const [sourceDoc, adminDoc] = await Promise.all([
+      db.collection(collectionName).doc(sourceUserId).get(),
+      db.collection(collectionName).doc(currentUser.uid).get()
+    ]);
+
+    if (!sourceDoc.exists) {
+      return { transferred: 0, active: 0 };
+    }
+
+    const sourceData = sourceDoc.data() || {};
+    const sourceQuotations = Array.isArray(sourceData.quotations) ? sourceData.quotations : [];
+    const activeCount = sourceQuotations.filter(q => isActiveQuotationStatus(q?.status)).length;
+
+    const adminData = adminDoc.exists ? adminDoc.data() || {} : {};
+    const adminQuotations = Array.isArray(adminData.quotations) ? adminData.quotations : [];
+    const transferredQuotations = sourceQuotations.map(quotation => ({
+      ...quotation,
+      agentId: currentUser.uid,
+      transferredFromAgentId: sourceUserId,
+      transferredFromAgentName: sourceUserName,
+      transferredAt: new Date().toISOString()
+    }));
+
+    const mergedQuotations = dedupeQuotations([...adminQuotations, ...transferredQuotations]);
+
+    await db.collection(collectionName).doc(currentUser.uid).set({
+      quotations: mergedQuotations,
+      updatedAt: new Date(),
+      agentId: currentUser.uid
+    }, { merge: true });
+
+    await db.collection(collectionName).doc(sourceUserId).delete();
+
+    return { transferred: sourceQuotations.length, active: activeCount };
+  }
+
+  function switchTab(tabName) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    
+    event.target.classList.add('active');
+    document.getElementById(tabName).classList.add('active');
+  }
+
+  async function viewUser(userId, status) {
+    selectedUserId = userId;
+    const userDoc = await db.collection('users').doc(userId).get();
+    const user = userDoc.data();
+
+    let html = `
+      <p style="color: #333; margin: 10px 0;"><strong>Name:</strong> ${user.fullName}</p>
+      <p style="color: #333; margin: 10px 0;"><strong>Email:</strong> ${user.email}</p>
+      <p style="color: #333; margin: 10px 0;"><strong>Company:</strong> ${user.company}</p>
+      <p style="color: #333; margin: 10px 0;"><strong>Phone:</strong> ${user.phone}</p>
+      <p style="color: #333; margin: 10px 0;"><strong>Type:</strong> ${user.userType}</p>
+      <p style="color: #333; margin: 10px 0;"><strong>Status:</strong> <span class="badge ${user.status}">${user.status.toUpperCase()}</span></p>
+      <p style="color: #333; margin: 10px 0;"><strong>Signup Date:</strong> ${new Date(user.createdAt).toLocaleString()}</p>
+    `;
+
+    if (user.approvedAt) {
+      html += `<p style="color: #333; margin: 10px 0;"><strong>Approved Date:</strong> ${new Date(user.approvedAt).toLocaleString()}</p>`;
+    }
+
+    document.getElementById('userDetails').innerHTML = html;
+
+    // Show approve/reject buttons only for pending users
+    document.getElementById('approveBtn').style.display = status === 'pending' ? 'block' : 'none';
+    document.getElementById('rejectBtn').style.display = status === 'pending' ? 'block' : 'none';
+
+    document.getElementById('userModal').classList.add('active');
+  }
+
+  function closeModal() {
+    document.getElementById('userModal').classList.remove('active');
+    selectedUserId = null;
+  }
+
+  async function approveUser() {
+    try {
+      await db.collection('users').doc(selectedUserId).update({
+        status: 'approved',
+        approvedAt: new Date().toISOString(),
+        approvedBy: currentUser.uid,
+        role: 'user' // Default role for new users
+      });
+
+      showNotification('✅ User approved successfully', 'success');
+      closeModal();
+      loadUsers();
+    } catch (error) {
+      console.error('Error approving user:', error);
+      showNotification('Error approving user', 'error');
+    }
+  }
+
+  async function rejectUser() {
+    try {
+      await db.collection('users').doc(selectedUserId).update({
+        status: 'rejected'
+      });
+
+      showNotification('❌ User rejected', 'success');
+      closeModal();
+      loadUsers();
+    } catch (error) {
+      console.error('Error rejecting user:', error);
+      showNotification('Error rejecting user', 'error');
+    }
+  }
+
+  function showCreateAgentModal() {
+    document.getElementById('createAgentModal').classList.add('active');
+  }
+
+  function closeCreateAgentModal() {
+    document.getElementById('createAgentModal').classList.remove('active');
+    document.getElementById('createAgentForm').reset();
+  }
+
+  async function createAgent(e) {
+    e.preventDefault();
+    
+    const fullName = document.getElementById('agentFullName').value.trim();
+    const email = document.getElementById('agentEmail').value.trim();
+    const password = document.getElementById('agentPassword').value;
+    const company = document.getElementById('agentCompany').value.trim();
+    const phone = document.getElementById('agentPhone').value.trim();
+    let createdAgentUser = null;
+
+    try {
+      // Create Firebase Auth user in isolated secondary app so admin stays signed in
+      const userCredential = await agentCreationAuth.createUserWithEmailAndPassword(email, password);
+      const user = userCredential.user;
+      createdAgentUser = user;
+
+      // Force refresh token
+      await user.getIdToken(true);
+
+      // Store agent data in Firestore with approved status using the same secondary app auth context
+      await agentCreationDb.collection('users').doc(user.uid).set({
+        uid: user.uid,
+        fullName: fullName,
+        email: email,
+        company: company,
+        phone: phone,
+        userType: 'agent',
+        status: 'approved', // Agents created by admin are auto-approved
+        role: 'agent',
+        createdAt: new Date().toISOString(),
+        approvedAt: new Date().toISOString(),
+        approvedBy: currentUser.uid
+      });
+
+      await agentCreationAuth.signOut();
+
+      showNotification('✅ Agent created successfully!', 'success');
+      closeCreateAgentModal();
+      loadUsers();
+    } catch (error) {
+      if (createdAgentUser) {
+        try {
+          await createdAgentUser.delete();
+        } catch (cleanupError) {
+          console.error('Error cleaning up created agent auth user:', cleanupError);
+        }
+      }
+      try {
+        await agentCreationAuth.signOut();
+      } catch (signOutError) {
+        console.error('Error signing out secondary auth session:', signOutError);
+      }
+      console.error('Error creating agent:', error);
+      showNotification('Error creating agent: ' + error.message, 'error');
+    }
+  }
+
+  async function deleteAgentUser(userId) {
+    const userDoc = await db.collection('users').doc(userId).get();
+    const userData = userDoc.exists ? userDoc.data() : null;
+    const agentName = userData?.fullName || 'this agent';
+
+    const quotationData = await loadQuotationDocsForUser(userId);
+    const umrahQuotations = Array.isArray(quotationData.umrah?.quotations) ? quotationData.umrah.quotations : [];
+    const internationalQuotations = Array.isArray(quotationData.international?.quotations) ? quotationData.international.quotations : [];
+    const totalQuotations = umrahQuotations.length + internationalQuotations.length;
+    const activeQuotations = [...umrahQuotations, ...internationalQuotations].filter(q => isActiveQuotationStatus(q?.status)).length;
+
+    let transferRequired = false;
+    if (activeQuotations > 0) {
+      transferRequired = confirm(`${agentName} has ${activeQuotations} active quotation(s) and ${totalQuotations} total quotation(s). Click OK to transfer all quotations under admin before delete.`);
+      if (!transferRequired) {
+        showNotification('Delete cancelled. Transfer quotations first if you want to remove this user.', 'info');
+        return;
+      }
+    } else if (totalQuotations > 0) {
+      const deleteWithQuotations = confirm(`${agentName} has ${totalQuotations} saved quotation(s). Click OK to delete the user and remove those quotation records too. Click Cancel to stop.`);
+      if (!deleteWithQuotations) {
+        return;
+      }
+    } else if (!confirm(`Are you sure you want to permanently delete ${agentName} from the database?`)) {
+      return;
+    }
+
+    try {
+      if (transferRequired) {
+        await transferQuotationCollection('umrah_quotations', userId, agentName);
+        await transferQuotationCollection('international_quotations', userId, agentName);
+      } else {
+        await Promise.all([
+          db.collection('umrah_quotations').doc(userId).delete().catch(() => null),
+          db.collection('international_quotations').doc(userId).delete().catch(() => null)
+        ]);
+      }
+
+      await db.collection('agents').doc(userId).delete().catch(() => null);
+      await db.collection('users').doc(userId).delete();
+
+      showNotification(transferRequired ? '✅ User deleted and quotations transferred to admin!' : '✅ User deleted successfully!', 'success');
+      loadUsers();
+    } catch (error) {
+      console.error('Error deleting agent:', error);
+
+      if (error.code === 'permission-denied' || error.message.toLowerCase().includes('permission')) {
+        try {
+          await db.collection('users').doc(userId).update({
+            status: 'deleted',
+            deletedAt: new Date().toISOString(),
+            deletedBy: currentUser.uid
+          });
+          showNotification('✅ User removed from the system successfully.', 'success');
+          loadUsers();
+          return;
+        } catch (fallbackError) {
+          console.error('Delete fallback failed:', fallbackError);
+          showNotification('Could not delete user. Please publish FIRESTORE_RULES.txt to Firebase Console and try again.', 'error');
+        }
+      }
+
+      showNotification('Error deleting user: ' + error.message, 'error');
+    }
+  }
+
+  async function removeSoftDeleted(userId, userName) {
+    if (!confirm(`Remove "${userName}" from the system permanently? This cannot be undone.`)) return;
+    try {
+      await db.collection('users').doc(userId).update({
+        status: 'deleted',
+        deletedAt: new Date().toISOString(),
+        deletedBy: currentUser.uid
+      });
+      showNotification('✅ User removed from the system successfully.', 'success');
+      loadUsers();
+    } catch (error) {
+      console.error('Error removing user:', error);
+      showNotification('Error removing user: ' + error.message, 'error');
+    }
+  }
+
+  function logout() {
+    auth.signOut().then(() => {
+      window.location.href = 'login.html';
+    });
+  }
+</script>
+
+</body>
+</html>

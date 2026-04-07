@@ -235,6 +235,16 @@
   transform: translateY(-1px);
 }
 
+.btn-transfer {
+  background: linear-gradient(135deg, #6f42c1, #5a32a3);
+  color: white;
+}
+
+.btn-transfer:hover {
+  background: linear-gradient(135deg, #5a32a3, #4b2a87);
+  transform: translateY(-1px);
+}
+
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -349,6 +359,7 @@
     <div class="header-right no-print">
       <button onclick="showQuotationTypeModal()" class="btn-primary">Create Quotation</button>
       <button id="adminBtn" onclick="showPackageModal()" class="btn-primary" style="display:none;">Manage Packages</button>
+      <button id="userMgmtBtn" onclick="window.location.href='user-management.html'" class="btn-primary" style="display:none;">User Management</button>
       <button id="btnLogout" class="btn-logout">Logout</button>
     </div>
   </div>
@@ -483,92 +494,125 @@
 
 <!-- Package Modal -->
 <div id="packageModal" class="modal-overlay no-print">
-  <div class="modal-content" style="max-width: 800px;">
+  <div class="modal-content" style="max-width: 1000px;">
     <div class="modal-header">
-      <h3 class="modal-title">Create Package</h3>
+      <h3 class="modal-title" id="modal-title">Manage Packages</h3>
       <button class="modal-close" onclick="closePackageModal()">&times;</button>
     </div>
     <div class="modal-body">
-      <form id="packageForm">
-        <div style="margin-bottom: 15px;">
-          <label>Package Name:</label>
-          <input type="text" id="packageName" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+      <!-- Package List View -->
+      <div id="packageListView">
+        <div style="margin-bottom: 20px; text-align: right;">
+          <button onclick="openPackageBuilder()" class="btn-primary">➕ Create New Package</button>
         </div>
-        <div style="margin-bottom: 15px;">
-          <label>Package Type:</label>
-          <select id="packageType" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-            <option value="">-- Select package type --</option>
-            <option value="umrah">Umrah</option>
-            <option value="international">International</option>
-            <option value="both">Both</option>
-          </select>
+        <div id="packagesTableContainer">
+          <table class="quotation-table" id="packagesTable">
+            <thead>
+              <tr>
+                <th>Package Code</th>
+                <th>Package Name</th>
+                <th>Type</th>
+                <th>Total Nights</th>
+                <th>Destinations</th>
+                <th>Created</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="packagesTableBody">
+              <tr>
+                <td colspan="7" style="text-align: center;">Loading packages...</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px;">
-          <div>
-            <label>Adults:</label>
-            <input type="number" id="adults" min="1" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+      </div>
+
+      <!-- Package Form View -->
+      <div id="packageFormView" style="display: none;">
+        <div style="margin-bottom: 20px;">
+          <button onclick="showPackageList()" style="background: #6c757d; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer;">← Back to Packages</button>
+        </div>
+        <form id="packageForm">
+          <div style="margin-bottom: 15px;">
+            <label>Package Name:</label>
+            <input type="text" id="packageName" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
           </div>
-          <div>
-            <label>Children:</label>
-            <input type="number" id="children" min="0" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+          <div style="margin-bottom: 15px;">
+            <label>Package Type:</label>
+            <select id="packageType" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+              <option value="">-- Select package type --</option>
+              <option value="umrah">Umrah</option>
+              <option value="international">International</option>
+              <option value="both">Both</option>
+            </select>
           </div>
-          <div>
-            <label>Infants:</label>
-            <input type="number" id="infants" min="0" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px;">
+            <div>
+              <label>Adults:</label>
+              <input type="number" id="adults" min="1" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            </div>
+            <div>
+              <label>Children:</label>
+              <input type="number" id="children" min="0" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            </div>
+            <div>
+              <label>Infants:</label>
+              <input type="number" id="infants" min="0" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            </div>
           </div>
-        </div>
-        <div style="margin-bottom: 15px;">
-          <label>Air Tickets Total Price (PKR):</label>
-          <input type="number" id="airTickets" min="0" step="0.01" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-        </div>
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px;">
-          <div>
-            <label>3 Star Hotels Total (PKR):</label>
-            <input type="number" id="hotels3Star" min="0" step="0.01" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+          <div style="margin-bottom: 15px;">
+            <label>Air Tickets Total Price (PKR):</label>
+            <input type="number" id="airTickets" min="0" step="0.01" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
           </div>
-          <div>
-            <label>4 Star Hotels Total (PKR):</label>
-            <input type="number" id="hotels4Star" min="0" step="0.01" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px;">
+            <div>
+              <label>3 Star Hotels Total (PKR):</label>
+              <input type="number" id="hotels3Star" min="0" step="0.01" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            </div>
+            <div>
+              <label>4 Star Hotels Total (PKR):</label>
+              <input type="number" id="hotels4Star" min="0" step="0.01" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            </div>
+            <div>
+              <label>5 Star Hotels Total (PKR):</label>
+              <input type="number" id="hotels5Star" min="0" step="0.01" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            </div>
           </div>
-          <div>
-            <label>5 Star Hotels Total (PKR):</label>
-            <input type="number" id="hotels5Star" min="0" step="0.01" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+          <div style="margin-bottom: 15px;">
+            <label>Transfers Details:</label>
+            <textarea id="transfersDetails" rows="3" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"></textarea>
           </div>
-        </div>
-        <div style="margin-bottom: 15px;">
-          <label>Transfers Details:</label>
-          <textarea id="transfersDetails" rows="3" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"></textarea>
-        </div>
-        <div style="margin-bottom: 15px;">
-          <label>Transfers Total Price (PKR):</label>
-          <input type="number" id="transfersPrice" min="0" step="0.01" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-        </div>
-        <div style="margin-bottom: 15px;">
-          <label>Tours & Activities Details:</label>
-          <textarea id="toursDetails" rows="3" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"></textarea>
-        </div>
-        <div style="margin-bottom: 15px;">
-          <label>Tours & Activities Total Price (PKR):</label>
-          <input type="number" id="toursPrice" min="0" step="0.01" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-        </div>
-        <div style="margin-bottom: 15px;">
-          <button type="button" onclick="calculatePackagePrices()" class="btn-primary">Calculate Prices</button>
-        </div>
-        <div id="calculatedPrices" style="display: none; background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-          <h4>Calculated Prices Per Person:</h4>
-          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
-            <div>Air: <span id="airPerPerson">0</span> PKR</div>
-            <div>3 Star Hotel: <span id="hotel3PerPerson">0</span> PKR</div>
-            <div>4 Star Hotel: <span id="hotel4PerPerson">0</span> PKR</div>
-            <div>5 Star Hotel: <span id="hotel5PerPerson">0</span> PKR</div>
-            <div>Transfers: <span id="transfersPerPerson">0</span> PKR</div>
-            <div>Tours: <span id="toursPerPerson">0</span> PKR</div>
+          <div style="margin-bottom: 15px;">
+            <label>Transfers Total Price (PKR):</label>
+            <input type="number" id="transfersPrice" min="0" step="0.01" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
           </div>
-        </div>
-        <div style="text-align: right;">
-          <button type="submit" class="btn-primary">Save Package</button>
-        </div>
-      </form>
+          <div style="margin-bottom: 15px;">
+            <label>Tours & Activities Details:</label>
+            <textarea id="toursDetails" rows="3" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"></textarea>
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label>Tours & Activities Total Price (PKR):</label>
+            <input type="number" id="toursPrice" min="0" step="0.01" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+          </div>
+          <div style="margin-bottom: 15px;">
+            <button type="button" onclick="calculatePackagePrices()" class="btn-primary">Calculate Prices</button>
+          </div>
+          <div id="calculatedPrices" style="display: none; background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+            <h4>Calculated Prices Per Person:</h4>
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+              <div>Air: <span id="airPerPerson">0</span> PKR</div>
+              <div>3 Star Hotel: <span id="hotel3PerPerson">0</span> PKR</div>
+              <div>4 Star Hotel: <span id="hotel4PerPerson">0</span> PKR</div>
+              <div>5 Star Hotel: <span id="hotel5PerPerson">0</span> PKR</div>
+              <div>Transfers: <span id="transfersPerPerson">0</span> PKR</div>
+              <div>Tours: <span id="toursPerPerson">0</span> PKR</div>
+            </div>
+          </div>
+          <div style="text-align: right;">
+            <button type="submit" class="btn-primary" id="savePackageBtn">Save Package</button>
+          </div>
+        </form>
+      </div>
     </div>
   </div>
 </div>
@@ -577,6 +621,8 @@
 // Show package modal
 function showPackageModal() {
   document.getElementById('packageModal').classList.add('visible');
+  showPackageList();
+  loadPackages();
 }
 
 // Close package modal
@@ -584,6 +630,39 @@ function closePackageModal() {
   document.getElementById('packageModal').classList.remove('visible');
   document.getElementById('packageForm').reset();
   document.getElementById('calculatedPrices').style.display = 'none';
+  currentPackageId = null;
+  document.getElementById('savePackageBtn').textContent = 'Save Package';
+}
+
+// Show package list view
+function showPackageList() {
+  document.getElementById('packageListView').style.display = 'block';
+  document.getElementById('packageFormView').style.display = 'none';
+  document.getElementById('modal-title').textContent = 'Manage Packages';
+}
+
+// Show package form view
+function showPackageForm(packageId = null) {
+  document.getElementById('packageListView').style.display = 'none';
+  document.getElementById('packageFormView').style.display = 'block';
+  document.getElementById('modal-title').textContent = packageId ? 'Edit Package' : 'Create Package';
+  
+  if (packageId) {
+    loadPackageForEdit(packageId);
+  } else {
+    document.getElementById('packageForm').reset();
+    document.getElementById('calculatedPrices').style.display = 'none';
+    currentPackageId = null;
+    document.getElementById('savePackageBtn').textContent = 'Save Package';
+  }
+}
+
+// Open dedicated package builder page
+function openPackageBuilder(packageId = null) {
+  const url = packageId
+    ? `package-builder.html?edit=${encodeURIComponent(packageId)}`
+    : 'package-builder.html';
+  window.open(url, '_blank');
 }
 
 // Calculate package prices
@@ -621,13 +700,191 @@ function calculatePackagePrices() {
   document.getElementById('calculatedPrices').style.display = 'block';
 }
 
+// Global variable for current package being edited
+let currentPackageId = null;
+
+function formatPackageCode(number) {
+  return `PKG-${String(number).padStart(4, '0')}`;
+}
+
+function getPackageCodeNumber(code) {
+  const match = String(code || '').match(/^PKG-(\d{1,})$/i);
+  return match ? parseInt(match[1], 10) : 0;
+}
+
+function getPackageCreatedTimestamp(pkg) {
+  if (pkg.createdAt?.toDate) {
+    return pkg.createdAt.toDate().getTime();
+  }
+
+  if (pkg.createdAt) {
+    const createdDate = new Date(pkg.createdAt);
+    if (!isNaN(createdDate.getTime())) {
+      return createdDate.getTime();
+    }
+  }
+
+  return 0;
+}
+
+async function backfillMissingPackageCodes(packages) {
+  const packagesWithCodes = [...packages];
+  let nextCodeNumber = packagesWithCodes.reduce((max, pkg) => {
+    return Math.max(max, getPackageCodeNumber(pkg.packageCode));
+  }, 0) + 1;
+
+  const missingPackages = packagesWithCodes
+    .filter(pkg => !pkg.packageCode)
+    .sort((a, b) => getPackageCreatedTimestamp(a) - getPackageCreatedTimestamp(b));
+
+  if (!missingPackages.length) {
+    return packagesWithCodes;
+  }
+
+  await Promise.all(missingPackages.map(async (pkg) => {
+    const packageCode = formatPackageCode(nextCodeNumber++);
+    pkg.packageCode = packageCode;
+    await window.firebaseDB.saveData('packages', pkg.id, { packageCode });
+  }));
+
+  return packagesWithCodes;
+}
+
+// Load packages list
+async function loadPackages() {
+  try {
+    let packages = await window.firebaseDB.getAll('packages');
+    packages = await backfillMissingPackageCodes(packages);
+    const tbody = document.getElementById('packagesTableBody');
+    
+    if (packages.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">No packages found. Create your first package!</td></tr>';
+      return;
+    }
+    
+    tbody.innerHTML = packages.map(pkg => {
+      const packageCode = pkg.packageCode || '—';
+      const pkgName = pkg.name || pkg.id || 'Unnamed Package';
+      const pkgType = typeof pkg.type === 'string' && pkg.type.length > 0
+        ? (pkg.type.charAt(0).toUpperCase() + pkg.type.slice(1))
+        : 'N/A';
+
+      const totalNightsText = typeof pkg.totalNights === 'number'
+        ? pkg.totalNights
+        : 'N/A';
+
+      const destinationsText = Array.isArray(pkg.destinations) && pkg.destinations.length > 0
+        ? pkg.destinations.map(d => d.city).filter(Boolean).join(', ')
+        : 'N/A';
+
+      let createdText = 'N/A';
+      if (pkg.createdAt?.toDate) {
+        createdText = pkg.createdAt.toDate().toLocaleDateString();
+      } else if (pkg.createdAt) {
+        const createdDate = new Date(pkg.createdAt);
+        if (!isNaN(createdDate.getTime())) {
+          createdText = createdDate.toLocaleDateString();
+        }
+      }
+
+      const canInlineEdit = !!(pkg.pax && pkg.costs);
+      const editBtn = canInlineEdit
+        ? `<button onclick="editPackage('${pkg.id}')" class="btn-edit" style="margin-right: 5px;">Edit</button>`
+        : `<button onclick="openPackageBuilder('${pkg.id}')" class="btn-edit" style="margin-right: 5px;" title="Edit in Advanced Package Builder">Edit</button>`;
+
+      return `
+      <tr>
+        <td>${packageCode}</td>
+        <td>${pkgName}</td>
+        <td>${pkgType}</td>
+        <td>${totalNightsText}</td>
+        <td>${destinationsText}</td>
+        <td>${createdText}</td>
+        <td>
+          ${editBtn}
+          <button onclick="deletePackage('${pkg.id}', '${pkgName}')" class="btn-delete">Delete</button>
+        </td>
+      </tr>
+    `;
+    }).join('');
+  } catch (error) {
+    console.error('Error loading packages:', error);
+    document.getElementById('packagesTableBody').innerHTML = '<tr><td colspan="7" style="text-align: center; color: red;">Error loading packages</td></tr>';
+  }
+}
+
+// Load package for editing
+async function loadPackageForEdit(packageId) {
+  try {
+    const pkg = await window.firebaseDB.getData('packages', packageId);
+    if (!pkg) {
+      showNotification('Package not found', 'error');
+      return;
+    }
+    
+    currentPackageId = packageId;
+    document.getElementById('packageName').value = pkg.name;
+    document.getElementById('packageType').value = pkg.type;
+    document.getElementById('adults').value = pkg.pax.adults;
+    document.getElementById('children').value = pkg.pax.children || 0;
+    document.getElementById('infants').value = pkg.pax.infants || 0;
+    document.getElementById('airTickets').value = pkg.costs.airTickets;
+    document.getElementById('hotels3Star').value = pkg.costs.hotels['3star'] || 0;
+    document.getElementById('hotels4Star').value = pkg.costs.hotels['4star'] || 0;
+    document.getElementById('hotels5Star').value = pkg.costs.hotels['5star'] || 0;
+    document.getElementById('transfersDetails').value = pkg.costs.transfers.details || '';
+    document.getElementById('transfersPrice').value = pkg.costs.transfers.price || 0;
+    document.getElementById('toursDetails').value = pkg.costs.tours.details || '';
+    document.getElementById('toursPrice').value = pkg.costs.tours.price || 0;
+    
+    document.getElementById('savePackageBtn').textContent = 'Update Package';
+    
+    // Calculate prices if data is available
+    if (pkg.prices) {
+      document.getElementById('airPerPerson').textContent = pkg.prices.air || 0;
+      document.getElementById('hotel3PerPerson').textContent = pkg.prices.hotels['3star'] || 0;
+      document.getElementById('hotel4PerPerson').textContent = pkg.prices.hotels['4star'] || 0;
+      document.getElementById('hotel5PerPerson').textContent = pkg.prices.hotels['5star'] || 0;
+      document.getElementById('transfersPerPerson').textContent = pkg.prices.transfers || 0;
+      document.getElementById('toursPerPerson').textContent = pkg.prices.tours || 0;
+      document.getElementById('calculatedPrices').style.display = 'block';
+    }
+  } catch (error) {
+    console.error('Error loading package for edit:', error);
+    showNotification('Error loading package', 'error');
+  }
+}
+
+// Edit package
+function editPackage(packageId) {
+  showPackageForm(packageId);
+}
+
+// Delete package
+async function deletePackage(packageId, packageName) {
+  if (!confirm(`Are you sure you want to delete the package "${packageName}"? This action cannot be undone.`)) {
+    return;
+  }
+  
+  try {
+    const success = await window.firebaseDB.deleteData('packages', packageId);
+    if (success) {
+      showNotification('Package deleted successfully', 'success');
+      loadPackages();
+    }
+  } catch (error) {
+    console.error('Error deleting package:', error);
+    showNotification('Error deleting package', 'error');
+  }
+}
+
 // Save package
 document.getElementById('packageForm').addEventListener('submit', async function(e) {
   e.preventDefault();
   
   const agent = checkAgentLogin();
   if (!agent || agent.role !== 'admin') {
-    showNotification('Only admin can create packages', 'error');
+    showNotification('Only admin can manage packages', 'error');
     return;
   }
 
@@ -664,15 +921,31 @@ document.getElementById('packageForm').addEventListener('submit', async function
       },
       transfers: parseFloat(document.getElementById('transfersPerPerson').textContent),
       tours: parseFloat(document.getElementById('toursPerPerson').textContent)
-    },
-    createdAt: new Date().toISOString(),
-    createdBy: checkAgentLogin().id
+    }
   };
 
-  const success = await window.firebaseDB.saveData('packages', packageData.name.replace(/\s+/g, '_').toLowerCase(), packageData);
+  let success;
+  if (currentPackageId) {
+    // Update existing package
+    packageData.updatedAt = new Date().toISOString();
+    success = await window.firebaseDB.saveData('packages', currentPackageId, packageData);
+    if (success) {
+      showNotification('Package updated successfully', 'success');
+    }
+  } else {
+    // Create new package
+    packageData.createdAt = new Date().toISOString();
+    packageData.createdBy = checkAgentLogin().id;
+    const packageId = packageData.name.replace(/\s+/g, '_').toLowerCase();
+    success = await window.firebaseDB.saveData('packages', packageId, packageData);
+    if (success) {
+      showNotification('Package created successfully', 'success');
+    }
+  }
+
   if (success) {
-    showNotification('Package saved successfully', 'success');
-    closePackageModal();
+    showPackageList();
+    loadPackages();
   }
 });
 
@@ -698,27 +971,64 @@ function checkAgentLogin() {
   return agent;
 }
 
+function getOwnerId(agent) {
+  return agent?.uid || agent?.id || window.auth?.currentUser?.uid || null;
+}
+
+function isFirebaseAvailableForDashboard() {
+  // file:// pages have isolated origins and commonly break auth/session based Firebase access.
+  return window.location.protocol !== 'file:' && !!window.auth?.currentUser;
+}
+
+function getLocalQuotationsSnapshot() {
+  return {
+    umrah: JSON.parse(localStorage.getItem('savedQuotations')) || [],
+    international: JSON.parse(localStorage.getItem('savedQuotations_international')) || []
+  };
+}
+
+function saveLocalQuotationsSnapshot(umrahQuotations, internationalQuotations) {
+  if (Array.isArray(umrahQuotations)) {
+    localStorage.setItem('savedQuotations', JSON.stringify(umrahQuotations));
+  }
+  if (Array.isArray(internationalQuotations)) {
+    localStorage.setItem('savedQuotations_international', JSON.stringify(internationalQuotations));
+  }
+}
+
 // Helper function to save quotations to Firebase
 async function saveQuotationsToFirebase(agent, umrahQuotations, internationalQuotations) {
   try {
-    if (!agent || !agent.id) return false;
+    const ownerId = getOwnerId(agent);
+    if (!ownerId) {
+      saveLocalQuotationsSnapshot(umrahQuotations, internationalQuotations);
+      return true;
+    }
+
+    // Always keep local copies in sync.
+    saveLocalQuotationsSnapshot(umrahQuotations, internationalQuotations);
+
+    if (!isFirebaseAvailableForDashboard()) {
+      showNotification('Running without Firebase session. Changes saved locally.', 'warning');
+      return true;
+    }
     
     // Save Umrah quotations
     if (umrahQuotations) {
-      const success = await window.firebaseDB.saveData('umrah_quotations', agent.id, { 
+      const success = await window.firebaseDB.saveData('umrah_quotations', ownerId, { 
         quotations: umrahQuotations, 
         updatedAt: new Date(),
-        agentId: agent.id 
+        agentId: ownerId 
       });
       if (!success) throw new Error('Failed to save Umrah quotations to Firebase');
     }
     
     // Save International quotations
     if (internationalQuotations) {
-      const success = await window.firebaseDB.saveData('international_quotations', agent.id, { 
+      const success = await window.firebaseDB.saveData('international_quotations', ownerId, { 
         quotations: internationalQuotations, 
         updatedAt: new Date(),
-        agentId: agent.id 
+        agentId: ownerId 
       });
       if (!success) throw new Error('Failed to save International quotations to Firebase');
     }
@@ -726,27 +1036,36 @@ async function saveQuotationsToFirebase(agent, umrahQuotations, internationalQuo
     return true;
   } catch (error) {
     console.error('Error saving quotations to Firebase:', error);
-    showNotification('Failed to save quotations to Firebase. Please check your connection and try again.', 'error');
-    return false;
+    saveLocalQuotationsSnapshot(umrahQuotations, internationalQuotations);
+    showNotification('Firebase save failed. Changes were saved locally.', 'warning');
+    return true;
   }
 }
 
 // Helper function to load quotations from Firebase
 async function loadQuotationsFromFirebase(agent) {
   try {
-    if (!agent || !agent.id) return { umrah: [], international: [] };
+    const ownerId = getOwnerId(agent);
+    if (!ownerId) return getLocalQuotationsSnapshot();
+
+    if (!isFirebaseAvailableForDashboard()) {
+      return getLocalQuotationsSnapshot();
+    }
     
-    const umrahData = await window.firebaseDB.getData('umrah_quotations', agent.id);
-    const internationalData = await window.firebaseDB.getData('international_quotations', agent.id);
-    
-    return {
+    const umrahData = await window.firebaseDB.getData('umrah_quotations', ownerId);
+    const internationalData = await window.firebaseDB.getData('international_quotations', ownerId);
+    const result = {
       umrah: umrahData?.quotations || [],
       international: internationalData?.quotations || []
     };
+
+    saveLocalQuotationsSnapshot(result.umrah, result.international);
+    
+    return result;
   } catch (error) {
     console.error('Error loading quotations from Firebase:', error);
-    showNotification('Failed to load quotations from Firebase. Please check your connection.', 'error');
-    return { umrah: [], international: [] };
+    showNotification('Could not load Firebase data. Showing local quotations.', 'warning');
+    return getLocalQuotationsSnapshot();
   }
 }
 
@@ -817,6 +1136,11 @@ function loadAgentInfo() {
     document.getElementById("agentInfo").textContent = `Logged in as: ${agent.name} (${agent.phone})`;
     if (agent.role === 'admin') {
       document.getElementById("adminBtn").style.display = 'inline-block';
+      document.getElementById("userMgmtBtn").style.display = 'inline-block';
+      const allUsersBtn = document.getElementById('allUsersBtn');
+      const userFilter = document.getElementById('userFilter');
+      if (allUsersBtn) allUsersBtn.style.display = 'inline-block';
+      if (userFilter) userFilter.style.display = 'inline-block';
     }
   }
 }
@@ -831,29 +1155,49 @@ async function loadAllQuotations() {
   // Load only from Firebase (no localStorage fallback)
   const firebaseData = await loadQuotationsFromFirebase(agent);
   console.log('Loaded firebaseData:', firebaseData);
-  
+
   allUmrahQuotations = firebaseData.umrah.map(q => ({...q, type: 'umrah', agentId: agent.id, agentName: agent.name}));
-  
   allInternationalQuotations = firebaseData.international.map(q => ({...q, type: 'international', agentId: agent.id, agentName: agent.name}));
-  
-  // Load all users' quotations for admin
+
+  // Only admins can see all users' quotations in 'all-users' view
   if (agent.role === 'admin') {
     allUsersQuotations = [];
     try {
-      const allAgents = await window.firebaseDB.getAll('agents');
-      for (const agentData of allAgents) {
-        const agentQuotations = await loadQuotationsFromFirebase(agentData);
+      if (!isFirebaseAvailableForDashboard()) {
+        throw new Error('Firebase unavailable in this session');
+      }
+
+      const usersFromUsersCollection = await window.firebaseDB.getAll('users');
+      const usersFromAgentsCollection = await window.firebaseDB.getAll('agents');
+      const allUsersMap = new Map();
+
+      usersFromUsersCollection.forEach(u => allUsersMap.set(u.id, u));
+      usersFromAgentsCollection.forEach(u => {
+        if (!allUsersMap.has(u.id)) allUsersMap.set(u.id, u);
+      });
+
+      for (const userData of allUsersMap.values()) {
+        if (!userData?.id) continue;
+        const userQuotations = await loadQuotationsFromFirebase(userData);
+        const displayName = userData.fullName || userData.name || userData.email || userData.id;
         allUsersQuotations = allUsersQuotations.concat(
-          (agentQuotations.umrah || []).map(q => ({...q, type: 'umrah', agentId: agentData.id, agentName: agentData.name})),
-          (agentQuotations.international || []).map(q => ({...q, type: 'international', agentId: agentData.id, agentName: agentData.name}))
+          (userQuotations.umrah || []).map(q => ({...q, type: 'umrah', agentId: userData.id, agentName: displayName})),
+          (userQuotations.international || []).map(q => ({...q, type: 'international', agentId: userData.id, agentName: displayName}))
         );
       }
       populateUserFilter();
     } catch (err) {
       console.error('Error loading all users quotations:', err);
+      showNotification('All-users view requires Firebase permissions. Showing your quotations only.', 'warning');
+      allUsersQuotations = [];
     }
+    // Do NOT overwrite allUmrahQuotations/allInternationalQuotations for admin; keep only their own
+  } else {
+    // Agents should only see their own quotations
+    allUsersQuotations = [];
+    // allUmrahQuotations and allInternationalQuotations already set above for agent
   }
-  
+
   console.log('allUmrahQuotations:', allUmrahQuotations);
   console.log('allInternationalQuotations:', allInternationalQuotations);
   
@@ -928,12 +1272,13 @@ function applyFilter() {
   }
   
   // Combine and filter quotations
-  let baseQuotations = [...allUmrahQuotations, ...allInternationalQuotations];
-  
-  // Admin view: load all users' quotations
+  let baseQuotations = [];
   const agent = checkAgentLogin();
   if (agent && agent.role === 'admin' && viewMode === 'all-users') {
     baseQuotations = allUsersQuotations;
+  } else {
+    // Agents + admin active/expired views: only own quotations
+    baseQuotations = [...allUmrahQuotations, ...allInternationalQuotations];
   }
   
   // Separate active (< 30 days old) from archived (30+ days expired)
@@ -1027,8 +1372,18 @@ function populateUserFilter() {
 // Change view mode (active/expired/all-users)
 function changeViewMode(mode) {
   viewMode = mode;
-  document.querySelectorAll('.view-mode-btn').forEach(btn => btn.classList.remove('active'));
-  document.querySelector(`[data-mode="${mode}"]`).classList.add('active');
+  document.querySelectorAll('.view-mode-btn').forEach(btn => {
+    btn.classList.remove('active');
+    btn.style.background = '#f3f6fb';
+    btn.style.color = '#111';
+  });
+
+  const activeBtn = document.querySelector(`[data-mode="${mode}"]`);
+  if (activeBtn) {
+    activeBtn.classList.add('active');
+    activeBtn.style.background = 'var(--accent)';
+    activeBtn.style.color = 'white';
+  }
   applyFilter();
 }
 
@@ -1065,21 +1420,18 @@ function renderQuotationsTable() {
   const tableBody = document.getElementById('allQuotationsTableBody');
   const quotations = filteredAllQuotations;
   const agent = checkAgentLogin();
+  const showAgentColumn = !!(agent && agent.role === 'admin' && viewMode === 'all-users');
+  const showTransferAction = !!(agent && agent.role === 'admin' && viewMode === 'all-users');
+  const agentHeaderCol = document.getElementById('agentHeaderCol');
+  if (agentHeaderCol) {
+    agentHeaderCol.style.display = showAgentColumn ? '' : 'none';
+  }
   
   if (quotations.length === 0) {
-    tableBody.innerHTML = `<tr><td colspan="9" style="text-align:center;">No quotations found</td></tr>`;
+    tableBody.innerHTML = `<tr><td colspan="${showAgentColumn ? 9 : 8}" style="text-align:center;">No quotations found</td></tr>`;
     document.getElementById('allPagination').innerHTML = '';
     return;
   }
-  
-  // Show/hide agent column based on admin viewing all users
-  const agentCol = document.getElementById('agentHeaderCol');
-  const showAgentCol = agent && agent.role === 'admin' && viewMode === 'all-users';
-  if (agentCol) agentCol.style.display = showAgentCol ? 'table-cell' : 'none';
-  const allUsersBtn = document.getElementById('allUsersBtn');
-  if (allUsersBtn) allUsersBtn.style.display = agent && agent.role === 'admin' ? 'inline-block' : 'none';
-  const userFilter = document.getElementById('userFilter');
-  if (userFilter) userFilter.style.display = showAgentCol ? 'inline-block' : 'none';
   
   // Calculate pagination
   const totalPages = Math.ceil(quotations.length / itemsPerPage);
@@ -1121,16 +1473,15 @@ function renderQuotationsTable() {
       : (quotation.clientData.tourDestination || 'N/A');
     
     // Build row HTML
-    let rowHTML = `
+    const agentCell = showAgentColumn ? `<td>${quotation.agentName || quotation.agentId || 'N/A'}</td>` : '';
+    const transferButton = showTransferAction
+      ? `<button class="btn-action btn-transfer" onclick="transferQuotation('${quotation.id}', '${quotation.type}', '${quotation.agentId || ''}')">Transfer</button>`
+      : '';
+    const rowHTML = `
       <td>${quotation.id}</td>
       <td>${typeBadge}</td>
-      <td>${quotation.clientData.name || 'N/A'}</td>`;
-    
-    if (showAgentCol) {
-      rowHTML += `<td>${quotation.agentName || 'N/A'}</td>`;
-    }
-    
-    rowHTML += `
+      <td>${quotation.clientData.name || 'N/A'}</td>
+      ${agentCell}
       <td>${destination}</td>
       <td>${createdDate}</td>
       <td class="${expiryClass}">${expiryDate}</td>
@@ -1147,6 +1498,7 @@ function renderQuotationsTable() {
         <div class="action-buttons">
           <button class="btn-action btn-view" onclick="viewQuotation('${quotation.id}', '${quotation.type}')">View</button>
           <button class="btn-action btn-edit" onclick="editQuotation('${quotation.id}', '${quotation.type}')">Edit</button>
+          ${transferButton}
           <button class="btn-action btn-delete" onclick="deleteQuotation('${quotation.id}', '${quotation.type}')">Delete</button>
         </div>
       </td>
@@ -1158,6 +1510,134 @@ function renderQuotationsTable() {
   
   // Render pagination
   renderPagination(totalPages);
+}
+
+// Transfer quotation from one user to another (admin only)
+async function transferQuotation(quotationId, quotationType, fromAgentId) {
+  const admin = checkAgentLogin();
+  if (!admin || admin.role !== 'admin') {
+    showNotification('Only admin can transfer quotations', 'error');
+    return;
+  }
+
+  if (!fromAgentId) {
+    showNotification('Source user not found for this quotation', 'error');
+    return;
+  }
+
+  try {
+    const usersFromUsersCollection = await window.firebaseDB.getAll('users');
+    const usersFromAgentsCollection = await window.firebaseDB.getAll('agents');
+    const usersMap = new Map();
+
+    usersFromUsersCollection.forEach(u => usersMap.set(u.id, u));
+    usersFromAgentsCollection.forEach(u => {
+      if (!usersMap.has(u.id)) usersMap.set(u.id, u);
+    });
+
+    const availableTargets = Array.from(usersMap.values()).filter(u => u?.id && u.id !== fromAgentId);
+    if (availableTargets.length === 0) {
+      showNotification('No target user found for transfer', 'warning');
+      return;
+    }
+
+    const chooserText = availableTargets
+      .map((u, i) => `${i + 1}. ${(u.fullName || u.name || u.email || u.id)} | ${u.email || 'no-email'} | ID: ${u.id}`)
+      .join('\n');
+
+    const selectedInput = window.prompt(
+      `Transfer quotation ${quotationId}.\nEnter target number, user ID, or email:\n\n${chooserText}`
+    );
+
+    if (!selectedInput) return;
+
+    const input = selectedInput.trim();
+    const selectedByNumber = Number(input);
+    let targetUser = null;
+
+    if (!Number.isNaN(selectedByNumber) && selectedByNumber >= 1 && selectedByNumber <= availableTargets.length) {
+      targetUser = availableTargets[selectedByNumber - 1];
+    } else {
+      const inputLower = input.toLowerCase();
+      targetUser = availableTargets.find(u =>
+        u.id === input ||
+        (u.email && u.email.toLowerCase() === inputLower)
+      );
+    }
+
+    if (!targetUser) {
+      showNotification('Invalid target user selection', 'error');
+      return;
+    }
+
+    if (targetUser.id === fromAgentId) {
+      showNotification('Source and target users are the same', 'warning');
+      return;
+    }
+
+    const sourceData = await loadQuotationsFromFirebase({ id: fromAgentId });
+    const targetData = await loadQuotationsFromFirebase({ id: targetUser.id });
+
+    const sourceList = quotationType === 'umrah' ? [...(sourceData.umrah || [])] : [...(sourceData.international || [])];
+    const targetList = quotationType === 'umrah' ? [...(targetData.umrah || [])] : [...(targetData.international || [])];
+
+    const sourceIndex = sourceList.findIndex(q => q.id === quotationId);
+    if (sourceIndex === -1) {
+      showNotification('Quotation not found in source user account', 'error');
+      return;
+    }
+
+    const quotationToTransfer = {
+      ...sourceList[sourceIndex],
+      updatedAt: new Date().toISOString(),
+      transferredAt: new Date().toISOString(),
+      transferredBy: admin.id,
+      transferredFrom: fromAgentId,
+      transferredTo: targetUser.id
+    };
+
+    sourceList.splice(sourceIndex, 1);
+
+    const duplicateIndexOnTarget = targetList.findIndex(q => q.id === quotationId);
+    if (duplicateIndexOnTarget !== -1) {
+      targetList.splice(duplicateIndexOnTarget, 1);
+    }
+    targetList.push(quotationToTransfer);
+
+    const sourceSaveSuccess = await saveQuotationsToFirebase(
+      { id: fromAgentId },
+      quotationType === 'umrah' ? sourceList : sourceData.umrah,
+      quotationType === 'international' ? sourceList : sourceData.international
+    );
+
+    if (!sourceSaveSuccess) {
+      showNotification('Failed to remove quotation from source user', 'error');
+      return;
+    }
+
+    const targetSaveSuccess = await saveQuotationsToFirebase(
+      { id: targetUser.id },
+      quotationType === 'umrah' ? targetList : targetData.umrah,
+      quotationType === 'international' ? targetList : targetData.international
+    );
+
+    if (!targetSaveSuccess) {
+      sourceList.splice(sourceIndex, 0, sourceData[quotationType][sourceIndex]);
+      await saveQuotationsToFirebase(
+        { id: fromAgentId },
+        quotationType === 'umrah' ? sourceData.umrah : sourceData.umrah,
+        quotationType === 'international' ? sourceData.international : sourceData.international
+      );
+      showNotification('Failed to add quotation to target user. Transfer rolled back.', 'error');
+      return;
+    }
+
+    showNotification('Quotation transferred successfully', 'success');
+    await loadAllQuotations();
+  } catch (error) {
+    console.error('Error transferring quotation:', error);
+    showNotification('Error transferring quotation', 'error');
+  }
 }
 
 // Render pagination
@@ -1309,8 +1789,15 @@ window.resetFilter = resetFilter;
 window.viewQuotation = viewQuotation;
 window.editQuotation = editQuotation;
 window.deleteQuotation = deleteQuotation;
+window.transferQuotation = transferQuotation;
 window.showPackageModal = showPackageModal;
 window.closePackageModal = closePackageModal;
+window.openPackageBuilder = openPackageBuilder;
+window.showPackageList = showPackageList;
+window.showPackageForm = showPackageForm;
+window.loadPackages = loadPackages;
+window.editPackage = editPackage;
+window.deletePackage = deletePackage;
 window.calculatePackagePrices = calculatePackagePrices;
 
 // Initialize dashboard

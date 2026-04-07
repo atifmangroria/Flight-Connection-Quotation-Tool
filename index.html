@@ -162,6 +162,9 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus, 
   opacity: 1;
   visibility: visible;
 }
+#custom-modal {
+  z-index: 2000 !important;
+}
 .modal-content {
   background: #fff;
   padding: 30px;
@@ -879,7 +882,7 @@ function updateAgentUI() {
 
 let availablePackages = [];
 
-async function loadPackages(type) {
+async function loadPackages(type = 'umrah') {
   const packageSelect = document.getElementById('packageSelect');
   if (!packageSelect) return;
   packageSelect.innerHTML = '<option value="">-- No Package --</option>';
@@ -887,13 +890,12 @@ async function loadPackages(type) {
   try {
     const packages = await window.firebaseDB.getAll('packages');
     availablePackages = packages || [];
-
     const filtered = availablePackages.filter(pkg => pkg.type === type || pkg.type === 'both');
 
     filtered.forEach(pkg => {
       const opt = document.createElement('option');
       opt.value = pkg.id || pkg.name.replace(/\s+/g, '_').toLowerCase();
-      opt.textContent = `${pkg.name} (${pkg.type})`;
+      opt.textContent = `${pkg.name} (Travel Month: ${pkg.travelMonth || 'Any'})`;
       packageSelect.appendChild(opt);
     });
   } catch (error) {
@@ -902,29 +904,294 @@ async function loadPackages(type) {
   }
 }
 
-function applyPackageToForm(pkg) {
+function checkPackageMonthMatch(pkg) {
+  const startDate = document.getElementById('dateFrom')?.value;
+  if (!startDate || !pkg.travelMonth) return true; // No validation if no date selected
+  
+  const selectedMonth = new Date(startDate).getMonth() + 1;
+  const packageMonth = parseInt(pkg.travelMonth);
+  
+  if (selectedMonth !== packageMonth) {
+    const warning = confirm(
+      `⚠️ Package travel month is ${pkg.travelMonth}, but you selected ${String(selectedMonth).padStart(2, '0')}.\n\nContinue anyway?`
+    );
+    return warning;
+  }
+  return true;
+}
+
+async function applyPackageToForm(pkg) {
   if (!pkg) return;
-  if (document.getElementById('numAdult')) document.getElementById('numAdult').value = pkg.pax.adults || 0;
-  if (document.getElementById('numChildBed')) document.getElementById('numChildBed').value = pkg.pax.children || 0;
-  if (document.getElementById('numChildNoBed')) document.getElementById('numChildNoBed').value = pkg.pax.children || 0;
-  if (document.getElementById('numInfant')) document.getElementById('numInfant').value = pkg.pax.infants || 0;
 
-  const flightCostAdult = document.getElementById('flightCostAdult_0');
-  if (flightCostAdult) flightCostAdult.value = pkg.prices?.air || '';
-  const flightCostChildBed = document.getElementById('flightCostChildBed_0');
-  if (flightCostChildBed) flightCostChildBed.value = pkg.prices?.air || '';
-  const flightCostChildNoBed = document.getElementById('flightCostChildNoBed_0');
-  if (flightCostChildNoBed) flightCostChildNoBed.value = pkg.prices?.air || '';
-  const flightCostInf = document.getElementById('flightCostInf_0');
-  if (flightCostInf) flightCostInf.value = pkg.prices?.air || '';
+  // Check month match
+  if (!checkPackageMonthMatch(pkg)) return;
 
-  // Set transfer and tour data if fields exist
-  const transferDetails = document.getElementById('transferDetails');
-  if (transferDetails) transferDetails.value = pkg.costs?.transfers?.details || '';
-  const toursDetails = document.getElementById('tourDetails');
-  if (toursDetails) toursDetails.value = pkg.costs?.tours?.details || '';
+  showNotification(`📦 Applying package: ${pkg.name}`, 'success');
 
-  // Add more mapping as needed for your fields
+  // Ensure Client & Pax is saved so dependent sections can be created safely
+  if (typeof validateAndSaveClientData === 'function') {
+    await validateAndSaveClientData();
+  }
+  if (!isClientDataSaved) {
+    showNotification('Please complete and save Client & Pax before applying package.', 'warning');
+    return;
+  }
+
+  const setValue = (id, value) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.value = value;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+
+  const setSelectValueSmart = (id, value) => {
+    const el = document.getElementById(id);
+    if (!el || value == null || value === '') return;
+    const desired = String(value).trim();
+    const hasOption = Array.from(el.options || []).some(o => String(o.value).toLowerCase() === desired.toLowerCase());
+    if (!hasOption) {
+      const opt = document.createElement('option');
+      opt.value = desired;
+      opt.textContent = desired;
+      el.appendChild(opt);
+    }
+    el.value = desired;
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+
+  // IMPORTANT: Do not override user-entered Client & Pax values
+  // Package selection should not change saved pax.
+
+  // Create first flight block if not present
+  if (!document.getElementById('flightBlock_1')) {
+    await addFlight();
+  }
+
+  // Pre-fill Flights (supports both old and new package schemas)
+  const firstFlight = (pkg.flights && pkg.flights.length > 0) ? pkg.flights[0] : null;
+  const airPrice =
+    (firstFlight?.priceAdult ?? null) ??
+    (pkg.prices?.air ?? null) ??
+    (pkg.costs?.airTickets ?? 0);
+
+  if (document.getElementById('flightCostAdult_1')) {
+    setValue('flightCostAdult_1', airPrice || 0);
+    setValue('flightCostChildBed_1', firstFlight?.priceChild ?? airPrice ?? 0);
+    setValue('flightCostChildNoBed_1', firstFlight?.priceChild ?? airPrice ?? 0);
+    setValue('flightCostInf_1', firstFlight?.priceInfant ?? 0);
+    if (firstFlight?.sector) setValue('flightItinerary_1', firstFlight.sector);
+    if (firstFlight?.airline) setValue('airline_1', firstFlight.airline);
+  }
+
+  // Clear existing hotels to avoid duplicate/empty blocks
+  const clearHotelBlocks = (containerId, blockPrefix, headerClass) => {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const header = container.querySelector(`.${headerClass}`);
+    container.innerHTML = '';
+    if (header) container.appendChild(header);
+    else {
+      const blocks = Array.from(container.querySelectorAll(`[id^='${blockPrefix}']`));
+      blocks.forEach(b => b.remove());
+    }
+  };
+
+  clearHotelBlocks('hotelContainerM', 'hotelBlockM_', 'hotel-header');
+  clearHotelBlocks('hotelContainerA', 'hotelBlockA_', 'hotel-header');
+  hotelsMakkah = [];
+  hotelsMadina = [];
+  nextHotelNumberM = 0;
+  nextHotelNumberA = 0;
+
+  const roomType = (typeof getRecommendedRoomType === 'function') ? getRecommendedRoomType() : 'Double';
+  const pickRateByRoomType = (hotel) => {
+    if (!hotel) return 0;
+    const doubleRate = parseFloat(hotel.doubleRate) || 0;
+    const tripleRate = parseFloat(hotel.tripleRate) || 0;
+    const quadRate = parseFloat(hotel.quadRate) || 0;
+    if (roomType === 'Double') return doubleRate || tripleRate || quadRate;
+    if (roomType === 'Triple') return tripleRate || doubleRate || quadRate;
+    return quadRate || tripleRate || doubleRate;
+  };
+
+  const packageHotels = Array.isArray(pkg.hotels) ? pkg.hotels : [];
+  const makkahHotels = packageHotels.filter(h => {
+    const city = String(h.city || '').toLowerCase();
+    return city.includes('makk') || city.includes('mecca');
+  });
+  const madinaHotels = packageHotels.filter(h => {
+    const city = String(h.city || '').toLowerCase();
+    return city.includes('madin') || city.includes('medin');
+  });
+
+  // Fallback split if city tags are missing
+  if (!makkahHotels.length && packageHotels.length) makkahHotels.push(packageHotels[0]);
+  if (!madinaHotels.length && packageHotels.length > 1) madinaHotels.push(packageHotels[1]);
+
+  // Build Makkah hotel sections from package
+  for (let i = 0; i < makkahHotels.length; i++) {
+    const hotel = makkahHotels[i];
+    nextHotelNumberM += 1;
+    await createHotelSectionM(nextHotelNumberM);
+    setValue(`hkRoomTypeM_${nextHotelNumberM}`, roomType);
+    if (hotel?.name) setValue(`hkNameM_${nextHotelNumberM}`, hotel.name);
+    if (hotel?.nights != null) setValue(`hkNightsM_${nextHotelNumberM}`, parseInt(hotel.nights) || 0);
+    setValue(`hkCostNightM_${nextHotelNumberM}`, pickRateByRoomType(hotel));
+  }
+
+  // Build Madina hotel sections from package
+  for (let i = 0; i < madinaHotels.length; i++) {
+    const hotel = madinaHotels[i];
+    nextHotelNumberA += 1;
+    await createHotelSectionA(nextHotelNumberA);
+    setValue(`hkRoomTypeA_${nextHotelNumberA}`, roomType);
+    if (hotel?.name) setValue(`hkNameA_${nextHotelNumberA}`, hotel.name);
+    if (hotel?.nights != null) setValue(`hkNightsA_${nextHotelNumberA}`, parseInt(hotel.nights) || 0);
+    setValue(`hkCostNightA_${nextHotelNumberA}`, pickRateByRoomType(hotel));
+  }
+
+  // If package has no city-specific hotels, still set one block each from fallback rates
+  if (!packageHotels.length) {
+    const fallbackRate =
+      (pkg.prices?.hotels?.['3star'] ?? null) ??
+      (pkg.prices?.hotels?.['4star'] ?? null) ??
+      (pkg.prices?.hotels?.['5star'] ?? 0);
+
+    if (!document.getElementById('hotelBlockM_1')) {
+      nextHotelNumberM = 1;
+      await createHotelSectionM(1);
+      setValue('hkRoomTypeM_1', roomType);
+      setValue('hkCostNightM_1', fallbackRate || 0);
+    }
+    if (!document.getElementById('hotelBlockA_1')) {
+      nextHotelNumberA = 1;
+      await createHotelSectionA(1);
+      setValue('hkRoomTypeA_1', roomType);
+      setValue('hkCostNightA_1', fallbackRate || 0);
+    }
+  }
+
+  // Rebuild transfer blocks from package data to avoid stale/empty entries
+  const transferContainer = document.getElementById('transferContainer');
+  if (transferContainer) transferContainer.innerHTML = '';
+  transfers = [];
+  nextTransferNumber = 0;
+
+  const packageTransfers = Array.isArray(pkg.transfers) ? pkg.transfers : [];
+  const normalizeVehicle = (vehicle) => {
+    const v = String(vehicle || '').toLowerCase();
+    if (v.includes('sedan') || v.includes('car')) return 'Car';
+    if (v.includes('staria') || v.includes('h1')) return 'H1/Staria';
+    if (v.includes('van')) return 'Hiace';
+    if (v.includes('hiace')) return 'Hiace';
+    if (v.includes('coaster')) return 'Coaster';
+    if (v.includes('bus')) return 'Bus';
+    if (v.includes('train')) return 'Bullet Train';
+    return '';
+  };
+  const normalizeTransferType = (type) => {
+    const t = String(type || '').toLowerCase();
+    if (t.includes('sharing') || t.includes('shared')) return 'Sharing';
+    return 'Private';
+  };
+
+  if (packageTransfers.length > 0) {
+    for (let i = 0; i < packageTransfers.length; i++) {
+      const tr = packageTransfers[i] || {};
+      await addTransfer({ skipValidation: true });
+      const idx = nextTransferNumber;
+      const transferPrice =
+        (parseFloat(tr.pricePerVehicle) || 0) ||
+        (parseFloat(tr.priceAdult) || 0) ||
+        (parseFloat(tr.priceChildBed) || 0) ||
+        (parseFloat(tr.priceChildNoBed) || 0) ||
+        (parseFloat(tr.priceInfant) || 0) ||
+        (parseFloat(pkg.prices?.transfers) || 0) ||
+        (parseFloat(pkg.costs?.transfers?.price) || 0);
+
+      if (tr.from) setSelectValueSmart(`tFrom_${idx}`, tr.from);
+      if (tr.to) setSelectValueSmart(`tTo_${idx}`, tr.to);
+      if (tr.type) setSelectValueSmart(`tType_${idx}`, normalizeTransferType(tr.type));
+
+      const mappedVehicle = normalizeVehicle(tr.vehicle);
+      if (mappedVehicle) setSelectValueSmart(`tCar_${idx}`, mappedVehicle);
+
+      // set default date so transfer rows are valid and connected
+      const dateFromVal = document.getElementById('dateFrom')?.value;
+      if (dateFromVal) setValue(`tDate_${idx}`, dateFromVal);
+
+      const normalizedType = normalizeTransferType(tr.type);
+      const isSharing = normalizedType === 'Sharing';
+      if (isSharing) {
+        setValue(`tCostSAR_${idx}`, 0);
+        setValue(`tSvcSAR_${idx}`, 0);
+        setValue(`tShareCostAdult_${idx}`, parseFloat(tr.priceAdult) || transferPrice || 0);
+        setValue(`tShareCostChild_${idx}`, parseFloat(tr.priceChildBed) || parseFloat(tr.priceChildNoBed) || parseFloat(tr.priceAdult) || 0);
+        setValue(`tShareCostInf_${idx}`, parseFloat(tr.priceInfant) || 0);
+        setValue(`tShareSvcAdult_${idx}`, 0);
+        setValue(`tShareSvcChild_${idx}`, 0);
+        setValue(`tShareSvcInf_${idx}`, 0);
+      } else {
+        setValue(`tCostSAR_${idx}`, parseFloat(tr.pricePerVehicle) || transferPrice || 0);
+        setValue(`tSvcSAR_${idx}`, 0);
+        setValue(`tShareCostAdult_${idx}`, 0);
+        setValue(`tShareCostChild_${idx}`, 0);
+        setValue(`tShareCostInf_${idx}`, 0);
+        setValue(`tShareSvcAdult_${idx}`, 0);
+        setValue(`tShareSvcChild_${idx}`, 0);
+        setValue(`tShareSvcInf_${idx}`, 0);
+      }
+      toggleTransferRateFields(idx);
+    }
+  } else {
+    // Fallback for older compact package schema
+    const fallbackTransferPrice =
+      (pkg.prices?.transfers ?? null) ??
+      (pkg.costs?.transfers?.price ?? 0);
+    if (fallbackTransferPrice > 0) {
+      await addTransfer({ skipValidation: true });
+      const dateFromVal = document.getElementById('dateFrom')?.value;
+      if (dateFromVal) setValue('tDate_1', dateFromVal);
+      setValue('tCostSAR_1', fallbackTransferPrice || 0);
+      setValue('tSvcSAR_1', 0);
+      setValue('tShareCostAdult_1', 0);
+      setValue('tShareCostChild_1', 0);
+      setValue('tShareCostInf_1', 0);
+      setValue('tShareSvcAdult_1', 0);
+      setValue('tShareSvcChild_1', 0);
+      setValue('tShareSvcInf_1', 0);
+      toggleTransferRateFields(1);
+    }
+  }
+
+  // Visa autofill from package
+  const existingVisaBlock = document.getElementById('visaBlock');
+  if (existingVisaBlock) {
+    existingVisaBlock.remove();
+    visaAdded = false;
+  }
+
+  const packageVisas = Array.isArray(pkg.visas) ? pkg.visas : [];
+  const firstVisa = packageVisas.length > 0 ? packageVisas[0] : null;
+  const fallbackVisaCost = (pkg.costs?.visa?.price ?? pkg.prices?.visa ?? 0);
+  const visaCostToApply = (firstVisa?.priceAdult ?? fallbackVisaCost ?? 0);
+
+  if (visaCostToApply > 0 || firstVisa) {
+    await addVisa();
+    setValue('visaCount', getTotalPax());
+    setValue('visaCost', visaCostToApply || 0);
+    setValue('visaSvc', 0);
+  }
+
+  // Pre-fill Service Charges
+  if (pkg.serviceCharge) {
+    setValue('serviceChargeAdult', pkg.serviceCharge.adult || 0);
+    setValue('serviceChargeChild', pkg.serviceCharge.childBed || 0);
+    setValue('serviceChargeInfant', pkg.serviceCharge.infant || 0);
+  }
+
+  showNotification(`✅ Package "${pkg.name}" applied! Edit fields as needed for your quotation.`, 'success');
 }
 
 // --- DASHBOARD BUTTON ---
@@ -934,6 +1201,14 @@ document.getElementById('btnDashboard').addEventListener('click', () => {
 
 // --- INITIALIZATION ---
 document.addEventListener('DOMContentLoaded', function() {
+  // Keep Client & Pax section before Package Selection (same flow as International)
+  const mainForm = document.getElementById('mainForm');
+  const clientPaxSection = document.getElementById('clientPaxSection');
+  const packageSelectionSection = document.getElementById('packageSelectionSection');
+  if (mainForm && clientPaxSection && packageSelectionSection) {
+    mainForm.insertBefore(clientPaxSection, packageSelectionSection);
+  }
+
   const agent = checkAuthentication();
   if (agent) {
     updateAgentUI();
@@ -941,11 +1216,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const packageSelect = document.getElementById('packageSelect');
     if (packageSelect) {
-      packageSelect.addEventListener('change', function () {
+      packageSelect.addEventListener('change', async function () {
         const val = this.value;
         if (!val) return;
         const pkg = availablePackages.find(p => (p.id === val) || (p.name.replace(/\s+/g, '_').toLowerCase() === val));
-        if (pkg) applyPackageToForm(pkg);
+        if (pkg) await applyPackageToForm(pkg);
       });
     }
 
@@ -956,16 +1231,7 @@ document.addEventListener('DOMContentLoaded', function() {
         savedQuotations = firebaseData.quotations;
       }
     }).catch(err => console.error('Load error:', err));
-    
-    // Clear any old quotation IDs to prevent errors
-    localStorage.removeItem('selectedQuotationId');
-    localStorage.removeItem('umrahSelectedQuotationId');
-    
-    // Set status select field from loaded quotation
-    const quotationStatus = document.getElementById('quotationStatus');
-    if (quotationStatus && quotation.status) {
-      quotationStatus.value = quotation.status;
-    }
+
     // Show status section
     showStatusSection();
   }
@@ -990,7 +1256,7 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 
   <!-- PACKAGE SELECTION -->
-  <div class="section">
+  <div class="section" id="packageSelectionSection">
     <h3>Package Selection (Optional)</h3>
     <div>
       <label for="packageSelect">Select Package</label>
@@ -1001,7 +1267,7 @@ document.addEventListener('DOMContentLoaded', function() {
   </div>
 
   <!-- CLIENT & PAX -->
-<div class="section">
+<div class="section" id="clientPaxSection">
   <h3>Client & Pax</h3>
   <div class="grid">
     <div>
@@ -1836,6 +2102,61 @@ function validateAllHotels() {
     return isValid;
 }
 
+function validateCityHotelNights(cityCode) {
+  const clientData = getClientData();
+  if (!clientData) return true;
+
+  const citySuffix = cityCode === 'M' ? 'Makkah' : 'Madina';
+  const expectedNights = parseInt(clientData[`nights${citySuffix}`] || 0);
+  const blocks = Array.from(document.querySelectorAll(`[id^='hotelBlock${cityCode}_']`));
+  const nightsInputs = blocks
+    .map(block => block.id.split('_')[1])
+    .map(idx => document.getElementById(`hkNights${cityCode}_${idx}`))
+    .filter(Boolean);
+
+  const ranges = [];
+  blocks.forEach((block) => {
+    const idx = block.id.split('_')[1];
+    const checkIn = document.getElementById(`hkCheckIn${cityCode}_${idx}`)?.value || '';
+    const checkOut = document.getElementById(`hkCheckOut${cityCode}_${idx}`)?.value || '';
+    if (checkIn && checkOut) {
+      const start = new Date(checkIn);
+      const end = new Date(checkOut);
+      if (!isNaN(start.getTime()) && !isNaN(end.getTime()) && end > start) {
+        ranges.push([start, end]);
+      }
+    }
+  });
+
+  let effectiveNights = 0;
+  if (ranges.length > 0) {
+    ranges.sort((a, b) => a[0] - b[0]);
+    const merged = [];
+    ranges.forEach((range) => {
+      if (!merged.length || range[0] > merged[merged.length - 1][1]) {
+        merged.push([range[0], range[1]]);
+      } else if (range[1] > merged[merged.length - 1][1]) {
+        merged[merged.length - 1][1] = range[1];
+      }
+    });
+    effectiveNights = merged.reduce((sum, range) => {
+      return sum + Math.round((range[1] - range[0]) / (1000 * 60 * 60 * 24));
+    }, 0);
+  } else {
+    effectiveNights = blocks.reduce((sum, block) => {
+      const idx = block.id.split('_')[1];
+      return sum + parseInt(document.getElementById(`hkNights${cityCode}_${idx}`)?.value || 0);
+    }, 0);
+  }
+
+  const valid = expectedNights === effectiveNights;
+  nightsInputs.forEach(input => {
+    if (valid) input.classList.remove('input-error');
+    else input.classList.add('input-error');
+  });
+  return valid;
+}
+
 // Create hotel section
 async function createHotelSectionM(index){
   const clientData = getClientData();
@@ -1898,19 +2219,15 @@ async function createHotelSectionM(index){
     if(chkIn.value && chkOut.value){
       const diff = Math.round((new Date(chkOut.value) - new Date(chkIn.value))/(1000*60*60*24));
       nights.value = diff>0 ? diff : 0;
-      if(diff !== clientData.nightsMakkah){
-        nights.classList.add("input-error");
-        showAlert(`Total nights must match "Number of nights in Makkah" (${clientData.nightsMakkah}) from Client & Pax`);
-      } else {
-        nights.classList.remove("input-error");
-      }
     } else {
       nights.value = clientData.nightsMakkah;
     }
+    validateCityHotelNights('M');
   }
 
   if (chkIn) chkIn.addEventListener("change", updateNights);
   if (chkOut) chkOut.addEventListener("change", updateNights);
+  if (nights) nights.addEventListener("input", () => validateCityHotelNights('M'));
 
   // Add event listeners for room validation
   if (roomTypeSelect) roomTypeSelect.addEventListener('change', validateAllHotels);
@@ -2034,19 +2351,15 @@ async function createHotelSectionA(index){
     if(chkIn.value && chkOut.value){
       const diff = Math.round((new Date(chkOut.value) - new Date(chkIn.value))/(1000*60*60*24));
       nights.value = diff>0 ? diff : 0;
-      if(diff !== clientData.nightsMadina){
-        nights.classList.add("input-error");
-        showAlert(`Total nights must match "Number of nights in Madina" (${clientData.nightsMadina}) from Client & Pax`);
-      } else {
-        nights.classList.remove("input-error");
-      }
     } else {
       nights.value = clientData.nightsMadina;
     }
+    validateCityHotelNights('A');
   }
 
   if (chkIn) chkIn.addEventListener("change", updateNights);
   if (chkOut) chkOut.addEventListener("change", updateNights);
+  if (nights) nights.addEventListener("input", () => validateCityHotelNights('A'));
 
   // Add event listeners for room validation
   if (roomTypeSelect) roomTypeSelect.addEventListener('change', validateAllHotels);
@@ -2215,8 +2528,64 @@ function validateTransfer(index){
   return valid;
 }
 
+function toggleTransferRateFields(index) {
+  const type = (document.getElementById(`tType_${index}`)?.value || 'Private').toLowerCase();
+  const privateWrap = document.getElementById(`tPrivateRates_${index}`);
+  const sharingWrap = document.getElementById(`tSharingRates_${index}`);
+  if (privateWrap) privateWrap.style.display = type === 'private' ? 'contents' : 'none';
+  if (sharingWrap) sharingWrap.style.display = type === 'sharing' ? 'contents' : 'none';
+}
+
+function getTransferPricingSAR(index, paxDataOverride = null, roeOverride = null) {
+  const p = paxDataOverride || getCurrentPaxData();
+  const roeValue = Number.isFinite(Number(roeOverride)) ? Number(roeOverride) : (parseFloat(document.getElementById("roe")?.value || 0) || 0);
+  const type = (document.getElementById(`tType_${index}`)?.value || 'Private').toLowerCase();
+  const childCount = (p.childBed || 0) + (p.childNoBed || 0);
+
+  let costSAR = 0;
+  let svcSAR = 0;
+  let perAdultPKR = 0;
+  let perChildPKR = 0;
+  let perInfantPKR = 0;
+
+  if (type === 'sharing') {
+    const cAdult = parseFloat(document.getElementById(`tShareCostAdult_${index}`)?.value || 0);
+    const sAdult = parseFloat(document.getElementById(`tShareSvcAdult_${index}`)?.value || 0);
+    const cChild = parseFloat(document.getElementById(`tShareCostChild_${index}`)?.value || 0);
+    const sChild = parseFloat(document.getElementById(`tShareSvcChild_${index}`)?.value || 0);
+    const cInf = parseFloat(document.getElementById(`tShareCostInf_${index}`)?.value || 0);
+    const sInf = parseFloat(document.getElementById(`tShareSvcInf_${index}`)?.value || 0);
+
+    costSAR = (cAdult * (p.adults || 0)) + (cChild * childCount) + (cInf * (p.infants || 0));
+    svcSAR = (sAdult * (p.adults || 0)) + (sChild * childCount) + (sInf * (p.infants || 0));
+
+    perAdultPKR = (cAdult + sAdult) * roeValue;
+    perChildPKR = (cChild + sChild) * roeValue;
+    perInfantPKR = (cInf + sInf) * roeValue;
+  } else {
+    costSAR = parseFloat(document.getElementById(`tCostSAR_${index}`)?.value || 0);
+    svcSAR = parseFloat(document.getElementById(`tSvcSAR_${index}`)?.value || 0);
+    const payingPax = (p.adults || 0) + childCount;
+    const perPerson = payingPax > 0 ? ((costSAR + svcSAR) * roeValue) / payingPax : 0;
+    perAdultPKR = perPerson;
+    perChildPKR = perPerson;
+    perInfantPKR = 0;
+  }
+
+  return {
+    type,
+    costSAR,
+    svcSAR,
+    totalPKR: (costSAR + svcSAR) * roeValue,
+    perAdultPKR,
+    perChildPKR,
+    perInfantPKR
+  };
+}
+
 // Add new transfer
-async function addTransfer(){
+async function addTransfer(options = {}){
+  const { skipValidation = false } = options;
   if(!isClientDataSaved) {
     await showAlert("Please save the Client & Pax data before adding transfers.");
     return;
@@ -2229,7 +2598,7 @@ async function addTransfer(){
   }
   
   // Prevent adding new transfer if last one is incomplete
-  if(transfers.length > 0 && !validateTransfer(transfers[transfers.length-1])){
+  if(!skipValidation && transfers.length > 0 && !validateTransfer(transfers[transfers.length-1])){
     await showAlert("Please complete all mandatory fields of the previous transfer first.");
     return;
   }
@@ -2289,13 +2658,41 @@ async function addTransfer(){
           <option>Sharing</option>
         </select>
       </div>
-      <div>
-        <label>Cost (SAR)</label>
-        <input id="tCostSAR_${nextTransferNumber}" type="number" placeholder="Cost">
+      <div id="tPrivateRates_${nextTransferNumber}" style="display: contents;">
+        <div>
+          <label>Private Cost (Total SAR)</label>
+          <input id="tCostSAR_${nextTransferNumber}" type="number" placeholder="Total private cost" value="0" min="0">
+        </div>
+        <div>
+          <label>Private Service (Total SAR)</label>
+          <input id="tSvcSAR_${nextTransferNumber}" type="number" placeholder="Total private service" value="0" min="0">
+        </div>
       </div>
-      <div>
-        <label>Service (SAR)</label>
-        <input id="tSvcSAR_${nextTransferNumber}" type="number" placeholder="Service">
+      <div id="tSharingRates_${nextTransferNumber}" style="display: none;">
+        <div>
+          <label>Per Person Adult Cost (SAR)</label>
+          <input id="tShareCostAdult_${nextTransferNumber}" type="number" value="0" min="0">
+        </div>
+        <div>
+          <label>Per Person Adult Service (SAR)</label>
+          <input id="tShareSvcAdult_${nextTransferNumber}" type="number" value="0" min="0">
+        </div>
+        <div>
+          <label>Per Person Child Cost (SAR)</label>
+          <input id="tShareCostChild_${nextTransferNumber}" type="number" value="0" min="0">
+        </div>
+        <div>
+          <label>Per Person Child Service (SAR)</label>
+          <input id="tShareSvcChild_${nextTransferNumber}" type="number" value="0" min="0">
+        </div>
+        <div>
+          <label>Per Person Infant Cost (SAR)</label>
+          <input id="tShareCostInf_${nextTransferNumber}" type="number" value="0" min="0">
+        </div>
+        <div>
+          <label>Per Person Infant Service (SAR)</label>
+          <input id="tShareSvcInf_${nextTransferNumber}" type="number" value="0" min="0">
+        </div>
       </div>
     </div>
   `;
@@ -2320,6 +2717,12 @@ async function addTransfer(){
 
   if (carSelect) {
     carSelect.addEventListener("change", () => validateTransferCapacity(carSelect));
+  }
+
+  const typeSelect = document.getElementById(`tType_${nextTransferNumber}`);
+  if (typeSelect) {
+    typeSelect.addEventListener('change', () => toggleTransferRateFields(nextTransferNumber));
+    toggleTransferRateFields(nextTransferNumber);
   }
 }
 
@@ -2647,6 +3050,57 @@ async function addMealTypeAddon(){
 
 // ----------------- Ziyarah -----------------
 let ziyarahIndex=0;
+function toggleZiyarahMode(index) {
+  const mode = document.getElementById(`zMode_${index}`)?.value || 'Private';
+  const privateFields = document.getElementById(`zPrivateFields_${index}`);
+  const sharingFields = document.getElementById(`zSharingFields_${index}`);
+  if (privateFields) privateFields.style.display = mode === 'Sharing' ? 'none' : '';
+  if (sharingFields) sharingFields.style.display = mode === 'Sharing' ? '' : 'none';
+}
+
+function getZiyarahPricing(index, paxData, roe) {
+  const mode = document.getElementById(`zMode_${index}`)?.value || 'Private';
+  const pax = {
+    adults: paxData.adults || 0,
+    childBed: paxData.childBed || 0,
+    childNoBed: paxData.childNoBed || 0,
+    infants: paxData.infants || 0
+  };
+
+  if (mode === 'Sharing') {
+    const cAdult = parseFloat(document.getElementById(`zShareCostAdult_${index}`)?.value || 0);
+    const sAdult = parseFloat(document.getElementById(`zShareSvcAdult_${index}`)?.value || 0);
+    const cChild = parseFloat(document.getElementById(`zShareCostChild_${index}`)?.value || 0);
+    const sChild = parseFloat(document.getElementById(`zShareSvcChild_${index}`)?.value || 0);
+    const cInf = parseFloat(document.getElementById(`zShareCostInf_${index}`)?.value || 0);
+    const sInf = parseFloat(document.getElementById(`zShareSvcInf_${index}`)?.value || 0);
+
+    const perAdultPKR = (cAdult + sAdult) * roe;
+    const perChildPKR = (cChild + sChild) * roe;
+    const perInfantPKR = (cInf + sInf) * roe;
+
+    const costSAR = (cAdult * pax.adults) + (cChild * (pax.childBed + pax.childNoBed)) + (cInf * pax.infants);
+    const svcSAR = (sAdult * pax.adults) + (sChild * (pax.childBed + pax.childNoBed)) + (sInf * pax.infants);
+
+    return { type: 'sharing', costSAR, svcSAR, perAdultPKR, perChildPKR, perInfantPKR };
+  }
+
+  const costSAR = parseFloat(document.getElementById(`zCostSAR_${index}`)?.value || 0);
+  const svcSAR = parseFloat(document.getElementById(`zSvcSAR_${index}`)?.value || 0);
+  const payingPax = pax.adults + pax.childBed + pax.childNoBed;
+  const totalPKR = (costSAR + svcSAR) * roe;
+  const perPaying = payingPax > 0 ? (totalPKR / payingPax) : 0;
+
+  return {
+    type: 'private',
+    costSAR,
+    svcSAR,
+    perAdultPKR: pax.adults > 0 ? perPaying : 0,
+    perChildPKR: (pax.childBed + pax.childNoBed) > 0 ? perPaying : 0,
+    perInfantPKR: 0
+  };
+}
+
 async function addZiyarahAddon(){
   if(!isClientDataSaved) {
     await showAlert("Please save the Client & Pax data before adding extras.");
@@ -2668,14 +3122,37 @@ async function addZiyarahAddon(){
       <select><option>Car</option><option>H1/Staria</option><option>Hiace</option><option>Coaster</option><option>Bus</option></select>
       <label>Type</label>
       <select><option>Half Day</option><option>Full Day</option></select>
-      <div class="inline-input">
-        <label>Cost per vehicle (SAR)</label><input type="number" value="0">
-        <label>Service per vehicle (SAR)</label><input type="number" value="0">
+
+      <label>Mode</label>
+      <select id="zMode_${ziyarahIndex}" onchange="toggleZiyarahMode(${ziyarahIndex})">
+        <option>Private</option>
+        <option>Sharing</option>
+      </select>
+
+      <div class="inline-input" id="zPrivateFields_${ziyarahIndex}">
+        <label>Cost per vehicle (SAR)</label><input id="zCostSAR_${ziyarahIndex}" type="number" value="0" min="0">
+        <label>Service per vehicle (SAR)</label><input id="zSvcSAR_${ziyarahIndex}" type="number" value="0" min="0">
       </div>
-      <small>Vehicle capacity validated based on total pax.</small>
+
+      <div id="zSharingFields_${ziyarahIndex}" style="display:none;">
+        <div class="inline-input">
+          <label>Adult Cost (SAR)</label><input id="zShareCostAdult_${ziyarahIndex}" type="number" value="0" min="0">
+          <label>Adult Service (SAR)</label><input id="zShareSvcAdult_${ziyarahIndex}" type="number" value="0" min="0">
+        </div>
+        <div class="inline-input" style="margin-top:8px;">
+          <label>Child Cost (SAR)</label><input id="zShareCostChild_${ziyarahIndex}" type="number" value="0" min="0">
+          <label>Child Service (SAR)</label><input id="zShareSvcChild_${ziyarahIndex}" type="number" value="0" min="0">
+        </div>
+        <div class="inline-input" style="margin-top:8px;">
+          <label>Infant Cost (SAR)</label><input id="zShareCostInf_${ziyarahIndex}" type="number" value="0" min="0">
+          <label>Infant Service (SAR)</label><input id="zShareSvcInf_${ziyarahIndex}" type="number" value="0" min="0">
+        </div>
+      </div>
+      <small>Private uses per-vehicle rate. Sharing uses per-person rates by passenger type.</small>
     </div>
   `;
   container.appendChild(div);
+  toggleZiyarahMode(ziyarahIndex);
 }
 
 // ----------------- Remove Addon -----------------
@@ -3298,31 +3775,25 @@ function performCalculation() {
     const to = document.getElementById(`tTo_${idx}`)?.value || "Not specified";
     const vehicle = document.getElementById(`tCar_${idx}`)?.value || "Not specified";
     const type = document.getElementById(`tType_${idx}`)?.value || "Not specified";
-    const costSAR = parseFloat(document.getElementById(`tCostSAR_${idx}`)?.value || 0);
-    const svcSAR = parseFloat(document.getElementById(`tSvcSAR_${idx}`)?.value || 0);
-
-    const cost = costSAR * roe;
-    const svc = svcSAR * roe;
-    
-    // TRANSFER COSTS: Adults, Children with bed, and Children without bed pay for transfers
-    // Infants typically don't pay for transfers
-    const payingPax = paxData.adults + paxData.childBed + paxData.childNoBed;
-    
-    // FIXED: Calculate per person cost by dividing by total paying passengers
-    const perPersonCost = payingPax > 0 ? (cost + svc) / payingPax : 0;
-    
-    // Each paying passenger type gets the same per-person cost
-    const perAdult = paxData.adults > 0 ? perPersonCost : 0;
-    const perChildBed = paxData.childBed > 0 ? perPersonCost : 0;
-    const perChildNoBed = paxData.childNoBed > 0 ? perPersonCost : 0;
-    const perInfant = 0; // Infants don't pay for transfers
+    const pricing = getTransferPricingSAR(idx, paxData, roe);
+    const cost = pricing.costSAR * roe;
+    const svc = pricing.svcSAR * roe;
+    const perAdult = paxData.adults > 0 ? pricing.perAdultPKR : 0;
+    const perChildBed = paxData.childBed > 0 ? pricing.perChildPKR : 0;
+    const perChildNoBed = paxData.childNoBed > 0 ? pricing.perChildPKR : 0;
+    const perInfant = paxData.infants > 0 ? pricing.perInfantPKR : 0;
+    const shareAdultRate = (parseFloat(document.getElementById(`tShareCostAdult_${idx}`)?.value || 0) + parseFloat(document.getElementById(`tShareSvcAdult_${idx}`)?.value || 0));
+    const shareChildRate = (parseFloat(document.getElementById(`tShareCostChild_${idx}`)?.value || 0) + parseFloat(document.getElementById(`tShareSvcChild_${idx}`)?.value || 0));
+    const shareInfRate = (parseFloat(document.getElementById(`tShareCostInf_${idx}`)?.value || 0) + parseFloat(document.getElementById(`tShareSvcInf_${idx}`)?.value || 0));
     
     // Create detailed description
     const details = `Date: ${formatDateToDMY(date)}<br>
                     Route: ${from} → ${to}<br>
                     Vehicle: ${vehicle} (${type})<br>
-                    Rate: SAR ${fmt(costSAR)} × ${roe} = PKR ${fmt(cost)}<br>
-                    Charged to: Adults (${paxData.adults}) + Children with bed (${paxData.childBed}) + Children without bed (${paxData.childNoBed})`;
+                    ${pricing.type === 'sharing'
+                      ? `Rate: SAR Adult ${fmt(shareAdultRate)}, Child ${fmt(shareChildRate)}, Infant ${fmt(shareInfRate)}<br>Charged by passenger type`
+                      : `Rate: SAR ${fmt(pricing.costSAR)} + Service SAR ${fmt(pricing.svcSAR)} × ${roe} = PKR ${fmt(cost + svc)}<br>Charged to: Adults (${paxData.adults}) + Children with bed (${paxData.childBed}) + Children without bed (${paxData.childNoBed})`
+                    }`;
 
     // Build per person text with counts and only show categories with passengers
     let perPersonText = [];
@@ -3583,54 +4054,43 @@ function performCalculation() {
 
   // --- ZIYARAH ADD-ONS ---
   document.querySelectorAll("[id^='ziyarahAddon_']").forEach((el, i) => {
-    const idx = i + 1;
+    const idx = el.id.split("_")[1];
+    const labelIdx = i + 1;
     const selects = el.querySelectorAll('select');
-    const inputs = el.querySelectorAll(".inline-input input[type='number']");
+    const mode = document.getElementById(`zMode_${idx}`)?.value || 'Private';
     
     const name = "Ziyarah";
     const city = selects[0]?.value || "Not specified";
     const vehicle = selects[1]?.value || "Not specified";
     const type = selects[2]?.value || "Not specified";
-    
-    let totalCostSAR = 0;
-    let totalSvcSAR = 0;
-    
-    if (inputs.length >= 2) {
-      totalCostSAR += parseFloat(inputs[0].value || 0);
-      totalSvcSAR += parseFloat(inputs[1].value || 0);
-    }
-    
-    const cost = totalCostSAR * roe;
-    const svc = totalSvcSAR * roe;
-    
-    // FIXED: Calculate per person cost by dividing by paying passengers only (excluding infants)
-    const payingPax = paxData.adults + paxData.childBed + paxData.childNoBed;
-    const perPersonCost = payingPax > 0 ? (cost + svc) / payingPax : 0;
-    
-    // Each paying passenger type gets the same per-person cost
-    const perAdult = paxData.adults > 0 ? perPersonCost : 0;
-    const perChildBed = paxData.childBed > 0 ? perPersonCost : 0;
-    const perChildNoBed = paxData.childNoBed > 0 ? perPersonCost : 0;
-    const perInfant = 0; // Infants don't pay for ziyarah
+    const pricing = getZiyarahPricing(idx, paxData, roe);
+    const cost = pricing.costSAR * roe;
+    const svc = pricing.svcSAR * roe;
+    const perAdult = paxData.adults > 0 ? pricing.perAdultPKR : 0;
+    const perChildBed = paxData.childBed > 0 ? pricing.perChildPKR : 0;
+    const perChildNoBed = paxData.childNoBed > 0 ? pricing.perChildPKR : 0;
+    const perInfant = paxData.infants > 0 ? pricing.perInfantPKR : 0;
     
     if (cost + svc > 0) {
       const details = `${city} - ${vehicle} (${type})<br>
-                      Cost: SAR ${fmt(totalCostSAR)}/vehicle<br>
-                      Service: SAR ${fmt(totalSvcSAR)}/vehicle<br>
+                      ${pricing.type === 'sharing'
+                        ? `Rate: Sharing per passenger type (Adult/Child/Infant)`
+                        : `Cost: SAR ${fmt(pricing.costSAR)}/vehicle<br>Service: SAR ${fmt(pricing.svcSAR)}/vehicle`
+                      }<br>
                       ROE: ${roe}<br>
-                      Charged to: Adults (${paxData.adults}) + Children with bed (${paxData.childBed}) + Children without bed (${paxData.childNoBed})`;
+                      Charged by ${pricing.type === 'sharing' ? 'passenger type' : 'equal split across paying passengers (excluding infants)'}`;
       
       // Build per person text with counts and only show categories with passengers
       let perPersonText = [];
       if (paxData.adults > 0) perPersonText.push(`Adult x${paxData.adults}: PKR ${fmt(perAdult)}`);
       if (paxData.childBed > 0) perPersonText.push(`Child (with bed) x${paxData.childBed}: PKR ${fmt(perChildBed)}`);
       if (paxData.childNoBed > 0) perPersonText.push(`Child (no bed) x${paxData.childNoBed}: PKR ${fmt(perChildNoBed)}`);
-      // Infants are not included in the per-person text since they don't pay
+      if (paxData.infants > 0 && perInfant > 0) perPersonText.push(`Infant x${paxData.infants}: PKR ${fmt(perInfant)}`);
       
       // Join the array with commas
       perPersonText = perPersonText.join(', ');
       
-      addDetailedRow(`Add-on - Ziyarah ${idx}`, `${city} ${type}`, details, cost, svc, cost + svc, perPersonText, true);
+      addDetailedRow(`Add-on - Ziyarah ${labelIdx}`, `${city} ${type}`, details, cost, svc, cost + svc, perPersonText, true);
     }
   });
 
@@ -3783,17 +4243,11 @@ function calculatePerPersonCosts(packageCostPKR, packageServicePKR, paxData) {
   
   document.querySelectorAll("[id^='transferBlock_']").forEach((el) => {
     const idx = el.id.split("_")[1];
-    const costSAR = parseFloat(document.getElementById(`tCostSAR_${idx}`)?.value || 0);
-    const svcSAR = parseFloat(document.getElementById(`tSvcSAR_${idx}`)?.value || 0);
-    const totalTransferCost = (costSAR + svcSAR) * roe;
-    
-    if (transferPayingPax > 0) {
-      const perPersonCost = totalTransferCost / transferPayingPax;
-      
-      if (numAdult > 0) perAdultCost += perPersonCost;
-      if (numChildBed > 0) perChildBedCost += perPersonCost;
-      if (numChildNoBed > 0) perChildNoBedCost += perPersonCost;
-    }
+    const pricing = getTransferPricingSAR(idx, { adults: numAdult, childBed: numChildBed, childNoBed: numChildNoBed, infants: numInfant }, roe);
+    if (numAdult > 0) perAdultCost += pricing.perAdultPKR;
+    if (numChildBed > 0) perChildBedCost += pricing.perChildPKR;
+    if (numChildNoBed > 0) perChildNoBedCost += pricing.perChildPKR;
+    if (numInfant > 0) perInfantCost += pricing.perInfantPKR;
   });
   
   // Add agent service fee per person if applicable
@@ -3853,58 +4307,39 @@ function getFlightDetails() {
   return { airline, direct, itinerary };
 }
 
+function getCityHotelDetails(cityPrefix) {
+  const details = [];
+  document.querySelectorAll(`[id^='hotelBlock${cityPrefix}_']`).forEach((hotelEl) => {
+    const idx = hotelEl.id.split("_")[1];
+    details.push({
+      name: document.getElementById(`hkName${cityPrefix}_${idx}`)?.value || "Not specified",
+      distance: document.getElementById(`hkDist${cityPrefix}_${idx}`)?.value || "Not specified",
+      checkIn: document.getElementById(`hkCheckIn${cityPrefix}_${idx}`)?.value || "",
+      checkOut: document.getElementById(`hkCheckOut${cityPrefix}_${idx}`)?.value || "",
+      nights: parseInt(document.getElementById(`hkNights${cityPrefix}_${idx}`)?.value || 0),
+      roomType: document.getElementById(`hkRoomType${cityPrefix}_${idx}`)?.value || "Not specified",
+      serviceType: document.getElementById(`hkService${cityPrefix}_${idx}`)?.value || "Not specified",
+      rooms: parseInt(document.getElementById(`hkRooms${cityPrefix}_${idx}`)?.value || 0)
+    });
+  });
+  return details;
+}
+
 function getMakkahHotelDetails() {
-  let name = "Not specified";
-  let distance = "Not specified";
-  let checkIn = "";
-  let checkOut = "";
-  let nights = 0;
-  let roomType = "Not specified";
-  let serviceType = "Not specified";
-  let rooms = 0;
-  
-  // Get details from the first Makkah hotel
-  const firstHotel = document.querySelector("[id^='hotelBlockM_']");
-  if (firstHotel) {
-    const idx = firstHotel.id.split("_")[1];
-    name = document.getElementById(`hkNameM_${idx}`)?.value || "Not specified";
-    distance = document.getElementById(`hkDistM_${idx}`)?.value || "Not specified";
-    checkIn = document.getElementById(`hkCheckInM_${idx}`)?.value || "";
-    checkOut = document.getElementById(`hkCheckOutM_${idx}`)?.value || "";
-    nights = parseInt(document.getElementById(`hkNightsM_${idx}`)?.value || 0);
-    roomType = document.getElementById(`hkRoomTypeM_${idx}`)?.value || "Not specified";
-    serviceType = document.getElementById(`hkServiceM_${idx}`)?.value || "Not specified";
-    rooms = parseInt(document.getElementById(`hkRoomsM_${idx}`)?.value || 0);
-  }
-  
-  return { name, distance, checkIn, checkOut, nights, roomType, serviceType, rooms };
+  return getCityHotelDetails('M');
 }
 
 function getMadinaHotelDetails() {
-  let name = "Not specified";
-  let distance = "Not specified";
-  let checkIn = "";
-  let checkOut = "";
-  let nights = 0;
-  let roomType = "Not specified";
-  let serviceType = "Not specified";
-  let rooms = 0;
-  
-  // Get details from the first Madina hotel
-  const firstHotel = document.querySelector("[id^='hotelBlockA_']");
-  if (firstHotel) {
-    const idx = firstHotel.id.split("_")[1];
-    name = document.getElementById(`hkNameA_${idx}`)?.value || "Not specified";
-    distance = document.getElementById(`hkDistA_${idx}`)?.value || "Not specified";
-    checkIn = document.getElementById(`hkCheckInA_${idx}`)?.value || "";
-    checkOut = document.getElementById(`hkCheckOutA_${idx}`)?.value || "";
-    nights = parseInt(document.getElementById(`hkNightsA_${idx}`)?.value || 0);
-    roomType = document.getElementById(`hkRoomTypeA_${idx}`)?.value || "Not specified";
-    serviceType = document.getElementById(`hkServiceA_${idx}`)?.value || "Not specified";
-    rooms = parseInt(document.getElementById(`hkRoomsA_${idx}`)?.value || 0);
-  }
-  
-  return { name, distance, checkIn, checkOut, nights, roomType, serviceType, rooms };
+  return getCityHotelDetails('A');
+}
+
+function renderHotelServiceDetails(cityLabel, hotels, icon) {
+  if (!hotels || hotels.length === 0) return '';
+  return hotels.map((hotel, i) => `
+  <div style="margin-bottom: 5px; padding: 4px 6px; background:#f0f7ff; border-left:3px solid #0b76d1; border-radius:3px;">
+    <strong>${icon} ${cityLabel} Hotel${hotels.length > 1 ? ` ${i + 1}` : ''}</strong> &mdash; ${hotel.name} &bull; ${hotel.nights} nights &bull; ${hotel.roomType} (${hotel.rooms} rooms) &bull; ${hotel.serviceType} &bull; ${hotel.distance}<br>
+    <span style="font-size:11px;color:#555;">Check-in: ${formatDateToDMY(hotel.checkIn)} &bull; Check-out: ${formatDateToDMY(hotel.checkOut)}</span>
+  </div>`).join('');
 }
 
 function getVisaDetails() {
@@ -3955,302 +4390,177 @@ btnGenerateQuotation.addEventListener("click", showQuotationModal);
   const modalContent = document.getElementById('quotationModalContent');
   const modalButtons = document.getElementById('quotationModalButtons');
 
-function printQuotation() {
+function getQuotationPreviewClone() {
+  const modalContent = document.getElementById("quotationModalContent");
+  if (!modalContent) {
+    return null;
+  }
+
+  const clonedContent = modalContent.cloneNode(true);
+  clonedContent.querySelectorAll('style, button, #printQuotationBtn, #closeQuotationModalBtn').forEach(el => el.remove());
+
+  const sectionIds = ['calculationSummarySection', 'flightSection', 'hotelSection', 'addonSection', 'priceBreakupSection'];
+  sectionIds.forEach(id => {
+    const div = clonedContent.querySelector('#' + id);
+    if (div && div.style.display === 'none') {
+      div.remove();
+    }
+  });
+
+  return clonedContent;
+}
+
+async function waitForRenderedImages(container) {
+  const images = Array.from(container.querySelectorAll('img'));
+  if (!images.length) {
+    return;
+  }
+
+  await Promise.all(images.map((img) => {
+    if (img.complete && img.naturalWidth > 0) {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+      const done = () => resolve();
+      img.addEventListener('load', done, { once: true });
+      img.addEventListener('error', done, { once: true });
+    });
+  }));
+
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+}
+
+function openPdfPreviewWindow(pdfWindow, blobUrl, fileName) {
+  pdfWindow.document.write(`
+    <html>
+    <head><title>${fileName}</title></head>
+    <body style="margin:0;display:flex;flex-direction:column;height:100vh;background:#eef3f9;">
+      <div style="padding:10px 14px;background:#f3f6fb;display:flex;align-items:center;gap:16px;flex-wrap:wrap;border-bottom:1px solid #d7e2f0;">
+        <button id="downloadPdfBtn" style="background:#0b76d1;color:#fff;padding:8px 18px;border:none;border-radius:5px;font-size:14px;cursor:pointer;">⬇️ Download PDF</button>
+        <span style="color:#333;font-size:14px;">PDF Preview: <b>${fileName}</b></span>
+      </div>
+      <iframe src="${blobUrl}#toolbar=1&navpanes=0&scrollbar=1" style="flex:1;width:100%;border:none;background:#fff;"></iframe>
+      <script>
+        document.getElementById('downloadPdfBtn').onclick = function() {
+          const a = document.createElement('a');
+          a.href = '${blobUrl}';
+          a.download = '${fileName}';
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(() => document.body.removeChild(a), 100);
+        };
+      <\/script>
+    </body>
+    </html>
+  `);
+  pdfWindow.document.close();
+}
+
+async function printQuotation() {
   try {
-    const modalContent = document.getElementById("quotationModalContent");
-    if (!modalContent) {
+    const pdfAgent = getCurrentAgent();
+    const previewWindow = window.open('', '_blank');
+    if (!previewWindow) {
+      showAlert('Popup blocked. Please allow popups to preview the PDF.', 'Error');
+      return;
+    }
+    previewWindow.document.write('<html><body style="font-family:Calibri,Arial,sans-serif;padding:20px;color:#333;">Generating PDF preview...</body></html>');
+    previewWindow.document.close();
+
+    const clonedContent = getQuotationPreviewClone();
+    if (!clonedContent) {
+      previewWindow.close();
       showAlert("Quotation preview not found!", "Error");
       return;
     }
-    
-    setTimeout(() => {
-      let clonedContent = modalContent.cloneNode(true);
-      // Remove toggle buttons
-      const buttons = clonedContent.querySelectorAll('button[onclick*="toggle"]');
-      buttons.forEach(btn => btn.remove());
-      // Remove hidden sections
-      const sectionIds = ['calculationSummarySection', 'flightSection', 'hotelSection', 'addonSection', 'priceBreakupSection'];
-      sectionIds.forEach(id => {
-        const div = clonedContent.querySelector('#' + id);
-        if (div && div.style.display === 'none') {
-          div.remove();
-        }
-      });
-      let html = clonedContent.innerHTML;
-      // Improve PDF readability by adjusting margins and padding
-      html = html.replace(/margin-bottom:\s*20px/g, 'margin-bottom: 20px');
-      html = html.replace(/padding:\s*15px/g, 'padding: 15px');
-      html = html.replace(/margin:\s*15px/g, 'margin: 15px');
-      
-      const printWindow = window.open('', '_blank');
-      
-      const printHTML = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Quotation #${currentQuotationId}</title>
-          <style>
-            /* Force colors with multiple methods */
-            * {
-              -webkit-print-color-adjust: exact !important;
-              color-adjust: exact !important;
-              print-color-adjust: exact !important;
-            }
-            
-            body { 
-              font-family: 'Calibri', Arial, sans-serif;
-              margin: 0px;
-              color: #111;
-              background: white !important;
-              font-size: 14px;
-              line-height: 1.5;
-            }
-            
-            * {
-              margin: 0;
-              padding: 0;
-              box-sizing: border-box;
-            }
-            
-            /* Headers - no blue background, just color */
-            h1, h2, h3 { 
-              color: #0b76d1 !important;
-              padding: 0px 0 !important;
-              margin: 0px 0 15px 0 !important;
-              display: block !important;
-              font-size: 18px !important;
-              page-break-after: avoid !important;
-              page-break-inside: avoid !important;
-              page-break-before: avoid !important;
-            }
-            
-            h4 {
-              page-break-after: avoid !important;
-            }
-            
-            /* Tables - keep exactly as original */
-            table { 
-              width: 100%;
-              border-collapse: collapse;
-              margin: 10px 0 15px 0;
-              border: 0.5px solid #ddd !important;
-              page-break-inside: avoid !important;
-              page-break-before: auto !important;
-              page-break-after: auto !important;
-            }
-            
-            th, td { 
-              border: 0.5px solid #ddd !important;
-              padding: 8px 10px;
-              text-align: left;
-              font-size: 13px;
-              page-break-inside: avoid !important;
-            }
-            
-            th { 
-              background: linear-gradient(to right, #0b76d1, #0a6bbd) !important;
-              color: white !important;
-              font-weight: bold;
-            }
-            
-            p {
-              margin: 8px 0;
-              page-break-inside: avoid !important;
-              orphans: 2;
-              widows: 2;
-            }
-            
-            /* Sections - NO blue background or borders */
-            div[style*="border: 1px solid #eee"],
-            div[style*="border: 1px solid #ddd"] {
-              margin: 0px 0 20px 0 !important;
-              padding: 15px !important;
-              border: none !important;
-              border-radius: 0px !important;
-              background: white !important;
-              page-break-inside: avoid !important;
-              page-break-before: avoid !important;
-              page-break-after: auto !important;
-            }
-            
-            /* Keep green sections */
-            div[style*="background-color: #e8f5e8"], 
-            div[style*="background-color: #e8f5e9"] {
-              background: #e8f5e8 !important;
-              border: 2px solid #2e7d32 !important;
-              color: #2e7d32 !important;
-              page-break-inside: avoid !important;
-            }
-            
-            /* Keep gray sections */
-            div[style*="background-color: #f8f9fa"] {
-              background: #f8f9fa !important;
-              border: 1px solid #ddd !important;
-              color: #666 !important;
-              page-break-inside: avoid !important;
-            }
-            
-            /* Keep table rows exactly as original - no alternating colors */
-            table tbody tr {
-              /* Keep original styling - don't add or remove grey */
-            }
-            
-            /* Total rows with light blue */
-            table tfoot tr,
-            tr[style*="background-color: #e3f2fd"] {
-              background: #e3f2fd !important;
-              color: #0b76d1 !important;
-              font-weight: bold !important;
-              page-break-inside: avoid !important;
-            }
-            
-            /* Remove blue from package total section */
-            div[style*="background-color: #e3f2fd"]:not(table tr) {
-              background: white !important;
-              border: 1px solid #ddd !important;
-            }
-            
-            /* Image styling */
-            img {
-              max-width: 100% !important;
-              height: auto !important;
-              page-break-inside: avoid !important;
-              page-break-before: auto !important;
-              page-break-after: auto !important;
-            }
-            
-            /* Specific page break controls for important sections */
-            .section-header {
-              page-break-after: avoid !important;
-              page-break-inside: avoid !important;
-            }
-            
-            .section-content {
-              page-break-inside: avoid !important;
-            }
-            
-            .table-container {
-              page-break-inside: avoid !important;
-              page-break-before: auto !important;
-              page-break-after: auto !important;
-            }
-            
-            /* Print settings */
-            @media print {
-              @page { 
-                margin: 0.5in; 
-                size: A4;
-                
-                /* Header and Footer */
-                @top-center {
-                  content: "Flight Connection Travel & Tours";
-                  font-size: 12px;
-                  color: #0b76d1;
-                  font-weight: bold;
-                }
-                
-                @bottom-center {
-                  content: "Page " counter(page);
-                  font-size: 10px;
-                  color: #666;
-                }
-              }
-              
-              /* Force everything to print with colors */
-              * {
-                -webkit-print-color-adjust: exact !important;
-                color-adjust: exact !important;
-                print-color-adjust: exact !important;
-              }
-              
-              /* Page break controls for different elements */
-              h1, h2, h3, h4 {
-                page-break-after: avoid !important;
-                page-break-inside: avoid !important;
-                page-break-before: auto !important;
-              }
-              
-              table {
-                page-break-inside: auto !important;
-                page-break-before: auto !important;
-                page-break-after: auto !important;
-              }
-              
-              tr {
-                page-break-inside: avoid !important;
-                page-break-after: auto !important;
-              }
-              
-              td, th {
-                page-break-inside: avoid !important;
-              }
-              
-              div {
-                page-break-inside: auto !important;
-              }
-              
-              p, li {
-                page-break-inside: avoid !important;
-                orphans: 2;
-                widows: 2;
-              }
-              
-              img {
-                page-break-inside: avoid !important;
-                page-break-before: auto !important;
-                page-break-after: auto !important;
-              }
-              
-              /* Specific section controls */
-              .section, .section-entry {
-                page-break-inside: avoid !important;
-                page-break-before: auto !important;
-                page-break-after: auto !important;
-              }
-              
-              /* Prevent breaks inside important content */
-              .client-info, .travel-info, .package-price, .service-details {
-                page-break-inside: avoid !important;
-              }
-              
-              /* Table specific controls */
-              .cost-table {
-                page-break-inside: auto !important;
-              }
-              
-              .cost-table thead {
-                page-break-inside: avoid !important;
-                page-break-after: auto !important;
-              }
-              
-              .cost-table tfoot {
-                page-break-inside: avoid !important;
-                page-break-before: auto !important;
-              }
-            }
-          </style>
-        </head>
-        <body>
-          ${html}
-        </body>
-        </html>
-      `;
-      
-      printWindow.document.write(printHTML);
-      printWindow.document.close();
-      
-      printWindow.onload = function() {
-        setTimeout(() => {
-          printWindow.print();
-          printWindow.close();
-        }, 1000);
-      };
-      
-    }, 1000);
-    
+
+    const renderHost = document.createElement('div');
+    renderHost.style.position = 'fixed';
+    renderHost.style.left = '-100000px';
+    renderHost.style.top = '0';
+    renderHost.style.width = '794px';
+    renderHost.style.background = '#ffffff';
+    renderHost.style.padding = '0';
+    renderHost.style.zIndex = '-1';
+    renderHost.appendChild(clonedContent);
+    document.body.appendChild(renderHost);
+
+    await waitForRenderedImages(renderHost);
+
+    if (document.fonts && document.fonts.ready) {
+      await document.fonts.ready;
+    }
+
+    const canvas = await html2canvas(renderHost, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+      windowWidth: renderHost.scrollWidth,
+      width: renderHost.scrollWidth,
+      height: renderHost.scrollHeight
+    });
+
+    document.body.removeChild(renderHost);
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 6;
+    const usableWidth = pageWidth - (margin * 2);
+    const footerReserve = 9;
+    const usableHeight = pageHeight - (margin * 2) - footerReserve;
+    const pxPerMm = canvas.width / usableWidth;
+    const pageHeightPx = Math.floor(usableHeight * pxPerMm);
+
+    let pageIndex = 0;
+    for (let offsetY = 0; offsetY < canvas.height; offsetY += pageHeightPx) {
+      const sliceHeight = Math.min(pageHeightPx, canvas.height - offsetY);
+      const pageCanvas = document.createElement('canvas');
+      pageCanvas.width = canvas.width;
+      pageCanvas.height = sliceHeight;
+
+      const pageCtx = pageCanvas.getContext('2d');
+      pageCtx.fillStyle = '#ffffff';
+      pageCtx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+      pageCtx.drawImage(canvas, 0, offsetY, canvas.width, sliceHeight, 0, 0, canvas.width, sliceHeight);
+
+      if (pageIndex > 0) {
+        pdf.addPage();
+      }
+
+      const imgHeightMm = sliceHeight / pxPerMm;
+      pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.95), 'JPEG', margin, margin, usableWidth, imgHeightMm, undefined, 'FAST');
+      pageIndex += 1;
+    }
+
+    const totalPages = pdf.getNumberOfPages();
+    const preparedLine = `Prepared by: ${sanitizeInput(pdfAgent?.name || 'N/A')}  |  Phone: ${sanitizeInput(pdfAgent?.phone || 'N/A')}`;
+    const addressLine = 'Mezzanine Floor, 17-E, Shahbaz Commercial, Phase 6. DHA  |  www.flightconnection.net.pk';
+    for (let p = 1; p <= totalPages; p++) {
+      pdf.setPage(p);
+      pdf.setDrawColor(220, 228, 240);
+      pdf.line(margin, pageHeight - 11, pageWidth - margin, pageHeight - 11);
+      pdf.setTextColor(70, 70, 70);
+      pdf.setFontSize(8.6);
+      pdf.setFont(undefined, 'bold');
+      pdf.text(preparedLine, pageWidth / 2, pageHeight - 7.2, { align: 'center' });
+      pdf.setFont(undefined, 'normal');
+      pdf.setFontSize(8.1);
+      pdf.text(addressLine, pageWidth / 2, pageHeight - 3.4, { align: 'center' });
+      pdf.setFontSize(7.3);
+      pdf.text(`Page ${p} of ${totalPages}`, pageWidth - margin, pageHeight - 1.2, { align: 'right' });
+    }
+
+    const fileName = `Quotation-${currentQuotationId || 'Preview'}.pdf`;
+    const blob = pdf.output('blob');
+    const blobUrl = URL.createObjectURL(blob);
+    openPdfPreviewWindow(previewWindow, blobUrl, fileName);
   } catch (error) {
-    console.error('Error printing quotation:', error);
-    showAlert("Failed to print. Please try again.", "Error");
+    console.error('Error generating PDF:', error);
+    showAlert("Failed to generate PDF. Please try again.", "Error");
   }
 }
   
@@ -4359,11 +4669,21 @@ if (packageTotalsRow) {
   packagePerInfant = perPersonCosts.perInfant;
 }
 
+// Safety fallback: if parser fails but totals exist, recalculate per-person values from current totals
+if ((packagePerAdult + packagePerChildBed + packagePerChildNoBed + packagePerInfant) === 0 && finalTotalSellPKR > 0) {
+  const safePerPerson = calculatePerPersonCosts(totalCostPKR, finalTotalServicePKR, clientData);
+  packagePerAdult = safePerPerson.perAdult || 0;
+  packagePerChildBed = safePerPerson.perChildBed || 0;
+  packagePerChildNoBed = safePerPerson.perChildNoBed || 0;
+  packagePerInfant = safePerPerson.perInfant || 0;
+}
+
 // Calculate the total package amount correctly
-const totalPackageAmount = (packagePerAdult * clientData.adults) + 
-                           (packagePerChildBed * clientData.childBed) + 
-                           (packagePerChildNoBed * clientData.childNoBed) + 
-                           (packagePerInfant * clientData.infants);
+const computedPackageAmount = (packagePerAdult * clientData.adults) + 
+                              (packagePerChildBed * clientData.childBed) + 
+                              (packagePerChildNoBed * clientData.childNoBed) + 
+                              (packagePerInfant * clientData.infants);
+const totalPackageAmount = computedPackageAmount > 0 ? computedPackageAmount : finalTotalSellPKR;
 
 // Debug: Log the final values
 console.log("Final per person costs:", {
@@ -4376,10 +4696,10 @@ console.log("Total package amount:", totalPackageAmount);
 
   // Build the HTML for the quotation preview
   let quotationHTML = `
-    <div style="text-align: center; margin-bottom: 20px;">
-      <img src="https://flightconnection.net.pk/wp-content/uploads/2018/09/cropped-cropped-Flight-Connection-Travel-1.png" alt="Company Logo" style="max-height: 80px;">
-      <h2 style="margin: 5px 0; color: #0b76d1;">Flight Connection Travel & Tours</h2>
-      <div style="font-size: 18px; font-weight: bold; color: #333; margin-top: 10px;">
+    <div style="text-align: center; margin-bottom: 12px; border-bottom: 1px solid #dbe6f3; padding-bottom: 8px;">
+      <h2 style="margin: 2px 0 4px; color: #0b76d1;">Flight Connection Travel & Tours</h2>
+      <div style="font-size: 12px; color: #555; margin-bottom: 6px;">GL No. 3423 &nbsp;|&nbsp; IATA: 27319143</div>
+      <div style="font-size: 17px; font-weight: bold; color: #333; margin-top: 4px;">
         Quotation Number: <span style="color: #0b76d1;">${currentQuotationId}</span>
       </div>
      </div>
@@ -4404,181 +4724,40 @@ console.log("Total package amount:", totalPackageAmount);
       <div><strong>Passengers:</strong> Adults: ${clientData.adults}, Children (with bed): ${clientData.childBed}, Children (without bed): ${clientData.childNoBed}, Infants: ${clientData.infants}</div>
     </div>
     
-    <div style="margin-bottom: 20px; border: 1px solid #eee; padding: 15px; border-radius: 8px;">
-      <h3 style="margin-top: 0; color: #0b76d1;">Package Price</h3>
-      <table style="width:100%; border-collapse: collapse;">
-        <tr>
-          <td style="border: 1px solid #ddd; padding: 8px;"><strong>Per Adult</strong></td>
-          <td style="border: 1px solid #ddd; padding: 8px;">PKR ${fmt(packagePerAdult)}</td>
-        </tr>
-        ${clientData.childBed > 0 ? `
-        <tr>
-          <td style="border: 1px solid #ddd; padding: 8px;"><strong>Per Child (with bed)</strong></td>
-          <td style="border: 1px solid #ddd; padding: 8px;">PKR ${fmt(packagePerChildBed)}</td>
-        </tr>` : ''}
-        ${clientData.childNoBed > 0 ? `
-        <tr>
-          <td style="border: 1px solid #ddd; padding: 8px;"><strong>Per Child (without bed)</strong></td>
-          <td style="border: 1px solid #ddd; padding: 8px;">PKR ${fmt(packagePerChildNoBed)}</td>
-        </tr>` : ''}
-        ${clientData.infants > 0 ? `
-        <tr>
-          <td style="border: 1px solid #ddd; padding: 8px;"><strong>Per Infant</strong></td>
-          <td style="border: 1px solid #ddd; padding: 8px;">PKR ${fmt(packagePerInfant)}</td>
-        </tr>` : ''}
-        <tr style="background-color: #f9f9f9;">
-          <td style="border: 1px solid #ddd; padding: 8px;"><strong>Total Package Amount</strong></td>
-<td style="border: 1px solid #ddd; padding: 8px;"><strong>PKR ${fmt(totalPackageAmount)}</strong></td>
-        </tr>
-      </table>
+    <div style="margin-bottom: 10px; border: 1px solid #eee; padding: 8px 12px; border-radius: 6px;">
+      <h3 style="margin-top: 0; color: #0b76d1; border-bottom: 2px solid #0b76d1; padding-bottom: 3px; margin-bottom: 6px;">Package Price</h3>
+      <ul style="list-style: disc; padding-left: 18px; margin: 0; line-height: 1.8;">
+        <li>Per Adult: <strong>PKR ${fmt(packagePerAdult)}</strong></li>
+        ${clientData.childBed > 0 ? `<li>Per Child (with bed): <strong>PKR ${fmt(packagePerChildBed)}</strong></li>` : ''}
+        ${clientData.childNoBed > 0 ? `<li>Per Child (without bed): <strong>PKR ${fmt(packagePerChildNoBed)}</strong></li>` : ''}
+        ${clientData.infants > 0 ? `<li>Per Infant: <strong>PKR ${fmt(packagePerInfant)}</strong></li>` : ''}
+      </ul>
+      <div style="margin-top: 5px; padding-top: 5px; border-top: 1px solid #ddd; font-weight: bold; color: #0b76d1;">Total Package Amount: PKR ${fmt(totalPackageAmount)}</div>
     </div>
         
    <!-- Service Details -->
-<div style="margin-bottom: 20px; border: 1px solid #eee; padding: 15px; border-radius: 8px;">
-  <h3 style="margin-top: 0; color: #0b76d1;">Service Details</h3>
-  
-  <!-- Flight Details - Only show if flights are included -->
+<div style="margin-bottom: 10px; border: 1px solid #eee; padding: 8px 12px; border-radius: 6px;">
+  <h3 style="margin-top: 0; color: #0b76d1; border-bottom: 2px solid #0b76d1; padding-bottom: 3px; margin-bottom: 6px;">Service Details</h3>
   ${document.querySelectorAll("[id^='flightBlock_']").length > 0 ? `
-  <div style="margin-bottom: 15px;">
-    <h4 style="color: #0b76d1; margin-bottom: 8px;">Flight</h4>
-    <table style="width:100%; border-collapse: collapse;">
-      <tr>
-        <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold; width: 150px;">Airline</td>
-        <td style="border: 1px solid #ddd; padding: 8px;">${getFlightDetails().airline}</td>
-      </tr>
-      <tr>
-        <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Flight Type</td>
-        <td style="border: 1px solid #ddd; padding: 8px;">${getFlightDetails().direct}</td>
-      </tr>
-      <tr>
-        <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold; vertical-align: top;">Flight Itinerary</td>
-        <td style="border: 1px solid #ddd; padding: 8px; white-space: pre-wrap; font-family: monospace; font-size: 13px;">${getFlightDetails().itinerary}</td>
-      </tr>
-    </table>
+  <div style="margin-bottom: 5px; padding: 4px 6px; background:#f0f7ff; border-left:3px solid #0b76d1; border-radius:3px;">
+    <strong>✈️ Flight</strong> &mdash; ${getFlightDetails().airline} &bull; ${getFlightDetails().direct}<br>
+    <span style="font-size:11px;color:#444;white-space:pre-wrap;font-family:monospace;">${getFlightDetails().itinerary}</span>
   </div>` : ''}
-  
-  <!-- Makkah Hotel Details - Only show if Makkah hotels are included -->
-  ${document.querySelectorAll("[id^='hotelBlockM_']").length > 0 ? `
-  <div style="margin-bottom: 15px;">
-    <h4 style="color: #0b76d1; margin-bottom: 8px;">Makkah Hotel</h4>
-    <table style="width:100%; border-collapse: collapse;">
-      <tr>
-        <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold; width: 150px;">Hotel Name</td>
-        <td style="border: 1px solid #ddd; padding: 8px;">${getMakkahHotelDetails().name}</td>
-      </tr>
-      <tr>
-        <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Distance</td>
-        <td style="border: 1px solid #ddd; padding: 8px;">${getMakkahHotelDetails().distance}</td>
-      </tr>
-      <tr>
-        <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Check-in</td>
-        <td style="border: 1px solid #ddd; padding: 8px;">${formatDateToDMY(getMakkahHotelDetails().checkIn)}</td>
-      </tr>
-      <tr>
-        <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Check-out</td>
-        <td style="border: 1px solid #ddd; padding: 8px;">${formatDateToDMY(getMakkahHotelDetails().checkOut)}</td>
-      </tr>
-      <tr>
-        <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Total Nights</td>
-        <td style="border: 1px solid #ddd; padding: 8px;">${getMakkahHotelDetails().nights}</td>
-      </tr>
-      <tr>
-        <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Room Type</td>
-        <td style="border: 1px solid #ddd; padding: 8px;">${getMakkahHotelDetails().roomType}</td>
-      </tr>
-      <tr>
-        <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Service Type</td>
-        <td style="border: 1px solid #ddd; padding: 8px;">${getMakkahHotelDetails().serviceType}</td>
-      </tr>
-      <tr>
-        <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Number of Rooms</td>
-        <td style="border: 1px solid #ddd; padding: 8px;">${getMakkahHotelDetails().rooms}</td>
-      </tr>
-    </table>
-  </div>` : ''}
-  
-  <!-- Madina Hotel Details - Only show if Madina hotels are included -->
-  ${document.querySelectorAll("[id^='hotelBlockA_']").length > 0 ? `
-  <div style="margin-bottom: 15px;">
-    <h4 style="color: #0b76d1; margin-bottom: 8px;">Madina Hotel</h4>
-    <table style="width:100%; border-collapse: collapse;">
-      <tr>
-        <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold; width: 150px;">Hotel Name</td>
-        <td style="border: 1px solid #ddd; padding: 8px;">${getMadinaHotelDetails().name}</td>
-      </tr>
-      <tr>
-        <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Distance</td>
-        <td style="border: 1px solid #ddd; padding: 8px;">${getMadinaHotelDetails().distance}</td>
-      </tr>
-      <tr>
-        <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Check-in</td>
-        <td style="border: 1px solid #ddd; padding: 8px;">${formatDateToDMY(getMadinaHotelDetails().checkIn)}</td>
-      </tr>
-      <tr>
-        <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Check-out</td>
-        <td style="border: 1px solid #ddd; padding: 8px;">${formatDateToDMY(getMadinaHotelDetails().checkOut)}</td>
-      </tr>
-      <tr>
-        <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Total Nights</td>
-        <td style="border: 1px solid #ddd; padding: 8px;">${getMadinaHotelDetails().nights}</td>
-      </tr>
-      <tr>
-        <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Room Type</td>
-        <td style="border: 1px solid #ddd; padding: 8px;">${getMadinaHotelDetails().roomType}</td>
-      </tr>
-      <tr>
-        <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Service Type</td>
-        <td style="border: 1px solid #ddd; padding: 8px;">${getMadinaHotelDetails().serviceType}</td>
-      </tr>
-      <tr>
-        <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Number of Rooms</td>
-        <td style="border: 1px solid #ddd; padding: 8px;">${getMadinaHotelDetails().rooms}</td>
-      </tr>
-    </table>
-  </div>` : ''}
-  
-  <!-- Umrah Visa Details - Only show if visa is included -->
+  ${renderHotelServiceDetails('Makkah', getMakkahHotelDetails(), '🏨')}
+  ${renderHotelServiceDetails('Madina', getMadinaHotelDetails(), '🏨')}
   ${document.getElementById('visaBlock') ? `
-  <div style="margin-bottom: 15px;">
-    <h4 style="color: #0b76d1; margin-bottom: 8px;">Umrah Visa</h4>
-    <table style="width:100%; border-collapse: collapse;">
-      <tr>
-        <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold; width: 150px;">Visa Type</td>
-        <td style="border: 1px solid #ddd; padding: 8px;">Standard Umrah Visa</td>
-      </tr>
-      <tr>
-        <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Number of Visas</td>
-        <td style="border: 1px solid #ddd; padding: 8px;">${getVisaDetails().count}</td>
-      </tr>
-    </table>
+  <div style="margin-bottom: 5px; padding: 4px 6px; background:#f0f7ff; border-left:3px solid #0b76d1; border-radius:3px;">
+    <strong>🛂 Umrah Visa</strong> &mdash; Standard Umrah Visa &bull; ${getVisaDetails().count} visas
   </div>` : ''}
-  
-  <!-- Transfer Details - Only show if transfers are included -->
   ${document.querySelectorAll("[id^='transferBlock_']").length > 0 ? `
-  <div style="margin-bottom: 15px;">
-    <h4 style="color: #0b76d1; margin-bottom: 8px;">Transfer</h4>
-    <div style="border: 1px solid #ddd; padding: 15px; border-radius: 5px; text-align: left; font-family: Arial, Helvetica, sans-serif; font-size: 13px; line-height: 1.6;">
-      ${getTransferDetails()}
-    </div>
+  <div style="margin-bottom: 5px; padding: 4px 6px; background:#f0f7ff; border-left:3px solid #0b76d1; border-radius:3px;">
+    <strong>🚗 Transfer</strong><br><span style="font-size:11px;color:#444;white-space:pre-wrap;">${getTransferDetails()}</span>
   </div>` : ''}
 </div>
   
-  <button onclick="toggleCalculationSummary()" style="margin-bottom: 10px; padding: 5px 10px; background: #0b76d1; color: white; border: none; border-radius: 4px; cursor: pointer;">Show/Hide Calculation Summary</button>
-  <div id="calculationSummarySection" style="margin-bottom: 20px;">
-    <h3 style="color: #0b76d1; text-align: center; margin-bottom: 15px; font-size: 18px;">Package Price</h3>
-    <table style="width:100%; border-collapse: collapse; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden;">
-      <thead>
-        <tr style="background: linear-gradient(to right, #0b76d1, #0a6bbd); color: white;">
-          <th style="border: none; padding: 12px 8px; text-align: left; font-weight: 600;">Service</th>
-          <th style="border: none; padding: 12px 8px; text-align: left; font-weight: 600;">Details</th>
-          <th style="border: none; padding: 12px 8px; text-align: left; font-weight: 600;">Price per Adult</th>
-          <th style="border: none; padding: 12px 8px; text-align: left; font-weight: 600;">Price per Child (with bed)</th>
-          <th style="border: none; padding: 12px 8px; text-align: left; font-weight: 600;">Price per Child (no bed)</th>
-          <th style="border: none; padding: 12px 8px; text-align: left; font-weight: 600;">Price per Infant</th>
-          <th style="border: none; padding: 12px 8px; text-align: left; font-weight: 600;">Total Price</th>
-        </tr>
-      </thead>
-      <tbody>
+  <button onclick="toggleCalculationSummary()" style="margin-bottom: 6px; padding: 3px 10px; background: #0b76d1; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Show/Hide Price Breakdown</button>
+  <div id="calculationSummarySection" style="margin-bottom: 10px; display: none;">
+    <h3 style="color: #0b76d1; border-bottom: 2px solid #0b76d1; padding-bottom: 3px; margin-bottom: 6px;">Price Breakdown</h3>
   `;
   
   // Add flight details
@@ -4611,15 +4790,10 @@ console.log("Total package amount:", totalPackageAmount);
     const totalFlight = totalAdult + totalChildBed + totalChildNoBed + totalInf;
     
     quotationHTML += `
-  <tr style="background-color: #f8f9fa;">
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 500;">✈️ Flight ${idx}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${sanitizeInput(airline)} - ${sanitizeInput(flightType)}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${clientData.adults > 0 ? `<div style="font-size: 12px; color: #666;">Adult x${clientData.adults}</div><div style="font-weight: 600;">PKR ${fmt(perAdultCost)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${clientData.childBed > 0 ? `<div style="font-size: 12px; color: #666;">Child (bed) x${clientData.childBed}</div><div style="font-weight: 600;">PKR ${fmt(perChildBedCost)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${clientData.childNoBed > 0 ? `<div style="font-size: 12px; color: #666;">Child (no bed) x${clientData.childNoBed}</div><div style="font-weight: 600;">PKR ${fmt(perChildNoBedCost)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${clientData.infants > 0 ? `<div style="font-size: 12px; color: #666;">Infant x${clientData.infants}</div><div style="font-weight: 600;">PKR ${fmt(perInfantCost)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 600; color: #0b76d1;">PKR ${fmt(totalFlight)}</td>
-  </tr>
+  <div style="margin:2px 0;padding:4px 8px;background:#f8f9fa;border-left:3px solid #0b76d1;border-radius:3px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
+    <span><b>✈️ Flight ${idx}</b> &mdash; ${sanitizeInput(airline)} &bull; ${sanitizeInput(flightType)} &nbsp; <span style="color:#555;font-size:11px;">${clientData.adults>0?`Adult: PKR ${fmt(perAdultCost)}`:''}${clientData.childBed>0?` &bull; Child(bed): PKR ${fmt(perChildBedCost)}`:''}${clientData.childNoBed>0?` &bull; Child(no bed): PKR ${fmt(perChildNoBedCost)}`:''}${clientData.infants>0?` &bull; Infant: PKR ${fmt(perInfantCost)}`:''}</span></span>
+    <b style="color:#0b76d1;white-space:nowrap;">PKR ${fmt(totalFlight)}</b>
+  </div>
 `;
   });
   
@@ -4653,18 +4827,10 @@ console.log("Total package amount:", totalPackageAmount);
     let infantCell = clientData.infants > 0 ? `<td style="border: 1px solid #ddd; padding: 8px;">PKR ${fmt(costPerInfant)} (x${clientData.infants})</td>` : '';
     
     quotationHTML += `
-  <tr style="background-color: #fff;">
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 500;">🏨 Makkah Hotel ${idx}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">
-      <div style="font-weight: 500;">${sanitizeInput(name)}</div>
-      <div style="font-size: 12px; color: #666;">${sanitizeInput(roomType)} × ${rooms} rooms | ${nights} nights | ${sanitizeInput(serviceType)}</div>
-    </td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${clientData.adults > 0 ? `<div style="font-size: 12px; color: #666;">Adult x${clientData.adults}</div><div style="font-weight: 600;">PKR ${fmt(costPerAdult)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${clientData.childBed > 0 ? `<div style="font-size: 12px; color: #666;">Child (bed) x${clientData.childBed}</div><div style="font-weight: 600;">PKR ${fmt(costPerChildBed)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;"><span style="color: #999;">N/A</span></td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;"><span style="color: #999;">N/A</span></td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 600; color: #0b76d1;">PKR ${fmt(totalHotel)}</td>
-  </tr>
+  <div style="margin:2px 0;padding:4px 8px;background:#fff;border-left:3px solid #0b76d1;border-radius:3px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
+    <span><b>🏨 Makkah Hotel ${idx}</b> &mdash; ${sanitizeInput(name)} &bull; ${sanitizeInput(roomType)} &times;${rooms} &bull; ${nights}N &bull; ${sanitizeInput(serviceType)} &nbsp; <span style="color:#555;font-size:11px;">${clientData.adults>0?`Adult: PKR ${fmt(costPerAdult)}`:''}${clientData.childBed>0?` &bull; Child(bed): PKR ${fmt(costPerChildBed)}`:''}</span></span>
+    <b style="color:#0b76d1;white-space:nowrap;">PKR ${fmt(totalHotel)}</b>
+  </div>
 `;
   });
 
@@ -4698,18 +4864,10 @@ console.log("Total package amount:", totalPackageAmount);
     let infantCell = clientData.infants > 0 ? `<td style="border: 1px solid #ddd; padding: 8px;">PKR ${fmt(costPerInfant)} (x${clientData.infants})</td>` : '';
     
     quotationHTML += `
-  <tr style="background-color: #f8f9fa;">
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 500;">🏨 Madina Hotel ${idx}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">
-      <div style="font-weight: 500;">${sanitizeInput(name)}</div>
-      <div style="font-size: 12px; color: #666;">${sanitizeInput(roomType)} × ${rooms} rooms | ${nights} nights | ${sanitizeInput(serviceType)}</div>
-    </td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${clientData.adults > 0 ? `<div style="font-size: 12px; color: #666;">Adult x${clientData.adults}</div><div style="font-weight: 600;">PKR ${fmt(costPerAdult)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${clientData.childBed > 0 ? `<div style="font-size: 12px; color: #666;">Child (bed) x${clientData.childBed}</div><div style="font-weight: 600;">PKR ${fmt(costPerChildBed)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;"><span style="color: #999;">N/A</span></td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;"><span style="color: #999;">N/A</span></td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 600; color: #0b76d1;">PKR ${fmt(totalHotel)}</td>
-  </tr>
+  <div style="margin:2px 0;padding:4px 8px;background:#f8f9fa;border-left:3px solid #0b76d1;border-radius:3px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
+    <span><b>🏨 Madina Hotel ${idx}</b> &mdash; ${sanitizeInput(name)} &bull; ${sanitizeInput(roomType)} &times;${rooms} &bull; ${nights}N &bull; ${sanitizeInput(serviceType)} &nbsp; <span style="color:#555;font-size:11px;">${clientData.adults>0?`Adult: PKR ${fmt(costPerAdult)}`:''}${clientData.childBed>0?` &bull; Child(bed): PKR ${fmt(costPerChildBed)}`:''}</span></span>
+    <b style="color:#0b76d1;white-space:nowrap;">PKR ${fmt(totalHotel)}</b>
+  </div>
 `;
   });
   
@@ -4720,32 +4878,18 @@ console.log("Total package amount:", totalPackageAmount);
     const to = document.getElementById(`tTo_${idx}`)?.value || "Not specified";
     const vehicle = document.getElementById(`tCar_${idx}`)?.value || "Not specified";
     const type = document.getElementById(`tType_${idx}`)?.value || "Not specified";
-    const costSAR = parseFloat(document.getElementById(`tCostSAR_${idx}`)?.value || 0);
-    const svcSAR = parseFloat(document.getElementById(`tSvcSAR_${idx}`)?.value || 0);
-    
-    // Adults, Children with bed, and Children without bed pay for transfers
-    const payingPax = clientData.adults + clientData.childBed + clientData.childNoBed;
-    const totalTransfer = (costSAR + svcSAR) * roe;
-    
-    // Calculate per person costs
-    const costPerAdult = clientData.adults > 0 ? totalTransfer / payingPax : 0;
-    const costPerChildBed = clientData.childBed > 0 ? totalTransfer / payingPax : 0;
-    const costPerChildNoBed = clientData.childNoBed > 0 ? totalTransfer / payingPax : 0;
-    const costPerInfant = 0; // Infants don't pay for transfers
+    const pricing = getTransferPricingSAR(idx, clientData, roe);
+    const totalTransfer = (pricing.costSAR + pricing.svcSAR) * roe;
+    const costPerAdult = clientData.adults > 0 ? pricing.perAdultPKR : 0;
+    const costPerChildBed = clientData.childBed > 0 ? pricing.perChildPKR : 0;
+    const costPerChildNoBed = clientData.childNoBed > 0 ? pricing.perChildPKR : 0;
+    const costPerInfant = clientData.infants > 0 ? pricing.perInfantPKR : 0;
     
     quotationHTML += `
-  <tr style="background-color: #fff;">
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 500;">🚗 Transfer ${idx}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">
-      <div style="font-weight: 500;">${sanitizeInput(from)} → ${sanitizeInput(to)}</div>
-      <div style="font-size: 12px; color: #666;">${sanitizeInput(vehicle)} (${sanitizeInput(type)})</div>
-    </td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${clientData.adults > 0 ? `<div style="font-size: 12px; color: #666;">Adult x${clientData.adults}</div><div style="font-weight: 600;">PKR ${fmt(costPerAdult)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${clientData.childBed > 0 ? `<div style="font-size: 12px; color: #666;">Child (bed) x${clientData.childBed}</div><div style="font-weight: 600;">PKR ${fmt(costPerChildBed)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${clientData.childNoBed > 0 ? `<div style="font-size: 12px; color: #666;">Child (no bed) x${clientData.childNoBed}</div><div style="font-weight: 600;">PKR ${fmt(costPerChildNoBed)}` : '<span style="color: #999;">N/A</span>'}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;"><span style="color: #999;">N/A</span></td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 600; color: #0b76d1;">PKR ${fmt(totalTransfer)}</td>
-  </tr>
+  <div style="margin:2px 0;padding:4px 8px;background:#fff;border-left:3px solid #0b76d1;border-radius:3px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
+    <span><b>🚗 Transfer ${idx}</b> &mdash; ${sanitizeInput(from)} &rarr; ${sanitizeInput(to)} &bull; ${sanitizeInput(vehicle)} (${sanitizeInput(type)}) &bull; ${pricing.type === 'sharing' ? 'Sharing' : 'Private'} &nbsp; <span style="color:#555;font-size:11px;">${clientData.adults>0?`Adult: PKR ${fmt(costPerAdult)}`:''}${clientData.childBed>0?` &bull; Child(bed): PKR ${fmt(costPerChildBed)}`:''}${clientData.childNoBed>0?` &bull; Child(no bed): PKR ${fmt(costPerChildNoBed)}`:''}${clientData.infants>0&&costPerInfant>0?` &bull; Infant: PKR ${fmt(costPerInfant)}`:''}</span></span>
+    <b style="color:#0b76d1;white-space:nowrap;">PKR ${fmt(totalTransfer)}</b>
+  </div>
 `;
   });
   
@@ -4766,24 +4910,14 @@ if (visaCostVal > 0 || visaSvc > 0) {
   const costPerInfant = clientData.infants > 0 ? costPerVisa : 0;
   
 quotationHTML += `
-  <tr style="background-color: #f8f9fa;">
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 500;">🛂 Visa</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">
-      <div style="font-weight: 500;">Umrah Visa</div>
-      <div style="font-size: 12px; color: #666;">${visaCount} visas</div>
-    </td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${clientData.adults > 0 ? `<div style="font-size: 12px; color: #666;">Adult x${clientData.adults}</div><div style="font-weight: 600;">PKR ${fmt(costPerAdult)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${clientData.childBed > 0 ? `<div style="font-size: 12px; color: #666;">Child (bed) x${clientData.childBed}</div><div style="font-weight: 600;">PKR ${fmt(costPerChildBed)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${clientData.childNoBed > 0 ? `<div style="font-size: 12px; color: #666;">Child (no bed) x${clientData.childNoBed}</div><div style="font-weight: 600;">PKR ${fmt(costPerChildNoBed)}` : '<span style="color: #999;">N/A</span>'}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${clientData.infants > 0 ? `<div style="font-size: 12px; color: #666;">Infant x${clientData.infants}</div><div style="font-weight: 600;">PKR ${fmt(costPerInfant)}` : '<span style="color: #999;">N/A</span>'}</td>
-    <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 600; color: #0b76d1;">PKR ${fmt(totalVisa)}</td>
-  </tr>
+  <div style="margin:2px 0;padding:4px 8px;background:#f8f9fa;border-left:3px solid #0b76d1;border-radius:3px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
+    <span><b>🛂 Visa</b> &mdash; Umrah Visa &bull; ${visaCount} visas &nbsp; <span style="color:#555;font-size:11px;">${clientData.adults>0?`Adult: PKR ${fmt(costPerAdult)}`:''}${clientData.childBed>0?` &bull; Child(bed): PKR ${fmt(costPerChildBed)}`:''}${clientData.childNoBed>0?` &bull; Child(no bed): PKR ${fmt(costPerChildNoBed)}`:''}${clientData.infants>0?` &bull; Infant: PKR ${fmt(costPerInfant)}`:''}</span></span>
+    <b style="color:#0b76d1;white-space:nowrap;">PKR ${fmt(totalVisa)}</b>
+  </div>
 `;
 }
   
   quotationHTML += `
-        </tbody>
-      </table>
     </div>
   `;
   
@@ -4792,21 +4926,8 @@ const hasAddons = document.querySelectorAll("[id^='dfAddon_'], [id^='mealAddon_'
 
 if (hasAddons) {
     quotationHTML += `
-      <div style="margin-bottom: 20px; border: 1px solid #e0e0e0; padding: 15px; border-radius: 8px; background-color: #ffffff; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-        <h3 style="margin-top: 0; color: #0b76d1; text-align: center; margin-bottom: 15px; font-size: 18px;">Add-Ons (Optional)</h3>
-        <table style="width:100%; border-collapse: collapse; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden;">
-          <thead>
-            <tr style="background: linear-gradient(to right, #28a745, #218838); color: white;">
-              <th style="border: none; padding: 12px 8px; text-align: left; font-weight: 600;">Add-On</th>
-              <th style="border: none; padding: 12px 8px; text-align: left; font-weight: 600;">Details</th>
-              <th style="border: none; padding: 12px 8px; text-align: left; font-weight: 600;">Price per Adult</th>
-              <th style="border: none; padding: 12px 8px; text-align: left; font-weight: 600;">Price per Child (with bed)</th>
-              <th style="border: none; padding: 12px 8px; text-align: left; font-weight: 600;">Price per Child (no bed)</th>
-              <th style="border: none; padding: 12px 8px; text-align: left; font-weight: 600;">Price per Infant</th>
-              <th style="border: none; padding: 12px 8px; text-align: left; font-weight: 600;">Total Price</th>
-            </tr>
-          </thead>
-          <tbody>
+      <div style="margin-bottom: 10px; border: 1px solid #c8e6c9; padding: 8px 12px; border-radius: 6px; background:#fff;">
+        <h3 style="margin-top: 0; color: #28a745; border-bottom: 2px solid #28a745; padding-bottom: 3px; margin-bottom: 6px;">Add-Ons (Optional)</h3>
     `;
     
     // Direct Flight Add-ons
@@ -4846,18 +4967,10 @@ if (hasAddons) {
       const totalCost = totalDifference + totalSvcPKR;
       
       quotationHTML += `
-        <tr style="background-color: #fff;">
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 500;">✈️ ${name} ${idx}</td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">
-            <div style="font-weight: 500;">${sanitizeInput(airline)}</div>
-            <div style="font-size: 12px; color: #666;">${sanitizeInput(flightType)}</div>
-          </td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${clientData.adults > 0 ? `<div style="font-size: 12px; color: #666;">Adult x${clientData.adults}</div><div style="font-weight: 600;">PKR ${fmt(adultDifference)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${clientData.childBed > 0 ? `<div style="font-size: 12px; color: #666;">Child (bed) x${clientData.childBed}</div><div style="font-weight: 600;">PKR ${fmt(childBedDifference)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${clientData.childNoBed > 0 ? `<div style="font-size: 12px; color: #666;">Child (no bed) x${clientData.childNoBed}</div><div style="font-weight: 600;">PKR ${fmt(childNoBedDifference)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${clientData.infants > 0 ? `<div style="font-size: 12px; color: #666;">Infant x${clientData.infants}</div><div style="font-weight: 600;">PKR ${fmt(infantDifference)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 600; color: #28a745;">PKR ${fmt(totalCost)}</td>
-        </tr>
+        <div style="margin:2px 0;padding:4px 8px;background:#f8fff8;border-left:3px solid #28a745;border-radius:3px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
+          <span><b>✈️ ${name} ${idx}</b> &mdash; ${sanitizeInput(airline)} &bull; ${sanitizeInput(flightType)} &nbsp; <span style="color:#555;font-size:11px;">${clientData.adults>0?`Adult: PKR ${fmt(adultDifference)}`:''}${clientData.childBed>0?` &bull; Child(bed): PKR ${fmt(childBedDifference)}`:''}${clientData.childNoBed>0?` &bull; Child(no bed): PKR ${fmt(childNoBedDifference)}`:''}${clientData.infants>0?` &bull; Infant: PKR ${fmt(infantDifference)}`:''}</span></span>
+          <b style="color:#28a745;white-space:nowrap;">PKR ${fmt(totalCost)}</b>
+        </div>
       `;
     });
     
@@ -4904,84 +5017,46 @@ if (hasAddons) {
       const totalAddon = cost + svc;
       
       quotationHTML += `
-        <tr style="background-color: #f8f9fa;">
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 500;">🍽️ ${name} ${idx}</td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">
-            <div style="font-weight: 500;">${sanitizeInput(city)} - ${sanitizeInput(mealType)}</div>
-<div style="font-size: 12px; color: #666;">${totalNights} nights | SAR ${fmt(costPerPaxPerNightSAR + svcPerPaxPerNightSAR)}/pax/night (ROE ${roe})</div>
-          </td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${clientData.adults > 0 ? `<div style="font-size: 12px; color: #666;">Adult x${clientData.adults}</div><div style="font-weight: 600;">PKR ${fmt(costPerAdult)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${clientData.childBed > 0 ? `<div style="font-size: 12px; color: #666;">Child (bed) x${clientData.childBed}</div><div style="font-weight: 600;">PKR ${fmt(costPerChildBed)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px;"><span style="color: #999;">N/A</span></td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px;"><span style="color: #999;">N/A</span></td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 600; color: #28a745;">PKR ${fmt(totalAddon)}</td>
-        </tr>
+        <div style="margin:2px 0;padding:4px 8px;background:#f8fff8;border-left:3px solid #28a745;border-radius:3px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
+          <span><b>🍽️ ${name} ${idx}</b> &mdash; ${sanitizeInput(city)} &bull; ${sanitizeInput(mealType)} &bull; ${totalNights}N &bull; SAR ${fmt(costPerPaxPerNightSAR+svcPerPaxPerNightSAR)}/pax/night &nbsp; <span style="color:#555;font-size:11px;">${clientData.adults>0?`Adult: PKR ${fmt(costPerAdult)}`:''}${clientData.childBed>0?` &bull; Child(bed): PKR ${fmt(costPerChildBed)}`:''}</span></span>
+          <b style="color:#28a745;white-space:nowrap;">PKR ${fmt(totalAddon)}</b>
+        </div>
       `;
     });
     
     // Ziyarah Add-ons
     document.querySelectorAll("[id^='ziyarahAddon_']").forEach((el, i) => {
-      const idx = i + 1;
+      const idx = el.id.split("_")[1];
+      const labelIdx = i + 1;
       const name = "Ziyarah";
       const selects = el.querySelectorAll('select');
       const city = selects[0]?.value || "Not specified";
       const vehicle = selects[1]?.value || "Not specified";
       const type = selects[2]?.value || "Not specified";
-      
-      const inlineInput = el.querySelector(".inline-input");
-      const inputs = inlineInput?.querySelectorAll("input[type='number']");
-      
-      const totalCostSAR = parseFloat(inputs?.[0]?.value || 0);
-      const totalSvcSAR = parseFloat(inputs?.[1]?.value || 0);
-      
-      const cost = totalCostSAR * roe;
-      const svc = totalSvcSAR * roe;
+
+      const pricing = getZiyarahPricing(idx, clientData, roe);
+      const cost = pricing.costSAR * roe;
+      const svc = pricing.svcSAR * roe;
       const totalAddon = cost + svc;
-      
-      // FIXED: Calculate per person cost by dividing by paying passengers only (excluding infants)
-      const payingPax = clientData.adults + clientData.childBed + clientData.childNoBed;
-      const perPersonCost = payingPax > 0 ? (cost + svc) / payingPax : 0;
-      
-      // Each paying passenger type gets the same per-person cost
-      const costPerAdult = clientData.adults > 0 ? perPersonCost : 0;
-      const costPerChildBed = clientData.childBed > 0 ? perPersonCost : 0;
-      const costPerChildNoBed = clientData.childNoBed > 0 ? perPersonCost : 0;
-      const costPerInfant = 0; // Infants don't pay for ziyarah
+      const costPerAdult = clientData.adults > 0 ? pricing.perAdultPKR : 0;
+      const costPerChildBed = clientData.childBed > 0 ? pricing.perChildPKR : 0;
+      const costPerChildNoBed = clientData.childNoBed > 0 ? pricing.perChildPKR : 0;
+      const costPerInfant = clientData.infants > 0 ? pricing.perInfantPKR : 0;
       
       quotationHTML += `
-        <tr style="background-color: #fff;">
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 500;">🕌 ${name} ${idx}</td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">
-            <div style="font-weight: 500;">${sanitizeInput(city)} - ${sanitizeInput(type)}</div>
-<div style="font-size: 12px; color: #666;">${sanitizeInput(vehicle)} | SAR ${fmt(totalCostSAR + totalSvcSAR)}/vehicle (ROE ${roe})</div>
-          </td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${clientData.adults > 0 ? `<div style="font-size: 12px; color: #666;">Adult x${clientData.adults}</div><div style="font-weight: 600;"> PKR ${fmt(costPerAdult)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${clientData.childBed > 0 ? `<div style="font-size: 12px; color: #666;">Child (bed) x${clientData.childBed}</div><div style="font-weight: 600;">PKR ${fmt(costPerChildBed)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px;">${clientData.childNoBed > 0 ? `<div style="font-size: 12px; color: #666;">Child (no bed) x${clientData.childNoBed}</div><div style="font-weight: 600;">PKR ${fmt(costPerChildNoBed)}</div>` : '<span style="color: #999;">N/A</span>'}</td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px;"><span style="color: #999;">N/A</span></td>
-          <td style="border: 1px solid #e0e0e0; padding: 10px 8px; font-weight: 600; color: #28a745;">PKR ${fmt(totalAddon)}</td>
-        </tr>
+        <div style="margin:2px 0;padding:4px 8px;background:#f8fff8;border-left:3px solid #28a745;border-radius:3px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
+          <span><b>🕌 ${name} ${labelIdx}</b> &mdash; ${sanitizeInput(city)} &bull; ${sanitizeInput(type)} &bull; ${sanitizeInput(vehicle)} &bull; ${pricing.type === 'sharing' ? 'Sharing' : 'Private'} &nbsp; <span style="color:#555;font-size:11px;">${clientData.adults>0?`Adult: PKR ${fmt(costPerAdult)}`:''}${clientData.childBed>0?` &bull; Child(bed): PKR ${fmt(costPerChildBed)}`:''}${clientData.childNoBed>0?` &bull; Child(no bed): PKR ${fmt(costPerChildNoBed)}`:''}${clientData.infants>0&&costPerInfant>0?` &bull; Infant: PKR ${fmt(costPerInfant)}`:''}</span></span>
+          <b style="color:#28a745;white-space:nowrap;">PKR ${fmt(totalAddon)}</b>
+        </div>
       `;
     });
     
     quotationHTML += `
-          </tbody>
-        </table>
-        
-<!-- Add-ons Summary -->
-<div style="background-color: #e8f5e9; border-radius: 8px; padding: 15px; margin-top: 15px;">
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-  <div style="font-weight: 600; color: #2e7d32;">Package Total:</div>
-  <div style="font-weight: 600; color: #2e7d32;">PKR ${fmt(totalPackageAmount)}</div>
+<div style="background-color:#e8f5e9;border-radius:6px;padding:8px 12px;margin-top:8px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;">
+  <span style="color:#2e7d32;font-weight:600;">Package Total: PKR ${fmt(totalPackageAmount)}</span>
+  <span style="color:#2e7d32;font-weight:600;">Add-ons: PKR ${fmt(addonCostPKR + addonServicePKR)}</span>
+  <span style="color:#2e7d32;font-weight:700;font-size:13px;">Grand Total: PKR ${fmt(totalPackageAmount + addonCostPKR + addonServicePKR)}</span>
 </div>
-  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-    <div style="font-weight: 600; color: #2e7d32;">Add-ons Subtotal:</div>
-    <div style="font-weight: 600; color: #2e7d32;">PKR ${fmt(addonCostPKR + addonServicePKR)}</div>
-  </div>
-  <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px solid #c8e6c9;">
-    <div style="font-size: 16px; font-weight: bold; color: #2e7d32;">Grand Total (Package + Add-ons):</div>
-    <div style="font-size: 16px; font-weight: bold; color: #2e7d32;">PKR ${fmt(totalPackageAmount + addonCostPKR + addonServicePKR)}</div>
-  </div>
 </div>
     `;
   }
@@ -5254,56 +5329,59 @@ if (!localStorage.getItem('biometricProcess')) {
 }
 
 // Get stored content
-const visaRequirements = localStorage.getItem('visaRequirements') || '';
-const biometricProcess = localStorage.getItem('biometricProcess') || '';
-
-// Add Section 1
-quotationHTML += `
-  <div style="margin-bottom: 20px; border: 1px solid #e3f2fd; padding: 15px; border-radius: 8px; background-color: #ffffff;">
-    <div style="font-size: 13px; line-height: 1.6; text-align: left;">
-      ${visaRequirements}
-    </div>
-  </div>
-  
-  <!-- Add Section 2 -->
-  <div style="margin-bottom: 20px; border: 1px solid #e3f2fd; padding: 15px; border-radius: 8px; background-color: #ffffff;">
-    <div style="font-size: 13px; line-height: 1.6; text-align: left;">
-      ${biometricProcess}
-    </div>
-  </div>
-`;
-  
 // Add terms and conditions
   quotationHTML += `
   <div style="margin-bottom: 20px; border: 1px solid #eee; padding: 15px; border-radius: 8px; text-align: left;">
+  <h3 style="margin-top:0; color:#0b76d1; text-align:left; margin-bottom:10px;">Terms & Conditions</h3>
   <div style="font-size: 13px; line-height: 1.6;">
-    ${customTerms}
+    <ul style="padding-left: 18px; margin: 0; text-align: left;">
+      <li>50% advance required to confirm booking; remaining 50% before ticket/voucher issuance. Non-payment may result in cancellation &amp; loss of advance.</li>
+      <li>Rates are subject to change due to fares, exchange rate, taxes, and availability. Booking is confirmed only after payment.</li>
+      <li>Most services are non-refundable and non-changeable. Please confirm cancellation/change policy before payment. Once issued, non-refundable/non-changeable services will be fully lost in case of cancellation or no-show.</li>
+      <li>We recommend confirming all services (tickets, hotels, transport, etc.) after visa approval. If issued/confirmed before visa approval and visa is refused, refund will be as per respective supplier policy; for non-refundable services, no refund will be applicable.</li>
+      <li>Standard hotel check-in is usually 14:00–15:00 and check-out 11:00–12:00; however, in some destinations (e.g. Saudi Arabia) check-in may be 16:00–18:00. Early check-in/late check-out subject to availability and extra charges.</li>
+      <li>Flight Connection Travel facilitates bookings with airlines and hotels; all services are subject to respective supplier terms and conditions.</li>
+      <li>Passenger must have valid passport, visa, and travel documents. No liability for denied boarding/entry.</li>
+      <li>Any increase in taxes or supplier charges before confirmation will be applicable. Payment confirms acceptance of terms.</li>
+    </ul>
   </div>
   </div>
 
-  <!-- Add your image right after Terms and Conditions -->
-<div style="text-align: center; margin-bottom: 30px;">
-  <img src="https://flightconnection.net.pk/wp-content/uploads/2020/08/flight-connection.jpeg" 
-       alt="Flight Connection Travel & Tours" 
-       style="max-width: 800px; width: 100%; height: auto; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.2);">
-</div>
-
-  <div style="text-align: center; margin-top: 30px; color: #666; font-size: 16px;">
-    <p>For any queries, please contact us</p>
-    <p style="margin-bottom: 5px;">Prepared by: <strong>${sanitizeInput(agentData?.name || 'N/A')}</strong></p>
-    <p style="margin-bottom: 5px;">Phone: <strong>${sanitizeInput(agentData?.phone || 'N/A')}</strong></p>
-    <p>Mezzanine Floor, 17-E, Shahbaz Commercial, Phase 6. DHA</p>
+  <div style="text-align: center; margin-top: 12px; color: #666; font-size: 12.5px; border-top: 1px solid #dbe6f3; padding-top: 8px;">
+    <p style="margin: 2px 0;"><strong>Prepared by:</strong> ${sanitizeInput(agentData?.name || 'N/A')} &nbsp;|&nbsp; <strong>Phone:</strong> ${sanitizeInput(agentData?.phone || 'N/A')}</p>
+    <p style="margin: 2px 0;">Mezzanine Floor, 17-E, Shahbaz Commercial, Phase 6. DHA &nbsp;|&nbsp; www.flightconnection.net.pk</p>
   </div>
 
   `;
   
   // Set modal content
   modalTitle.textContent = "Quotation Preview";
-  modalContent.innerHTML = quotationHTML;
+  modalContent.innerHTML = `
+    <style>
+      .compact-quotation{font-family:Calibri,Arial,sans-serif;font-size:12px;line-height:1.32;color:#111;text-align:left!important}
+      .compact-quotation > div:first-child{text-align:center!important}
+      .compact-quotation h2{font-size:18px!important;margin:4px 0 6px!important;line-height:1.2}
+      .compact-quotation h3{font-size:14px!important;margin:0 0 6px!important;line-height:1.2}
+      .compact-quotation h4,.compact-quotation h5{font-size:12.5px!important;margin:0 0 4px!important;line-height:1.2}
+      .compact-quotation p{margin:3px 0!important}
+      .compact-quotation ul,.compact-quotation ol{margin:4px 0!important;padding-left:18px!important}
+      .compact-quotation li{margin:1px 0!important}
+      .compact-quotation table{width:100%!important;border-collapse:collapse!important;margin:5px 0 8px!important}
+      .compact-quotation th,.compact-quotation td{padding:5px 6px!important;font-size:11.5px!important;vertical-align:top}
+      .compact-quotation div[style*="border: 1px solid #eee"],
+      .compact-quotation div[style*="border: 1px solid #ddd"],
+      .compact-quotation div[style*="border: 1px solid #e3f2fd"],
+      .compact-quotation div[style*="border: 1px solid #f5e6e6"]{margin-bottom:10px!important;padding:8px!important;border-radius:6px!important}
+      .compact-quotation div[style*="text-align: center; margin-bottom: 20px"]{margin-bottom:10px!important}
+      .compact-quotation div[style*="margin-top: 30px"]{margin-top:12px!important}
+      .compact-quotation img{max-width:100%!important;height:auto!important}
+      .compact-quotation img[alt="Flight Connection Travel & Tours"]{box-shadow:none!important;border-radius:6px!important}
+    </style>
+    <div class="compact-quotation">${quotationHTML}</div>
+  `;
   
 // Add buttons
 modalButtons.innerHTML = `
-  <button id="editContentBtn" class="ghost">📝 Edit Content</button>
   <button id="printQuotationBtn" class="green-btn" style="margin-right: 10px;">🖨️ Print Quotation</button>
   <button id="shareWhatsAppBtn" class="whatsapp-btn">📱 Share on WhatsApp</button>
   <button id="closeQuotationBtn" class="ghost">Close</button>
@@ -5312,14 +5390,6 @@ modalButtons.innerHTML = `
 
 // Add event listeners after modal is shown
 setTimeout(() => {
-// Edit Content button
-document.getElementById('editContentBtn').onclick = function() {
-  document.getElementById('quotationModal').classList.remove('visible');
-  setTimeout(() => {
-    showContentEditor();
-  }, 300);
-};
-
   // Print Quotation button
   document.getElementById('printQuotationBtn').onclick = function() {
     printQuotation();
@@ -5342,7 +5412,23 @@ document.getElementById('editContentBtn').onclick = function() {
 
 function toggleCalculationSummary() {
   const div = document.getElementById('calculationSummarySection');
-  if (div.style.display === 'none') {
+  const isHidden = div.style.display === 'none';
+
+  // If trying to show, block when Agent Service Charge is added
+  if (isHidden) {
+    const svcOption = document.querySelector('input[name="svcOption"]:checked')?.value || 'none';
+    const extraTotal = parseFloat(document.getElementById('extraSvcTotal')?.value || 0);
+    const svcPerAdult = parseFloat(document.getElementById('svcPerAdult')?.value || 0);
+    const svcPerChild = parseFloat(document.getElementById('svcPerChild')?.value || 0);
+    const svcPerInfant = parseFloat(document.getElementById('svcPerInfant')?.value || 0);
+    const hasAgentFeeByInput = (svcOption === 'total' && extraTotal > 0) || (svcOption === 'perPerson' && (svcPerAdult > 0 || svcPerChild > 0 || svcPerInfant > 0));
+    const hasAgentFeeRow = Array.from(document.querySelectorAll('#calcSummaryBody tr td:first-child')).some(td => (td.textContent || '').includes('Agent Service Fee'));
+
+    if (hasAgentFeeByInput || hasAgentFeeRow) {
+      showAlert('Please remove Agent Service Fee and add service charge in each service section to view Price Breakdown.', 'Price Breakdown');
+      return;
+    }
+
     div.style.display = 'block';
   } else {
     div.style.display = 'none';
@@ -5690,8 +5776,15 @@ function saveQuotation() {
         to: document.getElementById(`tTo_${idx}`)?.value || "",
         vehicle: document.getElementById(`tCar_${idx}`)?.value || "",
         type: document.getElementById(`tType_${idx}`)?.value || "",
+        mode: document.getElementById(`transferMode_${idx}`)?.value || 'Private',
         cost: parseFloat(document.getElementById(`tCostSAR_${idx}`)?.value || 0),
-        service: parseFloat(document.getElementById(`tSvcSAR_${idx}`)?.value || 0)
+        service: parseFloat(document.getElementById(`tSvcSAR_${idx}`)?.value || 0),
+        shareAdultCost: parseFloat(document.getElementById(`tShareCostAdult_${idx}`)?.value || 0),
+        shareAdultService: parseFloat(document.getElementById(`tShareSvcAdult_${idx}`)?.value || 0),
+        shareChildCost: parseFloat(document.getElementById(`tShareCostChild_${idx}`)?.value || 0),
+        shareChildService: parseFloat(document.getElementById(`tShareSvcChild_${idx}`)?.value || 0),
+        shareInfCost: parseFloat(document.getElementById(`tShareCostInf_${idx}`)?.value || 0),
+        shareInfService: parseFloat(document.getElementById(`tShareSvcInf_${idx}`)?.value || 0)
       };
       transfersData.push(transferData);
     });
@@ -5758,19 +5851,32 @@ function saveQuotation() {
     // Ziyarah add-ons
     document.querySelectorAll("[id^='ziyarahAddon_']").forEach((el) => {
       const selects = el.querySelectorAll('select');
-      const inputs = el.querySelectorAll(".inline-input input[type='number']");
+      const idx = el.id.split("_")[1];
       const addonData = {
         city: selects[0]?.value || "",
         vehicle: selects[1]?.value || "",
         duration: selects[2]?.value || "",
-        cost: parseFloat(inputs[0]?.value || 0),
-        service: parseFloat(inputs[1]?.value || 0)
+        mode: document.getElementById(`zMode_${idx}`)?.value || 'Private',
+        cost: parseFloat(document.getElementById(`zCostSAR_${idx}`)?.value || 0),
+        service: parseFloat(document.getElementById(`zSvcSAR_${idx}`)?.value || 0),
+        shareAdultCost: parseFloat(document.getElementById(`zShareCostAdult_${idx}`)?.value || 0),
+        shareAdultService: parseFloat(document.getElementById(`zShareSvcAdult_${idx}`)?.value || 0),
+        shareChildCost: parseFloat(document.getElementById(`zShareCostChild_${idx}`)?.value || 0),
+        shareChildService: parseFloat(document.getElementById(`zShareSvcChild_${idx}`)?.value || 0),
+        shareInfCost: parseFloat(document.getElementById(`zShareCostInf_${idx}`)?.value || 0),
+        shareInfService: parseFloat(document.getElementById(`zShareSvcInf_${idx}`)?.value || 0)
       };
       addonsData.ziyarah.push(addonData);
     });
     
     // Get client data from localStorage
     const savedClientData = JSON.parse(localStorage.getItem('savedClientData')) || {};
+    const packageSelectEl = document.getElementById('packageSelect');
+    const selectedPackageId = packageSelectEl ? packageSelectEl.value : '';
+    const selectedPackageName = (packageSelectEl && packageSelectEl.selectedOptions && packageSelectEl.selectedOptions[0])
+      ? packageSelectEl.selectedOptions[0].textContent
+      : '';
+    const selectedSvcOption = document.querySelector('input[name="svcOption"]:checked')?.value || 'none';
     
     // Create a complete quotation object
     const quotationData = {
@@ -5797,6 +5903,13 @@ function saveQuotation() {
       updatedAt: new Date().toISOString(),
       expiresAt: expiryDate.toISOString(),
       status: document.getElementById('quotationStatus')?.value || 'pending',
+      pricingSettings: {
+        roe: parseFloat(document.getElementById('roeInput')?.value || 0),
+        svcOption: selectedSvcOption,
+        svcPerAdult: parseFloat(document.getElementById('svcPerAdult')?.value || 0),
+        svcPerChild: parseFloat(document.getElementById('svcPerChild')?.value || 0),
+        svcPerInfant: parseFloat(document.getElementById('svcPerInfant')?.value || 0)
+      },
       flights: flightsData,
       hotelsMakkah: hotelsMakkahData,
       hotelsMadina: hotelsMadinaData,
@@ -5804,6 +5917,13 @@ function saveQuotation() {
       visa: visaData,
       addons: addonsData
     };
+
+    if (selectedPackageId) {
+      quotationData.packageSelection = {
+        id: selectedPackageId,
+        name: selectedPackageName || ''
+      };
+    }
     
     // Get ALL existing quotations from localStorage
     let allQuotations = JSON.parse(localStorage.getItem('savedQuotations')) || [];
@@ -5847,16 +5967,33 @@ function saveQuotation() {
 }
 
 // Function to load a quotation
-function loadQuotation(quotationId) {
+async function loadQuotation(quotationId) {
   try {
     console.log("Loading quotation with ID:", quotationId);
     
     // Get all saved quotations
-    const savedQuotations = JSON.parse(localStorage.getItem('savedQuotations')) || [];
+    let savedQuotations = JSON.parse(localStorage.getItem('savedQuotations')) || [];
     console.log("Found quotations:", savedQuotations.length);
     
     // Find the quotation
-    const quotation = savedQuotations.find(q => q.id === quotationId);
+    let quotation = savedQuotations.find(q => q.id === quotationId);
+
+    // Fallback to Firebase refresh for current user if quotation is not in local cache
+    if (!quotation) {
+      const currentAgent = getCurrentAgent();
+      if (currentAgent && currentAgent.id) {
+        try {
+          const firebaseData = await window.firebaseDB.getData('umrah_quotations', currentAgent.id);
+          if (firebaseData && Array.isArray(firebaseData.quotations)) {
+            savedQuotations = firebaseData.quotations;
+            localStorage.setItem('savedQuotations', JSON.stringify(savedQuotations));
+            quotation = savedQuotations.find(q => q.id === quotationId);
+          }
+        } catch (refreshError) {
+          console.error('Error refreshing quotations from Firebase:', refreshError);
+        }
+      }
+    }
     
     if (!quotation) {
       console.error("Quotation not found with ID:", quotationId);
@@ -5868,6 +6005,39 @@ function loadQuotation(quotationId) {
     
     // Set the current quotation ID
     currentQuotationId = quotationId;
+
+    // Restore selected package from quotation data (or clear stale selection)
+    const packageSelect = document.getElementById('packageSelect');
+    if (packageSelect) {
+      if (quotation.packageSelection && quotation.packageSelection.id) {
+        let option = Array.from(packageSelect.options).find(opt => opt.value === quotation.packageSelection.id);
+        if (!option) {
+          option = document.createElement('option');
+          option.value = quotation.packageSelection.id;
+          option.textContent = quotation.packageSelection.name || quotation.packageSelection.id;
+          packageSelect.appendChild(option);
+        }
+        packageSelect.value = quotation.packageSelection.id;
+      } else {
+        packageSelect.value = '';
+      }
+    }
+
+    // Restore saved pricing settings (ROE + agent fee option)
+    const pricing = quotation.pricingSettings || {};
+    if (document.getElementById('roeInput')) {
+      document.getElementById('roeInput').value = Number.isFinite(Number(pricing.roe)) ? Number(pricing.roe) : (document.getElementById('roeInput').value || 79);
+    }
+    const svcOptionToSet = pricing.svcOption || 'none';
+    const svcOptionInput = document.querySelector(`input[name="svcOption"][value="${svcOptionToSet}"]`) || document.querySelector('input[name="svcOption"][value="none"]');
+    if (svcOptionInput) svcOptionInput.checked = true;
+    if (document.getElementById('svcPerAdult')) document.getElementById('svcPerAdult').value = parseFloat(pricing.svcPerAdult || 0);
+    if (document.getElementById('svcPerChild')) document.getElementById('svcPerChild').value = parseFloat(pricing.svcPerChild || 0);
+    if (document.getElementById('svcPerInfant')) document.getElementById('svcPerInfant').value = parseFloat(pricing.svcPerInfant || 0);
+    toggleServiceOption(svcOptionToSet);
+    if (document.getElementById('quotationStatus')) {
+      document.getElementById('quotationStatus').value = quotation.status || 'pending';
+    }
     
     // Store the expiry date if it exists
     if (quotation.expiresAt) {
@@ -6088,10 +6258,20 @@ function loadQuotation(quotationId) {
               document.getElementById(`tCar_${idx}`).value = transferData.vehicle || "";
             if (document.getElementById(`tType_${idx}`)) 
               document.getElementById(`tType_${idx}`).value = transferData.type || "";
+            if (document.getElementById(`transferMode_${idx}`)) {
+              document.getElementById(`transferMode_${idx}`).value = transferData.mode || 'Private';
+              toggleTransferModeFields(idx);
+            }
             if (document.getElementById(`tCostSAR_${idx}`)) 
               document.getElementById(`tCostSAR_${idx}`).value = transferData.cost || 0;
             if (document.getElementById(`tSvcSAR_${idx}`)) 
               document.getElementById(`tSvcSAR_${idx}`).value = transferData.service || 0;
+            if (document.getElementById(`tShareCostAdult_${idx}`)) document.getElementById(`tShareCostAdult_${idx}`).value = transferData.shareAdultCost || 0;
+            if (document.getElementById(`tShareSvcAdult_${idx}`)) document.getElementById(`tShareSvcAdult_${idx}`).value = transferData.shareAdultService || 0;
+            if (document.getElementById(`tShareCostChild_${idx}`)) document.getElementById(`tShareCostChild_${idx}`).value = transferData.shareChildCost || 0;
+            if (document.getElementById(`tShareSvcChild_${idx}`)) document.getElementById(`tShareSvcChild_${idx}`).value = transferData.shareChildService || 0;
+            if (document.getElementById(`tShareCostInf_${idx}`)) document.getElementById(`tShareCostInf_${idx}`).value = transferData.shareInfCost || 0;
+            if (document.getElementById(`tShareSvcInf_${idx}`)) document.getElementById(`tShareSvcInf_${idx}`).value = transferData.shareInfService || 0;
             
             console.log(`Transfer ${idx} loaded successfully`);
           }, 100);
@@ -6231,13 +6411,23 @@ function loadQuotation(quotationId) {
               const addonElement = document.getElementById(`ziyarahAddon_${idx}`);
               if (addonElement) {
                 const selects = addonElement.querySelectorAll('select');
-                const inputs = addonElement.querySelectorAll(".inline-input input[type='number']");
+                const modeSelect = document.getElementById(`zMode_${idx}`);
                 
                 if (selects[0]) selects[0].value = addonData.city || "";
                 if (selects[1]) selects[1].value = addonData.vehicle || "";
                 if (selects[2]) selects[2].value = addonData.duration || "";
-                if (inputs[0]) inputs[0].value = addonData.cost || 0;
-                if (inputs[1]) inputs[1].value = addonData.service || 0;
+                if (modeSelect) {
+                  modeSelect.value = addonData.mode || 'Private';
+                  toggleZiyarahMode(idx);
+                }
+                if (document.getElementById(`zCostSAR_${idx}`)) document.getElementById(`zCostSAR_${idx}`).value = addonData.cost || 0;
+                if (document.getElementById(`zSvcSAR_${idx}`)) document.getElementById(`zSvcSAR_${idx}`).value = addonData.service || 0;
+                if (document.getElementById(`zShareCostAdult_${idx}`)) document.getElementById(`zShareCostAdult_${idx}`).value = addonData.shareAdultCost || 0;
+                if (document.getElementById(`zShareSvcAdult_${idx}`)) document.getElementById(`zShareSvcAdult_${idx}`).value = addonData.shareAdultService || 0;
+                if (document.getElementById(`zShareCostChild_${idx}`)) document.getElementById(`zShareCostChild_${idx}`).value = addonData.shareChildCost || 0;
+                if (document.getElementById(`zShareSvcChild_${idx}`)) document.getElementById(`zShareSvcChild_${idx}`).value = addonData.shareChildService || 0;
+                if (document.getElementById(`zShareCostInf_${idx}`)) document.getElementById(`zShareCostInf_${idx}`).value = addonData.shareInfCost || 0;
+                if (document.getElementById(`zShareSvcInf_${idx}`)) document.getElementById(`zShareSvcInf_${idx}`).value = addonData.shareInfService || 0;
               }
             }, 50);
           }, 300 * (addonIndex + 1));
@@ -6247,6 +6437,11 @@ function loadQuotation(quotationId) {
 
     // Show status section
     showStatusSection();
+
+    // Recalculate after async section restores to ensure loaded quotation totals are exact
+    setTimeout(() => {
+      try { performCalculation(); } catch (e) { console.error('Recalculate after load failed:', e); }
+    }, 1200);
     
     showNotification("Quotation loaded successfully!", "success");
     
