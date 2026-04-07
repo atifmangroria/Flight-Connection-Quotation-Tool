@@ -1164,7 +1164,10 @@ async function loadAllQuotations() {
     allUsersQuotations = [];
     try {
       if (!isFirebaseAvailableForDashboard()) {
-        throw new Error('Firebase unavailable in this session');
+        console.warn('Firebase unavailable in this session. Skipping all-users quotations.');
+        showNotification('All-users view requires an active Firebase session. Showing your quotations only.', 'warning');
+        populateUserFilter();
+        return;
       }
 
       const usersFromUsersCollection = await window.firebaseDB.getAll('users');
