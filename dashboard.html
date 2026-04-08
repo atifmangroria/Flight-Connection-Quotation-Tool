@@ -361,6 +361,7 @@
       <button onclick="showQuotationTypeModal()" class="btn-primary">Create Quotation</button>
       <button id="adminBtn" onclick="showPackageModal()" class="btn-primary" style="display:none;">Manage Packages</button>
       <button id="userMgmtBtn" onclick="window.location.href='user-management.html'" class="btn-primary" style="display:none;">User Management</button>
+      <button id="cleanupDupBtn" class="btn-primary" style="display:none;background:linear-gradient(135deg,#f39c12,#e67e22);">Cleanup Duplicates</button>
       <button id="btnLogout" class="btn-logout">Logout</button>
     </div>
   </div>
@@ -973,8 +974,9 @@ function checkAgentLogin() {
 }
 
 function getOwnerId(agent) {
-  // Prefer the active Firebase auth UID to avoid stale localStorage IDs.
-  return window.auth?.currentUser?.uid || agent?.uid || agent?.id || null;
+  // Prefer the explicitly provided owner identity first.
+  // This is critical for all-users/admin flows where we load/save another user's quotations.
+  return agent?.uid || agent?.id || window.auth?.currentUser?.uid || null;
 }
 
 function isFirebaseAvailableForDashboard() {
@@ -1183,7 +1185,168 @@ function loadAgentInfo() {
       const userFilter = document.getElementById('userFilter');
       if (allUsersBtn) allUsersBtn.style.display = 'inline-block';
       if (userFilter) userFilter.style.display = 'inline-block';
+      const cleanupDupBtn = document.getElementById('cleanupDupBtn');
+      if (cleanupDupBtn) cleanupDupBtn.style.display = 'inline-block';
     }
+  }
+}
+
+async function cleanupDuplicateQuotations() {
+  const admin = checkAgentLogin();
+  if (!admin || admin.role !== 'admin') {
+    showNotification('Only admin can run duplicate cleanup', 'error');
+    return;
+  }
+
+  if (!isFirebaseAvailableForDashboard()) {
+    showNotification('Cleanup requires active Firebase session', 'warning');
+    return;
+  }
+
+  const proceed = confirm('Scan all users and remove duplicate quotation IDs from non-canonical owners?');
+  if (!proceed) return;
+
+  try {
+    const usersFromUsersCollection = await window.firebaseDB.getAll('users');
+    const usersFromAgentsCollection = await window.firebaseDB.getAll('agents');
+    const usersMap = new Map();
+    usersFromUsersCollection.forEach(user => {
+      if (user?.id) usersMap.set(user.id, user);
+    });
+    usersFromAgentsCollection.forEach(user => {
+      if (user?.id && !usersMap.has(user.id)) usersMap.set(user.id, user);
+    });
+
+    const ownerIds = Array.from(usersMap.keys());
+    if (!ownerIds.length) {
+      showNotification('No users found for cleanup', 'warning');
+      return;
+    }
+
+    const snapshotsByOwner = new Map();
+    for (const ownerId of ownerIds) {
+      const umrahDoc = await window.firebaseDB.getData('umrah_quotations', ownerId);
+      const internationalDoc = await window.firebaseDB.getData('international_quotations', ownerId);
+      snapshotsByOwner.set(ownerId, {
+        umrah: Array.isArray(umrahDoc?.quotations) ? umrahDoc.quotations : [],
+        international: Array.isArray(internationalDoc?.quotations) ? internationalDoc.quotations : []
+      });
+    }
+
+    const occurrences = new Map();
+    snapshotsByOwner.forEach((snapshot, ownerId) => {
+      ['umrah', 'international'].forEach(type => {
+        snapshot[type].forEach(quotation => {
+          if (!quotation?.id) return;
+          const key = `${type}:${quotation.id}`;
+          if (!occurrences.has(key)) occurrences.set(key, []);
+          occurrences.get(key).push({ ownerId, type, quotation });
+        });
+      });
+    });
+
+    const duplicateGroups = Array.from(occurrences.values()).filter(group => group.length > 1);
+    if (!duplicateGroups.length) {
+      showNotification('No duplicates found', 'success');
+      return;
+    }
+
+    const adminOwnerId = getOwnerId(admin);
+    const getTimestamp = (quotation) => {
+      const updated = new Date(quotation?.updatedAt || 0).getTime();
+      if (Number.isFinite(updated) && updated > 0) return updated;
+      const created = new Date(quotation?.createdAt || 0).getTime();
+      return Number.isFinite(created) ? created : 0;
+    };
+    const declaredOwner = (quotation) => {
+      return quotation?.transferredTo || quotation?.agentData?.uid || quotation?.agentData?.id || quotation?.agentId || quotation?.userId || null;
+    };
+
+    const removalsByOwner = new Map();
+    let duplicatesFound = 0;
+    let plannedRemovals = 0;
+
+    duplicateGroups.forEach(group => {
+      duplicatesFound += 1;
+
+      let canonical = group.find(record => record.quotation?.transferredTo && record.quotation.transferredTo === record.ownerId);
+
+      if (!canonical) {
+        canonical = group.find(record => {
+          const owner = declaredOwner(record.quotation);
+          return owner && owner === record.ownerId;
+        });
+      }
+
+      if (!canonical && adminOwnerId) {
+        const hasAdminCopy = group.some(record => record.ownerId === adminOwnerId);
+        const nonAdminCopies = group.filter(record => record.ownerId !== adminOwnerId);
+        if (hasAdminCopy && nonAdminCopies.length === 1) canonical = nonAdminCopies[0];
+      }
+
+      if (!canonical) {
+        canonical = [...group].sort((a, b) => getTimestamp(b.quotation) - getTimestamp(a.quotation))[0];
+      }
+
+      group.forEach(record => {
+        if (record.ownerId === canonical.ownerId) return;
+        if (!removalsByOwner.has(record.ownerId)) {
+          removalsByOwner.set(record.ownerId, { umrah: new Set(), international: new Set() });
+        }
+        removalsByOwner.get(record.ownerId)[record.type].add(record.quotation.id);
+        plannedRemovals += 1;
+      });
+    });
+
+    if (!plannedRemovals) {
+      showNotification('Duplicates found but no safe removals identified', 'warning');
+      return;
+    }
+
+    const affectedUsers = removalsByOwner.size;
+    const confirmed = confirm(
+      `Found ${duplicatesFound} duplicate quotation groups.\n` +
+      `Will remove ${plannedRemovals} duplicate copies across ${affectedUsers} users.\n\n` +
+      `Continue cleanup?`
+    );
+    if (!confirmed) return;
+
+    let savedOwners = 0;
+    let failedOwners = 0;
+
+    for (const [ownerId, removalSets] of removalsByOwner.entries()) {
+      const snapshot = snapshotsByOwner.get(ownerId) || { umrah: [], international: [] };
+      const cleanedUmrah = snapshot.umrah.filter(quotation => !removalSets.umrah.has(quotation.id));
+      const cleanedInternational = snapshot.international.filter(quotation => !removalSets.international.has(quotation.id));
+
+      const umrahSaved = await window.firebaseDB.saveData('umrah_quotations', ownerId, {
+        quotations: cleanedUmrah,
+        updatedAt: new Date(),
+        agentId: ownerId,
+        userId: ownerId
+      });
+
+      const internationalSaved = await window.firebaseDB.saveData('international_quotations', ownerId, {
+        quotations: cleanedInternational,
+        updatedAt: new Date(),
+        agentId: ownerId,
+        userId: ownerId
+      });
+
+      if (umrahSaved && internationalSaved) savedOwners += 1;
+      else failedOwners += 1;
+    }
+
+    if (failedOwners > 0) {
+      showNotification(`Cleanup partially completed. Updated ${savedOwners} users, failed ${failedOwners}.`, 'warning');
+    } else {
+      showNotification(`Cleanup completed. Removed ${plannedRemovals} duplicates from ${savedOwners} users.`, 'success');
+    }
+
+    await loadAllQuotations();
+  } catch (error) {
+    console.error('Error during duplicate cleanup:', error);
+    showNotification('Duplicate cleanup failed. Check console for details.', 'error');
   }
 }
 
@@ -1216,9 +1379,13 @@ async function loadAllQuotations() {
       }
 
       const usersFromUsersCollection = await window.firebaseDB.getAll('users');
+      const usersFromAgentsCollection = await window.firebaseDB.getAll('agents');
       const allUsersMap = new Map();
 
       usersFromUsersCollection.forEach(u => allUsersMap.set(u.id, u));
+      usersFromAgentsCollection.forEach(u => {
+        if (u?.id && !allUsersMap.has(u.id)) allUsersMap.set(u.id, u);
+      });
 
       for (const userData of allUsersMap.values()) {
         if (!userData?.id) continue;
@@ -1826,6 +1993,11 @@ document.getElementById('btnLogout').addEventListener('click', function() {
     }, 1000);
   }
 });
+
+const cleanupDupBtn = document.getElementById('cleanupDupBtn');
+if (cleanupDupBtn) {
+  cleanupDupBtn.addEventListener('click', cleanupDuplicateQuotations);
+}
 
 // Make functions global for inline onclick
 window.showQuotationTypeModal = showQuotationTypeModal;
