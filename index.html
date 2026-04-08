@@ -5819,7 +5819,7 @@ function saveQuotation() {
         to: document.getElementById(`tTo_${idx}`)?.value || "",
         vehicle: document.getElementById(`tCar_${idx}`)?.value || "",
         type: document.getElementById(`tType_${idx}`)?.value || "",
-        mode: document.getElementById(`transferMode_${idx}`)?.value || 'Private',
+        mode: document.getElementById(`tType_${idx}`)?.value || 'Private',
         cost: parseFloat(document.getElementById(`tCostSAR_${idx}`)?.value || 0),
         service: parseFloat(document.getElementById(`tSvcSAR_${idx}`)?.value || 0),
         shareAdultCost: parseFloat(document.getElementById(`tShareCostAdult_${idx}`)?.value || 0),
@@ -6274,46 +6274,66 @@ async function loadQuotation(quotationId) {
     
     console.log("Loading transfers...");
     
-    // Load transfers with proper timing
+    // Load transfers sequentially so saved mode/rates map to the correct transfer row
     if (quotation.transfers && Array.isArray(quotation.transfers)) {
-      quotation.transfers.forEach((transferData, transferIndex) => {
-        setTimeout(() => {
-          addTransfer();
-          
-          setTimeout(() => {
-            const idx = nextTransferNumber;
-            console.log(`Loading transfer ${idx} with data:`, transferData);
-            
-            // Fill transfer data
-            if (document.getElementById(`tDate_${idx}`)) 
-              document.getElementById(`tDate_${idx}`).value = transferData.date || "";
-            if (document.getElementById(`tFrom_${idx}`)) 
-              document.getElementById(`tFrom_${idx}`).value = transferData.from || "";
-            if (document.getElementById(`tTo_${idx}`)) 
-              document.getElementById(`tTo_${idx}`).value = transferData.to || "";
-            if (document.getElementById(`tCar_${idx}`)) 
-              document.getElementById(`tCar_${idx}`).value = transferData.vehicle || "";
-            if (document.getElementById(`tType_${idx}`)) 
-              document.getElementById(`tType_${idx}`).value = transferData.type || "";
-            if (document.getElementById(`transferMode_${idx}`)) {
-              document.getElementById(`transferMode_${idx}`).value = transferData.mode || 'Private';
-              toggleTransferModeFields(idx);
-            }
-            if (document.getElementById(`tCostSAR_${idx}`)) 
-              document.getElementById(`tCostSAR_${idx}`).value = transferData.cost || 0;
-            if (document.getElementById(`tSvcSAR_${idx}`)) 
-              document.getElementById(`tSvcSAR_${idx}`).value = transferData.service || 0;
-            if (document.getElementById(`tShareCostAdult_${idx}`)) document.getElementById(`tShareCostAdult_${idx}`).value = transferData.shareAdultCost || 0;
-            if (document.getElementById(`tShareSvcAdult_${idx}`)) document.getElementById(`tShareSvcAdult_${idx}`).value = transferData.shareAdultService || 0;
-            if (document.getElementById(`tShareCostChild_${idx}`)) document.getElementById(`tShareCostChild_${idx}`).value = transferData.shareChildCost || 0;
-            if (document.getElementById(`tShareSvcChild_${idx}`)) document.getElementById(`tShareSvcChild_${idx}`).value = transferData.shareChildService || 0;
-            if (document.getElementById(`tShareCostInf_${idx}`)) document.getElementById(`tShareCostInf_${idx}`).value = transferData.shareInfCost || 0;
-            if (document.getElementById(`tShareSvcInf_${idx}`)) document.getElementById(`tShareSvcInf_${idx}`).value = transferData.shareInfService || 0;
-            
-            console.log(`Transfer ${idx} loaded successfully`);
-          }, 100);
-        }, 200 * transferIndex);
-      });
+      const toNumber = (...values) => {
+        for (const value of values) {
+          const parsed = parseFloat(value);
+          if (Number.isFinite(parsed)) return parsed;
+        }
+        return 0;
+      };
+      const detectTransferType = (transferData) => {
+        const explicit = String(transferData?.type || transferData?.mode || '').toLowerCase();
+        if (explicit.includes('sharing') || explicit.includes('shared')) return 'Sharing';
+        if (explicit.includes('private')) return 'Private';
+
+        const hasSharingRates =
+          toNumber(transferData?.shareAdultCost) > 0 ||
+          toNumber(transferData?.shareChildCost) > 0 ||
+          toNumber(transferData?.shareInfCost) > 0 ||
+          toNumber(transferData?.shareAdultService) > 0 ||
+          toNumber(transferData?.shareChildService) > 0 ||
+          toNumber(transferData?.shareInfService) > 0;
+
+        return hasSharingRates ? 'Sharing' : 'Private';
+      };
+
+      for (const transferData of quotation.transfers) {
+        await addTransfer({ skipValidation: true });
+        const idx = nextTransferNumber;
+        console.log(`Loading transfer ${idx} with data:`, transferData);
+
+        // Fill transfer data
+        if (document.getElementById(`tDate_${idx}`)) 
+          document.getElementById(`tDate_${idx}`).value = transferData.date || "";
+        if (document.getElementById(`tFrom_${idx}`)) 
+          document.getElementById(`tFrom_${idx}`).value = transferData.from || "";
+        if (document.getElementById(`tTo_${idx}`)) 
+          document.getElementById(`tTo_${idx}`).value = transferData.to || "";
+        if (document.getElementById(`tCar_${idx}`)) 
+          document.getElementById(`tCar_${idx}`).value = transferData.vehicle || "";
+
+        const loadedType = detectTransferType(transferData);
+        if (document.getElementById(`tType_${idx}`)) {
+          document.getElementById(`tType_${idx}`).value = loadedType;
+          toggleTransferRateFields(idx);
+        }
+
+        if (document.getElementById(`tCostSAR_${idx}`)) 
+          document.getElementById(`tCostSAR_${idx}`).value = toNumber(transferData.cost, transferData.pricePerVehicle, 0);
+        if (document.getElementById(`tSvcSAR_${idx}`)) 
+          document.getElementById(`tSvcSAR_${idx}`).value = toNumber(transferData.service, transferData.servicePerVehicle, 0);
+
+        if (document.getElementById(`tShareCostAdult_${idx}`)) document.getElementById(`tShareCostAdult_${idx}`).value = toNumber(transferData.shareAdultCost, transferData.priceAdult, 0);
+        if (document.getElementById(`tShareSvcAdult_${idx}`)) document.getElementById(`tShareSvcAdult_${idx}`).value = toNumber(transferData.shareAdultService, transferData.serviceAdult, 0);
+        if (document.getElementById(`tShareCostChild_${idx}`)) document.getElementById(`tShareCostChild_${idx}`).value = toNumber(transferData.shareChildCost, transferData.priceChildBed, transferData.priceChildNoBed, 0);
+        if (document.getElementById(`tShareSvcChild_${idx}`)) document.getElementById(`tShareSvcChild_${idx}`).value = toNumber(transferData.shareChildService, transferData.serviceChild, 0);
+        if (document.getElementById(`tShareCostInf_${idx}`)) document.getElementById(`tShareCostInf_${idx}`).value = toNumber(transferData.shareInfCost, transferData.priceInfant, 0);
+        if (document.getElementById(`tShareSvcInf_${idx}`)) document.getElementById(`tShareSvcInf_${idx}`).value = toNumber(transferData.shareInfService, transferData.serviceInfant, transferData.serviceInf, 0);
+
+        console.log(`Transfer ${idx} loaded successfully`);
+      }
     }
     
     console.log("Loading visa...");
