@@ -3244,15 +3244,15 @@ function removeAddon(id){
     
     <!-- Per Person Service Option -->
     <div id="perPersonSvcOption" class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 10px; display: none;">
-      <div>
+      <div id="svcAdultWrap">
         <label>Service / Adult (PKR)</label>
         <input id="svcPerAdult" type="number" value="0" min="0" oninput="performCalculation()">
       </div>
-      <div>
+      <div id="svcChildWrap">
         <label>Service / Child (PKR)</label>
         <input id="svcPerChild" type="number" value="0" min="0" oninput="performCalculation()">
       </div>
-      <div>
+      <div id="svcInfantWrap">
         <label>Service / Infant (PKR)</label>
         <input id="svcPerInfant" type="number" value="0" min="0" oninput="performCalculation()">
       </div>
@@ -3303,9 +3303,36 @@ function fmt(num) {
   return num.toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
+function updateServiceChargeVisibility() {
+  const adultCount = parseInt(document.getElementById('numAdult')?.value || 0);
+  const childBedCount = parseInt(document.getElementById('numChildBed')?.value || 0);
+  const childNoBedCount = parseInt(document.getElementById('numChildNoBed')?.value || 0);
+  const childCount = childBedCount + childNoBedCount;
+  const infantCount = parseInt(document.getElementById('numInfant')?.value || 0);
+
+  const adultWrap = document.getElementById('svcAdultWrap');
+  const childWrap = document.getElementById('svcChildWrap');
+  const infantWrap = document.getElementById('svcInfantWrap');
+  const perPersonOption = document.getElementById('perPersonSvcOption');
+
+  if (adultWrap) adultWrap.style.display = adultCount > 0 ? 'block' : 'none';
+  if (childWrap) childWrap.style.display = childCount > 0 ? 'block' : 'none';
+  if (infantWrap) infantWrap.style.display = infantCount > 0 ? 'block' : 'none';
+
+  if (adultCount <= 0 && document.getElementById('svcPerAdult')) document.getElementById('svcPerAdult').value = 0;
+  if (childCount <= 0 && document.getElementById('svcPerChild')) document.getElementById('svcPerChild').value = 0;
+  if (infantCount <= 0 && document.getElementById('svcPerInfant')) document.getElementById('svcPerInfant').value = 0;
+
+  if (perPersonOption) {
+    const visibleCols = [adultCount > 0, childCount > 0, infantCount > 0].filter(Boolean).length;
+    perPersonOption.style.gridTemplateColumns = `repeat(${Math.max(visibleCols, 1)}, 1fr)`;
+  }
+}
+
 // Toggle service charge options for International tool
 function toggleServiceOption(option) {
   const perPersonOption = document.getElementById('perPersonSvcOption');
+  updateServiceChargeVisibility();
   
   if (option === 'perPerson') {
     perPersonOption.style.display = 'block';
@@ -3971,6 +3998,19 @@ btnRecalculate.addEventListener("click", () => {
   performCalculation();
 });
 btnCloseSummary.addEventListener("click", () => (calcSummarySection.style.display = "none"));
+
+['numAdult', 'numChildBed', 'numChildNoBed', 'numInfant'].forEach((id) => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('input', () => {
+    updateServiceChargeVisibility();
+    if ((document.querySelector('input[name="svcOption"]:checked')?.value || 'none') === 'perPerson') {
+      performCalculation();
+    }
+  });
+});
+
+updateServiceChargeVisibility();
 </script>
 
 <script>
@@ -6078,10 +6118,8 @@ function loadQuotation(quotationId) {
     // Show status section
     showStatusSection();
 
-    // Recalculate after async section restores to ensure loaded quotation totals are exact
-    setTimeout(() => {
-      try { performCalculation(); } catch (e) { console.error('Recalculate after load failed:', e); }
-    }, 1200);
+    // Keep loaded values but do not auto-open quotation preview/cost sheet on reload
+    updateServiceChargeVisibility();
     
     showNotification("Quotation loaded successfully!", "success");
     
