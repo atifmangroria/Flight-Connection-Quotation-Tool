@@ -1034,6 +1034,10 @@ function addTransfer() {
   const container = document.getElementById('transfersContainer');
   const id = transferCount++;
   const cityOptions = getDestinationCities();
+  const packageType = document.getElementById('packageType')?.value || 'international';
+  const transferVehicleOptions = packageType === 'umrah'
+    ? '<option>Car</option><option>H1/Staria</option><option>Hiace</option><option>Coaster</option><option>Bus</option><option>Bullet Train</option>'
+    : '<option>Sedan</option><option>Van</option><option>Bus</option>';
   const html = `
     <div class="subsection" id="transfer_${id}">
       <div class="subsection-header">
@@ -1051,7 +1055,7 @@ function addTransfer() {
         <div><label>Transfer Type <span class="req">*</span></label><select class="tfType" required><option>One Way</option><option>Round Trip</option><option>Multi-Day</option></select></div>
       </div>
       <div class="grid cols3">
-        <div><label>Vehicle Type <span class="req">*</span></label><select class="tfVehicle" required><option>Sedan</option><option>Van</option><option>Bus</option></select></div>
+        <div><label>Vehicle Type <span class="req">*</span></label><select class="tfVehicle" required>${transferVehicleOptions}</select></div>
         <div><label>City <span class="req">*</span></label><select class="tfCity" required>${cityOptions}</select></div>
         <div><label>Price Per Vehicle</label><input type="number" class="tfPerVehicle" min="0" step="0.01" placeholder="Optional - if entered, per person prices below are optional"></div>
       </div>
