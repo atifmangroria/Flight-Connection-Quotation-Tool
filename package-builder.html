@@ -1045,8 +1045,8 @@ function addTransfer() {
         <button type="button" class="btn btn-remove" onclick="removeEl('transfer_${id}')">Remove</button>
       </div>
       <div class="grid cols3">
-        <div><label>From <span class="req">*</span></label><input type="text" class="tfFrom" placeholder="Airport" required></div>
-        <div><label>To <span class="req">*</span></label><input type="text" class="tfTo" placeholder="Hotel" required></div>
+        <div><label>From <span class="req">*</span></label><select class="tfFrom" required><option value="">-- Select --</option><option>Jeddah Airport</option><option>Madina Airport</option><option>Makkah Hotel</option><option>Madina Hotel</option><option>Makkah Station</option><option>Madina Station</option></select></div>
+        <div><label>To <span class="req">*</span></label><select class="tfTo" required><option value="">-- Select --</option><option>Jeddah Airport</option><option>Madina Airport</option><option>Makkah Hotel</option><option>Madina Hotel</option><option>Makkah Station</option><option>Madina Station</option></select></div>
         <div><label>Vendor <span class="req">*</span></label><input type="text" class="tfVendor" placeholder="Vendor name" required></div>
       </div>
       <div class="grid cols3">
