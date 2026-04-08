@@ -361,7 +361,6 @@
       <button onclick="showQuotationTypeModal()" class="btn-primary">Create Quotation</button>
       <button id="adminBtn" onclick="showPackageModal()" class="btn-primary" style="display:none;">Manage Packages</button>
       <button id="userMgmtBtn" onclick="window.location.href='user-management.html'" class="btn-primary" style="display:none;">User Management</button>
-      <button id="cleanupDupBtn" class="btn-primary" style="display:none;background:linear-gradient(135deg,#f39c12,#e67e22);">Cleanup Duplicates</button>
       <button id="btnLogout" class="btn-logout">Logout</button>
     </div>
   </div>
@@ -1185,8 +1184,6 @@ function loadAgentInfo() {
       const userFilter = document.getElementById('userFilter');
       if (allUsersBtn) allUsersBtn.style.display = 'inline-block';
       if (userFilter) userFilter.style.display = 'inline-block';
-      const cleanupDupBtn = document.getElementById('cleanupDupBtn');
-      if (cleanupDupBtn) cleanupDupBtn.style.display = 'inline-block';
     }
   }
 }
@@ -1993,11 +1990,6 @@ document.getElementById('btnLogout').addEventListener('click', function() {
     }, 1000);
   }
 });
-
-const cleanupDupBtn = document.getElementById('cleanupDupBtn');
-if (cleanupDupBtn) {
-  cleanupDupBtn.addEventListener('click', cleanupDuplicateQuotations);
-}
 
 // Make functions global for inline onclick
 window.showQuotationTypeModal = showQuotationTypeModal;
