@@ -973,7 +973,8 @@ function checkAgentLogin() {
 }
 
 function getOwnerId(agent) {
-  return agent?.uid || agent?.id || window.auth?.currentUser?.uid || null;
+  // Prefer the active Firebase auth UID to avoid stale localStorage IDs.
+  return window.auth?.currentUser?.uid || agent?.uid || agent?.id || null;
 }
 
 function isFirebaseAvailableForDashboard() {
