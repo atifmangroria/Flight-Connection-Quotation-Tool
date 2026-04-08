@@ -1035,10 +1035,8 @@ async function saveQuotationsToFirebase(agent, umrahQuotations, internationalQuo
       return true;
     }
 
-    // Always keep local copies in sync.
-    saveLocalQuotationsSnapshot(umrahQuotations, internationalQuotations);
-
     if (!isFirebaseAvailableForDashboard()) {
+      saveLocalQuotationsSnapshot(umrahQuotations, internationalQuotations);
       showNotification('Running without Firebase session. Changes saved locally.', 'warning');
       return true;
     }
@@ -1062,13 +1060,15 @@ async function saveQuotationsToFirebase(agent, umrahQuotations, internationalQuo
       });
       if (!success) throw new Error('Failed to save International quotations to Firebase');
     }
+
+    // Keep local snapshots aligned only after successful Firebase writes.
+    saveLocalQuotationsSnapshot(umrahQuotations, internationalQuotations);
     
     return true;
   } catch (error) {
     console.error('Error saving quotations to Firebase:', error);
-    saveLocalQuotationsSnapshot(umrahQuotations, internationalQuotations);
-    showNotification('Firebase save failed. Changes were saved locally.', 'warning');
-    return true;
+    showNotification('Firebase save failed. Changes were not synced.', 'error');
+    return false;
   }
 }
 
