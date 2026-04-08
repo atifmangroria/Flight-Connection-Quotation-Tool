@@ -1093,6 +1093,44 @@ async function applyPackageToForm(pkg) {
   const normalizeTransferType = (type) => {
     const t = String(type || '').toLowerCase();
     if (t.includes('sharing') || t.includes('shared')) return 'Sharing';
+    if (t.includes('private')) return 'Private';
+    return 'Private';
+  };
+  const firstNumber = (...values) => {
+    for (const value of values) {
+      const parsed = parseFloat(value);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+    return 0;
+  };
+  const isPositiveNumber = (value) => {
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) && parsed > 0;
+  };
+  const detectTransferMode = (transfer) => {
+    const typeBased = normalizeTransferType(transfer?.mode || transfer?.transferMode || transfer?.type);
+    if (typeBased === 'Sharing') return 'Sharing';
+
+    const hasSharingFields =
+      isPositiveNumber(transfer?.shareAdultCost) ||
+      isPositiveNumber(transfer?.shareChildCost) ||
+      isPositiveNumber(transfer?.shareInfCost) ||
+      isPositiveNumber(transfer?.shareAdultService) ||
+      isPositiveNumber(transfer?.shareChildService) ||
+      isPositiveNumber(transfer?.shareInfService);
+
+    const hasPerPersonPackageRates =
+      isPositiveNumber(transfer?.priceAdult) ||
+      isPositiveNumber(transfer?.priceChildBed) ||
+      isPositiveNumber(transfer?.priceChildNoBed) ||
+      isPositiveNumber(transfer?.priceInfant);
+
+    const hasVehicleRate =
+      isPositiveNumber(transfer?.pricePerVehicle) ||
+      isPositiveNumber(transfer?.cost);
+
+    if (hasSharingFields) return 'Sharing';
+    if (!hasVehicleRate && hasPerPersonPackageRates) return 'Sharing';
     return 'Private';
   };
 
@@ -1101,8 +1139,10 @@ async function applyPackageToForm(pkg) {
       const tr = packageTransfers[i] || {};
       await addTransfer({ skipValidation: true });
       const idx = nextTransferNumber;
+      const transferMode = detectTransferMode(tr);
       const transferPrice =
         (parseFloat(tr.pricePerVehicle) || 0) ||
+        (parseFloat(tr.cost) || 0) ||
         (parseFloat(tr.priceAdult) || 0) ||
         (parseFloat(tr.priceChildBed) || 0) ||
         (parseFloat(tr.priceChildNoBed) || 0) ||
@@ -1112,7 +1152,7 @@ async function applyPackageToForm(pkg) {
 
       if (tr.from) setSelectValueSmart(`tFrom_${idx}`, tr.from);
       if (tr.to) setSelectValueSmart(`tTo_${idx}`, tr.to);
-      if (tr.type) setSelectValueSmart(`tType_${idx}`, normalizeTransferType(tr.type));
+      setSelectValueSmart(`tType_${idx}`, transferMode);
 
       const mappedVehicle = normalizeVehicle(tr.vehicle);
       if (mappedVehicle) setSelectValueSmart(`tCar_${idx}`, mappedVehicle);
@@ -1121,20 +1161,19 @@ async function applyPackageToForm(pkg) {
       const dateFromVal = document.getElementById('dateFrom')?.value;
       if (dateFromVal) setValue(`tDate_${idx}`, dateFromVal);
 
-      const normalizedType = normalizeTransferType(tr.type);
-      const isSharing = normalizedType === 'Sharing';
+      const isSharing = transferMode === 'Sharing';
       if (isSharing) {
         setValue(`tCostSAR_${idx}`, 0);
         setValue(`tSvcSAR_${idx}`, 0);
-        setValue(`tShareCostAdult_${idx}`, parseFloat(tr.priceAdult) || transferPrice || 0);
-        setValue(`tShareCostChild_${idx}`, parseFloat(tr.priceChildBed) || parseFloat(tr.priceChildNoBed) || parseFloat(tr.priceAdult) || 0);
-        setValue(`tShareCostInf_${idx}`, parseFloat(tr.priceInfant) || 0);
-        setValue(`tShareSvcAdult_${idx}`, 0);
-        setValue(`tShareSvcChild_${idx}`, 0);
-        setValue(`tShareSvcInf_${idx}`, 0);
+        setValue(`tShareCostAdult_${idx}`, firstNumber(tr.shareAdultCost, tr.priceAdult, transferPrice, 0));
+        setValue(`tShareCostChild_${idx}`, firstNumber(tr.shareChildCost, tr.priceChildBed, tr.priceChildNoBed, tr.priceAdult, 0));
+        setValue(`tShareCostInf_${idx}`, firstNumber(tr.shareInfCost, tr.priceInfant, 0));
+        setValue(`tShareSvcAdult_${idx}`, firstNumber(tr.shareAdultService, tr.serviceAdult, 0));
+        setValue(`tShareSvcChild_${idx}`, firstNumber(tr.shareChildService, tr.serviceChild, 0));
+        setValue(`tShareSvcInf_${idx}`, firstNumber(tr.shareInfService, tr.serviceInfant, tr.serviceInf, 0));
       } else {
-        setValue(`tCostSAR_${idx}`, parseFloat(tr.pricePerVehicle) || transferPrice || 0);
-        setValue(`tSvcSAR_${idx}`, 0);
+        setValue(`tCostSAR_${idx}`, firstNumber(tr.pricePerVehicle, tr.cost, transferPrice, 0));
+        setValue(`tSvcSAR_${idx}`, firstNumber(tr.service, tr.servicePerVehicle, tr.priceService, 0));
         setValue(`tShareCostAdult_${idx}`, 0);
         setValue(`tShareCostChild_${idx}`, 0);
         setValue(`tShareCostInf_${idx}`, 0);
