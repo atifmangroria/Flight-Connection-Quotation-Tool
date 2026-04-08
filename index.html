@@ -7427,13 +7427,6 @@ function handleUrlParameters() {
     setTimeout(() => {
       // Load the quotation
       loadQuotation(quotationIdToLoad);
-      
-      // If viewing, show quotation modal after loading
-      if (viewId) {
-        setTimeout(() => {
-          showQuotationModal();
-        }, 2000);
-      }
     }, 1000);
     
     // Add this at the end to ensure status is shown
