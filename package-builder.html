@@ -280,10 +280,16 @@ async function generateImage() {
   }
   const packageCode = currentPackageCode || await getNextPackageCode();
   const typeVal = (document.getElementById('packageType').value || 'N/A').toUpperCase();
-  const currentAgent = JSON.parse(localStorage.getItem('loggedInAgent') || 'null') || {};
+  const currentAgent = JSON.parse(localStorage.getItem('loggedInAgent') || 'null')
+    || JSON.parse(localStorage.getItem('loggedInUser') || 'null')
+    || {};
   const userContactNumber = [
     currentAgent.phone,
+    currentAgent.phoneNumber,
+    currentAgent.whatsapp,
+    currentAgent.whatsApp,
     currentAgent.mobile,
+    currentAgent.cell,
     currentAgent.contact,
     currentAgent.contactNumber,
     currentAgent.number
@@ -453,6 +459,16 @@ async function generateImage() {
   ctx.save();
   // --- Draw header (match PDF) ---
   let y = 40 * scale;
+  ctx.font = `${8.5*scale}px Arial`;
+  ctx.fillStyle = '#5a5a5a';
+  ctx.textAlign = 'right';
+  ctx.fillText('Flight Connection Travel & Tours | GL No. 3423 | IATA: 27319143', width - 28 * scale, 18 * scale);
+  ctx.beginPath();
+  ctx.strokeStyle = '#dce4f0';
+  ctx.lineWidth = 1;
+  ctx.moveTo(24 * scale, 22 * scale);
+  ctx.lineTo(width - 24 * scale, 22 * scale);
+  ctx.stroke();
   ctx.font = `bold ${20*scale}px Arial`;
   ctx.fillStyle = '#0b76d1';
   ctx.textAlign = 'center';
