@@ -6200,82 +6200,76 @@ async function loadQuotation(quotationId) {
     
     console.log("Loading Makkah hotels...");
     
-    // Load Makkah hotels with proper timing
+    // Load Makkah hotels sequentially to preserve exact saved order and values
     if (quotation.hotelsMakkah && Array.isArray(quotation.hotelsMakkah)) {
-      quotation.hotelsMakkah.forEach((hotelData, hotelIndex) => {
-        setTimeout(() => {
-          createHotelSectionM(nextHotelNumberM);
-          
-          setTimeout(() => {
-            const idx = nextHotelNumberM;
-            console.log(`Loading Makkah hotel ${idx} with data:`, hotelData);
-            
-            // Fill hotel data
-            if (document.getElementById(`hkNameM_${idx}`)) 
-              document.getElementById(`hkNameM_${idx}`).value = hotelData.name || "";
-            if (document.getElementById(`hkDistM_${idx}`)) 
-              document.getElementById(`hkDistM_${idx}`).value = hotelData.distance || "";
-            if (document.getElementById(`hkCheckInM_${idx}`)) 
-              document.getElementById(`hkCheckInM_${idx}`).value = hotelData.checkIn || "";
-            if (document.getElementById(`hkCheckOutM_${idx}`)) 
-              document.getElementById(`hkCheckOutM_${idx}`).value = hotelData.checkOut || "";
-            if (document.getElementById(`hkNightsM_${idx}`)) 
-              document.getElementById(`hkNightsM_${idx}`).value = hotelData.nights || 0;
-            if (document.getElementById(`hkRoomTypeM_${idx}`)) 
-              document.getElementById(`hkRoomTypeM_${idx}`).value = hotelData.roomType || "";
-            if (document.getElementById(`hkRoomsM_${idx}`)) 
-              document.getElementById(`hkRoomsM_${idx}`).value = hotelData.rooms || 1;
-            if (document.getElementById(`hkServiceM_${idx}`)) 
-              document.getElementById(`hkServiceM_${idx}`).value = hotelData.serviceType || "";
-            if (document.getElementById(`hkCostNightM_${idx}`)) 
-              document.getElementById(`hkCostNightM_${idx}`).value = hotelData.costNight || 0;
-            if (document.getElementById(`hkSvcNightM_${idx}`)) 
-              document.getElementById(`hkSvcNightM_${idx}`).value = hotelData.svcNight || 0;
-            
-            console.log(`Makkah hotel ${idx} loaded successfully`);
-          }, 100);
-        }, 200 * hotelIndex);
-      });
+      for (const hotelData of quotation.hotelsMakkah) {
+        nextHotelNumberM += 1;
+        const idx = nextHotelNumberM;
+        await createHotelSectionM(idx);
+
+        console.log(`Loading Makkah hotel ${idx} with data:`, hotelData);
+
+        // Fill hotel data
+        if (document.getElementById(`hkNameM_${idx}`)) 
+          document.getElementById(`hkNameM_${idx}`).value = hotelData.name || "";
+        if (document.getElementById(`hkDistM_${idx}`)) 
+          document.getElementById(`hkDistM_${idx}`).value = hotelData.distance || "";
+        if (document.getElementById(`hkCheckInM_${idx}`)) 
+          document.getElementById(`hkCheckInM_${idx}`).value = hotelData.checkIn || "";
+        if (document.getElementById(`hkCheckOutM_${idx}`)) 
+          document.getElementById(`hkCheckOutM_${idx}`).value = hotelData.checkOut || "";
+        if (document.getElementById(`hkNightsM_${idx}`)) 
+          document.getElementById(`hkNightsM_${idx}`).value = hotelData.nights || 0;
+        if (document.getElementById(`hkRoomTypeM_${idx}`)) 
+          document.getElementById(`hkRoomTypeM_${idx}`).value = hotelData.roomType || "";
+        if (document.getElementById(`hkRoomsM_${idx}`)) 
+          document.getElementById(`hkRoomsM_${idx}`).value = hotelData.rooms || 1;
+        if (document.getElementById(`hkServiceM_${idx}`)) 
+          document.getElementById(`hkServiceM_${idx}`).value = hotelData.serviceType || "";
+        if (document.getElementById(`hkCostNightM_${idx}`)) 
+          document.getElementById(`hkCostNightM_${idx}`).value = hotelData.costNight || 0;
+        if (document.getElementById(`hkSvcNightM_${idx}`)) 
+          document.getElementById(`hkSvcNightM_${idx}`).value = hotelData.svcNight || 0;
+
+        console.log(`Makkah hotel ${idx} loaded successfully`);
+      }
     }
     
     console.log("Loading Madina hotels...");
     
-    // Load Madina hotels with proper timing
+    // Load Madina hotels sequentially to preserve exact saved order and values
     if (quotation.hotelsMadina && Array.isArray(quotation.hotelsMadina)) {
-      quotation.hotelsMadina.forEach((hotelData, hotelIndex) => {
-        setTimeout(() => {
-          createHotelSectionA(nextHotelNumberA);
-          
-          setTimeout(() => {
-            const idx = nextHotelNumberA;
-            console.log(`Loading Madina hotel ${idx} with data:`, hotelData);
-            
-            // Fill hotel data
-            if (document.getElementById(`hkNameA_${idx}`)) 
-              document.getElementById(`hkNameA_${idx}`).value = hotelData.name || "";
-            if (document.getElementById(`hkDistA_${idx}`)) 
-              document.getElementById(`hkDistA_${idx}`).value = hotelData.distance || "";
-            if (document.getElementById(`hkCheckInA_${idx}`)) 
-              document.getElementById(`hkCheckInA_${idx}`).value = hotelData.checkIn || "";
-            if (document.getElementById(`hkCheckOutA_${idx}`)) 
-              document.getElementById(`hkCheckOutA_${idx}`).value = hotelData.checkOut || "";
-            if (document.getElementById(`hkNightsA_${idx}`)) 
-              document.getElementById(`hkNightsA_${idx}`).value = hotelData.nights || 0;
-            if (document.getElementById(`hkRoomTypeA_${idx}`)) 
-              document.getElementById(`hkRoomTypeA_${idx}`).value = hotelData.roomType || "";
-            if (document.getElementById(`hkRoomsA_${idx}`)) 
-              document.getElementById(`hkRoomsA_${idx}`).value = hotelData.rooms || 1;
-            if (document.getElementById(`hkServiceA_${idx}`)) 
-              document.getElementById(`hkServiceA_${idx}`).value = hotelData.serviceType || "";
-            if (document.getElementById(`hkCostNightA_${idx}`)) 
-              document.getElementById(`hkCostNightA_${idx}`).value = hotelData.costNight || 0;
-            if (document.getElementById(`hkSvcNightA_${idx}`)) 
-              document.getElementById(`hkSvcNightA_${idx}`).value = hotelData.svcNight || 0;
-            
-            console.log(`Madina hotel ${idx} loaded successfully`);
-          }, 100);
-        }, 200 * hotelIndex);
-      });
+      for (const hotelData of quotation.hotelsMadina) {
+        nextHotelNumberA += 1;
+        const idx = nextHotelNumberA;
+        await createHotelSectionA(idx);
+
+        console.log(`Loading Madina hotel ${idx} with data:`, hotelData);
+
+        // Fill hotel data
+        if (document.getElementById(`hkNameA_${idx}`)) 
+          document.getElementById(`hkNameA_${idx}`).value = hotelData.name || "";
+        if (document.getElementById(`hkDistA_${idx}`)) 
+          document.getElementById(`hkDistA_${idx}`).value = hotelData.distance || "";
+        if (document.getElementById(`hkCheckInA_${idx}`)) 
+          document.getElementById(`hkCheckInA_${idx}`).value = hotelData.checkIn || "";
+        if (document.getElementById(`hkCheckOutA_${idx}`)) 
+          document.getElementById(`hkCheckOutA_${idx}`).value = hotelData.checkOut || "";
+        if (document.getElementById(`hkNightsA_${idx}`)) 
+          document.getElementById(`hkNightsA_${idx}`).value = hotelData.nights || 0;
+        if (document.getElementById(`hkRoomTypeA_${idx}`)) 
+          document.getElementById(`hkRoomTypeA_${idx}`).value = hotelData.roomType || "";
+        if (document.getElementById(`hkRoomsA_${idx}`)) 
+          document.getElementById(`hkRoomsA_${idx}`).value = hotelData.rooms || 1;
+        if (document.getElementById(`hkServiceA_${idx}`)) 
+          document.getElementById(`hkServiceA_${idx}`).value = hotelData.serviceType || "";
+        if (document.getElementById(`hkCostNightA_${idx}`)) 
+          document.getElementById(`hkCostNightA_${idx}`).value = hotelData.costNight || 0;
+        if (document.getElementById(`hkSvcNightA_${idx}`)) 
+          document.getElementById(`hkSvcNightA_${idx}`).value = hotelData.svcNight || 0;
+
+        console.log(`Madina hotel ${idx} loaded successfully`);
+      }
     }
     
     console.log("Loading transfers...");
