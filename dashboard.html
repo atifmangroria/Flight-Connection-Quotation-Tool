@@ -1027,9 +1027,9 @@ function saveLocalQuotationsSnapshot(umrahQuotations, internationalQuotations) {
 }
 
 // Helper function to save quotations to Firebase
-async function saveQuotationsToFirebase(agent, umrahQuotations, internationalQuotations) {
+async function saveQuotationsToFirebase(agent, umrahQuotations, internationalQuotations, explicitOwnerId = null) {
   try {
-    const ownerId = getOwnerId(agent);
+    const ownerId = explicitOwnerId || getOwnerId(agent);
     if (!ownerId) {
       saveLocalQuotationsSnapshot(umrahQuotations, internationalQuotations);
       return true;
@@ -1046,7 +1046,8 @@ async function saveQuotationsToFirebase(agent, umrahQuotations, internationalQuo
       const success = await window.firebaseDB.saveData('umrah_quotations', ownerId, { 
         quotations: umrahQuotations, 
         updatedAt: new Date(),
-        agentId: ownerId 
+        agentId: ownerId,
+        userId: ownerId
       });
       if (!success) throw new Error('Failed to save Umrah quotations to Firebase');
     }
@@ -1056,7 +1057,8 @@ async function saveQuotationsToFirebase(agent, umrahQuotations, internationalQuo
       const success = await window.firebaseDB.saveData('international_quotations', ownerId, { 
         quotations: internationalQuotations, 
         updatedAt: new Date(),
-        agentId: ownerId 
+        agentId: ownerId,
+        userId: ownerId
       });
       if (!success) throw new Error('Failed to save International quotations to Firebase');
     }
@@ -1073,9 +1075,9 @@ async function saveQuotationsToFirebase(agent, umrahQuotations, internationalQuo
 }
 
 // Helper function to load quotations from Firebase
-async function loadQuotationsFromFirebase(agent) {
+async function loadQuotationsFromFirebase(agent, explicitOwnerId = null) {
   try {
-    const ownerId = getOwnerId(agent);
+    const ownerId = explicitOwnerId || getOwnerId(agent);
     if (!ownerId) return getLocalQuotationsSnapshot();
 
     if (!isFirebaseAvailableForDashboard()) {
@@ -1094,9 +1096,19 @@ async function loadQuotationsFromFirebase(agent) {
     return result;
   } catch (error) {
     console.error('Error loading quotations from Firebase:', error);
+    if (isFirebaseAvailableForDashboard()) {
+      showNotification('Could not load Firebase data due to permissions. Local cache was not used.', 'error');
+      return { umrah: [], international: [] };
+    }
     showNotification('Could not load Firebase data. Showing local quotations.', 'warning');
     return getLocalQuotationsSnapshot();
   }
+}
+
+function findQuotationOwnerId(quotationId, quotationType) {
+  const list = quotationType === 'umrah' ? allUsersQuotations.concat(allUmrahQuotations) : allUsersQuotations.concat(allInternationalQuotations);
+  const target = list.find(q => q?.id === quotationId && q?.type === quotationType);
+  return target?.agentId || null;
 }
 
 // Show notification function
@@ -1764,18 +1776,22 @@ async function deleteQuotation(quotationId, quotationType) {
   
   const agent = checkAgentLogin();
   if (!agent) return;
+
+  const ownerId = findQuotationOwnerId(quotationId, quotationType) || getOwnerId(agent);
   
   // Load current data from Firebase
-  const firebaseData = await loadQuotationsFromFirebase(agent);
+  const firebaseData = await loadQuotationsFromFirebase(agent, ownerId);
   let quotations = quotationType === 'umrah' ? firebaseData.umrah : firebaseData.international;
   
   quotations = quotations.filter(q => q.id !== quotationId);
   
   // Save updated data to Firebase
-  const success = await saveQuotationsToFirebase(agent, quotationType === 'umrah' ? quotations : firebaseData.umrah, quotationType === 'international' ? quotations : firebaseData.international);
+  const success = await saveQuotationsToFirebase(agent, quotationType === 'umrah' ? quotations : firebaseData.umrah, quotationType === 'international' ? quotations : firebaseData.international, ownerId);
   if (success) {
     await loadAllQuotations(); // Reload to reflect changes
     showNotification('Quotation deleted successfully', 'success');
+  } else {
+    showNotification('Delete failed due to Firebase permissions. No local-only changes applied.', 'error');
   }
 }
 
