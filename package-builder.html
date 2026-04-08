@@ -609,6 +609,7 @@ let transferCount = 0;
 let visaCount = 0;
 let editingPackageId = null;
 let currentPackageCode = null;
+let isReadOnlyMode = false;
 
 function formatPackageCode(number) {
   return `PKG-${String(number).padStart(4, '0')}`;
@@ -629,6 +630,11 @@ function getEditingPackageIdFromUrl() {
   return params.get('edit');
 }
 
+function getViewingPackageIdFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('view');
+}
+
 function resetDynamicSections() {
   document.getElementById('destinationsContainer').innerHTML = '';
   document.getElementById('flightsContainer').innerHTML = '';
@@ -645,24 +651,28 @@ function resetDynamicSections() {
   visaCount = 0;
 }
 
-async function loadPackageForEditing(packageId) {
+async function loadPackageForEditing(packageId, options = {}) {
+  const readOnly = !!options.readOnly;
   const data = await window.firebaseDB.getData('packages', packageId);
   if (!data) {
-    showNotification('Package not found for editing', 'error');
+    showNotification(readOnly ? 'Package not found for viewing' : 'Package not found for editing', 'error');
     return;
   }
 
-  editingPackageId = packageId;
-  if (!data.packageCode) {
+  if (!readOnly) {
+    editingPackageId = packageId;
+  }
+
+  if (!data.packageCode && !readOnly) {
     const assignedPackageCode = await getNextPackageCode();
     data.packageCode = assignedPackageCode;
     currentPackageCode = assignedPackageCode;
     await window.firebaseDB.saveData('packages', packageId, { packageCode: assignedPackageCode });
   } else {
-    currentPackageCode = data.packageCode;
+    currentPackageCode = data.packageCode || null;
   }
   const submitBtn = document.querySelector('#packageForm button[type="submit"]');
-  if (submitBtn) submitBtn.textContent = '💾 Update Package';
+  if (submitBtn && !readOnly) submitBtn.textContent = '💾 Update Package';
 
   document.getElementById('packageName').value = data.name || '';
   document.getElementById('packageType').value = data.type || '';
@@ -783,7 +793,31 @@ async function loadPackageForEditing(packageId) {
 
   updateCitySelectors();
   updateTourDaySelectors();
-  showNotification('Package loaded for editing', 'success');
+  showNotification(readOnly ? 'Package loaded for viewing' : 'Package loaded for editing', 'success');
+}
+
+function enableReadOnlyMode() {
+  isReadOnlyMode = true;
+
+  const headerTitle = document.querySelector('.header h1');
+  if (headerTitle) {
+    headerTitle.textContent = 'Package Viewer';
+  }
+
+  const submitBtn = document.querySelector('#packageForm button[type="submit"]');
+  if (submitBtn) {
+    submitBtn.style.display = 'none';
+  }
+
+  document.querySelectorAll('.btn-add, .btn-remove').forEach(btn => {
+    btn.style.display = 'none';
+  });
+
+  document.querySelectorAll('#packageForm input, #packageForm select, #packageForm textarea').forEach(field => {
+    field.disabled = true;
+  });
+
+  showNotification('Read-only mode: You can view package details and download PDF/PNG.', 'success');
 }
 
 function getDestinationCities() {
@@ -842,8 +876,7 @@ const packageData = {};
 function checkAdminAccess() {
   const agent = JSON.parse(localStorage.getItem("loggedInAgent"));
   if (!agent || agent.role !== 'admin') {
-    showNotification('Only admins can create packages', 'error');
-    setTimeout(() => window.close(), 2000);
+    showNotification('Only admins can create or edit packages', 'error');
     return false;
   }
   return true;
@@ -1794,17 +1827,28 @@ async function generatePDF() {
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
-  if (checkAdminAccess()) {
-    const editId = getEditingPackageIdFromUrl();
-    if (editId) {
-      await loadPackageForEditing(editId);
-    } else {
-      addDestination();
-      addFlight();
-      addHotel();
-      addTransfer();
-      addVisa();
-    }
+  const viewId = getViewingPackageIdFromUrl();
+  const editId = getEditingPackageIdFromUrl();
+
+  if (viewId) {
+    await loadPackageForEditing(viewId, { readOnly: true });
+    enableReadOnlyMode();
+    return;
+  }
+
+  if (!checkAdminAccess()) {
+    setTimeout(() => window.close(), 2000);
+    return;
+  }
+
+  if (editId) {
+    await loadPackageForEditing(editId);
+  } else {
+    addDestination();
+    addFlight();
+    addHotel();
+    addTransfer();
+    addVisa();
   }
 });
 </script>

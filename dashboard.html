@@ -360,6 +360,7 @@
     <div class="header-right no-print">
       <button onclick="showQuotationTypeModal()" class="btn-primary">Create Quotation</button>
       <button id="adminBtn" onclick="showPackageModal()" class="btn-primary" style="display:none;">Manage Packages</button>
+      <button id="agentPackageBtn" onclick="showPackageModal()" class="btn-primary" style="display:none;">View Packages</button>
       <button id="userMgmtBtn" onclick="window.location.href='user-management.html'" class="btn-primary" style="display:none;">User Management</button>
       <button id="btnLogout" class="btn-logout">Logout</button>
     </div>
@@ -503,7 +504,7 @@
     <div class="modal-body">
       <!-- Package List View -->
       <div id="packageListView">
-        <div style="margin-bottom: 20px; text-align: right;">
+        <div id="createPackageWrap" style="margin-bottom: 20px; text-align: right;">
           <button onclick="openPackageBuilder()" class="btn-primary">➕ Create New Package</button>
         </div>
         <div id="packagesTableContainer">
@@ -621,7 +622,17 @@
 <script>
 // Show package modal
 function showPackageModal() {
+  const agent = checkAgentLogin();
+  const isAdmin = !!(agent && agent.role === 'admin');
   document.getElementById('packageModal').classList.add('visible');
+  const modalTitle = document.getElementById('modal-title');
+  const createPackageWrap = document.getElementById('createPackageWrap');
+  if (modalTitle) {
+    modalTitle.textContent = isAdmin ? 'Manage Packages' : 'View Packages';
+  }
+  if (createPackageWrap) {
+    createPackageWrap.style.display = isAdmin ? 'block' : 'none';
+  }
   showPackageList();
   loadPackages();
 }
@@ -637,9 +648,11 @@ function closePackageModal() {
 
 // Show package list view
 function showPackageList() {
+  const agent = checkAgentLogin();
+  const isAdmin = !!(agent && agent.role === 'admin');
   document.getElementById('packageListView').style.display = 'block';
   document.getElementById('packageFormView').style.display = 'none';
-  document.getElementById('modal-title').textContent = 'Manage Packages';
+  document.getElementById('modal-title').textContent = isAdmin ? 'Manage Packages' : 'View Packages';
 }
 
 // Show package form view
@@ -754,6 +767,8 @@ async function backfillMissingPackageCodes(packages) {
 // Load packages list
 async function loadPackages() {
   try {
+    const agent = checkAgentLogin();
+    const isAdmin = !!(agent && agent.role === 'admin');
     let packages = await window.firebaseDB.getAll('packages');
     packages = await backfillMissingPackageCodes(packages);
     const tbody = document.getElementById('packagesTableBody');
@@ -793,6 +808,10 @@ async function loadPackages() {
         ? `<button onclick="editPackage('${pkg.id}')" class="btn-edit" style="margin-right: 5px;">Edit</button>`
         : `<button onclick="openPackageBuilder('${pkg.id}')" class="btn-edit" style="margin-right: 5px;" title="Edit in Advanced Package Builder">Edit</button>`;
 
+      const actions = isAdmin
+        ? `${editBtn}<button onclick="deletePackage('${pkg.id}', '${pkgName}')" class="btn-delete">Delete</button>`
+        : `<button onclick="viewPackage('${pkg.id}')" class="btn-view">View</button>`;
+
       return `
       <tr>
         <td>${packageCode}</td>
@@ -801,10 +820,7 @@ async function loadPackages() {
         <td>${totalNightsText}</td>
         <td>${destinationsText}</td>
         <td>${createdText}</td>
-        <td>
-          ${editBtn}
-          <button onclick="deletePackage('${pkg.id}', '${pkgName}')" class="btn-delete">Delete</button>
-        </td>
+        <td>${actions}</td>
       </tr>
     `;
     }).join('');
@@ -859,6 +875,11 @@ async function loadPackageForEdit(packageId) {
 // Edit package
 function editPackage(packageId) {
   showPackageForm(packageId);
+}
+
+function viewPackage(packageId) {
+  const url = `package-builder.html?view=${encodeURIComponent(packageId)}`;
+  window.open(url, '_blank');
 }
 
 // Delete package
@@ -1184,6 +1205,8 @@ function loadAgentInfo() {
       const userFilter = document.getElementById('userFilter');
       if (allUsersBtn) allUsersBtn.style.display = 'inline-block';
       if (userFilter) userFilter.style.display = 'inline-block';
+    } else {
+      document.getElementById("agentPackageBtn").style.display = 'inline-block';
     }
   }
 }
@@ -1842,6 +1865,7 @@ window.showPackageList = showPackageList;
 window.showPackageForm = showPackageForm;
 window.loadPackages = loadPackages;
 window.editPackage = editPackage;
+window.viewPackage = viewPackage;
 window.deletePackage = deletePackage;
 window.calculatePackagePrices = calculatePackagePrices;
 
