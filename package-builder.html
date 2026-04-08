@@ -279,6 +279,20 @@ async function generateImage() {
     travelPeriod = `${monthVal}/${yearVal}`;
   }
   const packageCode = currentPackageCode || await getNextPackageCode();
+  const typeVal = (document.getElementById('packageType').value || 'N/A').toUpperCase();
+  const currentAgent = JSON.parse(localStorage.getItem('loggedInAgent') || 'null') || {};
+  const userContactNumber = [
+    currentAgent.phone,
+    currentAgent.mobile,
+    currentAgent.contact,
+    currentAgent.contactNumber,
+    currentAgent.number
+  ].find(value => String(value || '').trim()) || '';
+  const headerContactLine = [
+    'www.flightconnection.net.pk',
+    userContactNumber,
+    'info@flightconnection.net.pk'
+  ].filter(value => String(value || '').trim()).join(' | ');
   const totalNights = Number(document.getElementById('totalNights').value || 0);
   const totalDays = totalNights > 0 ? totalNights + 1 : 0;
   const destinationRows = Array.from(document.querySelectorAll('#destinationsContainer .subsection')).map(s => ({
@@ -451,7 +465,7 @@ async function generateImage() {
   ctx.fillStyle = '#555';
   ctx.fillText('Mezzanine Floor, 17-E, Shahbaz Commercial, Phase 6. DHA', width/2, y);
   y += 14 * scale;
-  ctx.fillText('www.flightconnection.net.pk | info@flightconnection.net.pk', width/2, y);
+  ctx.fillText(headerContactLine, width/2, y);
   y += 18 * scale;
   ctx.font = `${13*scale}px Arial`;
   ctx.fillStyle = '#222';
@@ -478,7 +492,7 @@ async function generateImage() {
   y += 18 * scale;
   ctx.fillText(`Travel Period: ${travelPeriod}`, 30*scale, y);
   y += 18 * scale;
-  ctx.fillText(`Package Type: INTERNATIONAL`, 30*scale, y);
+  ctx.fillText(`Package Type: ${typeVal}`, 30*scale, y);
   y += 24 * scale;
   // --- Draw sections ---
   const drawSection = (title, lines) => {
@@ -511,7 +525,8 @@ async function generateImage() {
   ctx.font = `${11*scale}px Arial`;
   ctx.fillStyle = '#888';
   ctx.textAlign = 'center';
-  ctx.fillText('Flight Connection Travel & Tours | www.flightconnection.net.pk', width/2, height-30*scale);
+  ctx.fillText('Flight Connection Travel & Tours | GL No. 3423 | IATA: 27319143', width/2, height-42*scale);
+  ctx.fillText('Mezzanine Floor, 17-E, Shahbaz Commercial, Phase 6. DHA | www.flightconnection.net.pk', width/2, height-26*scale);
   ctx.restore();
   // --- Open PNG in new tab ---
   const fileName = `${packageCode}-${pkgName}`.replace(/[^a-zA-Z0-9-_]/g, '_') + '.png';
