@@ -910,6 +910,8 @@ function updateSections() {
       addVisa();
     }
   }
+
+  updateTransferFromToByPackageType(type);
 }
 
 // DESTINATIONS
@@ -1080,6 +1082,46 @@ function addTour() {
 }
 
 // TRANSFERS
+function getTransferFromToFieldHtml(fieldClass, label, packageType, value = '') {
+  const safeValue = String(value || '').replace(/"/g, '&quot;');
+  if (packageType === 'umrah') {
+    return `<label>${label} <span class="req">*</span></label><select class="${fieldClass}" required><option value="">-- Select --</option><option>Jeddah Airport</option><option>Madina Airport</option><option>Makkah Hotel</option><option>Madina Hotel</option><option>Makkah Station</option><option>Madina Station</option></select>`;
+  }
+  return `<label>${label} <span class="req">*</span></label><input type="text" class="${fieldClass}" required placeholder="Enter ${label.toLowerCase()}" value="${safeValue}">`;
+}
+
+function updateTransferFromToByPackageType(packageType) {
+  const type = packageType || document.getElementById('packageType')?.value || '';
+  document.querySelectorAll('#transfersContainer .subsection').forEach((row) => {
+    const fromWrap = row.querySelector('.tfFromWrap');
+    const toWrap = row.querySelector('.tfToWrap');
+    if (!fromWrap || !toWrap) return;
+
+    const currentFrom = row.querySelector('.tfFrom')?.value || '';
+    const currentTo = row.querySelector('.tfTo')?.value || '';
+
+    fromWrap.innerHTML = getTransferFromToFieldHtml('tfFrom', 'From', type, currentFrom);
+    toWrap.innerHTML = getTransferFromToFieldHtml('tfTo', 'To', type, currentTo);
+
+    const fromField = row.querySelector('.tfFrom');
+    const toField = row.querySelector('.tfTo');
+    if (fromField) {
+      if (type === 'umrah') {
+        fromField.value = ['Jeddah Airport', 'Madina Airport', 'Makkah Hotel', 'Madina Hotel', 'Makkah Station', 'Madina Station'].includes(currentFrom) ? currentFrom : '';
+      } else {
+        fromField.value = currentFrom;
+      }
+    }
+    if (toField) {
+      if (type === 'umrah') {
+        toField.value = ['Jeddah Airport', 'Madina Airport', 'Makkah Hotel', 'Madina Hotel', 'Makkah Station', 'Madina Station'].includes(currentTo) ? currentTo : '';
+      } else {
+        toField.value = currentTo;
+      }
+    }
+  });
+}
+
 function addTransfer() {
   const container = document.getElementById('transfersContainer');
   const id = transferCount++;
@@ -1095,8 +1137,8 @@ function addTransfer() {
         <button type="button" class="btn btn-remove" onclick="removeEl('transfer_${id}')">Remove</button>
       </div>
       <div class="grid cols3">
-        <div><label>From <span class="req">*</span></label><select class="tfFrom" required><option value="">-- Select --</option><option>Jeddah Airport</option><option>Madina Airport</option><option>Makkah Hotel</option><option>Madina Hotel</option><option>Makkah Station</option><option>Madina Station</option></select></div>
-        <div><label>To <span class="req">*</span></label><select class="tfTo" required><option value="">-- Select --</option><option>Jeddah Airport</option><option>Madina Airport</option><option>Makkah Hotel</option><option>Madina Hotel</option><option>Makkah Station</option><option>Madina Station</option></select></div>
+        <div class="tfFromWrap">${getTransferFromToFieldHtml('tfFrom', 'From', packageType)}</div>
+        <div class="tfToWrap">${getTransferFromToFieldHtml('tfTo', 'To', packageType)}</div>
         <div><label>Vendor <span class="req">*</span></label><input type="text" class="tfVendor" placeholder="Vendor name" required></div>
       </div>
       <div class="grid cols3">
