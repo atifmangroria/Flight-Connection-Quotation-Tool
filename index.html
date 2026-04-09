@@ -700,6 +700,31 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus, 
   </div>
 </div>
 
+<div id="customerPickerModal" class="modal-overlay no-print">
+  <div class="modal-content" style="max-width:820px;width:96%;text-align:left;">
+    <h3 style="margin:0 0 10px;">Find Customer</h3>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <input id="customerPickerSearch" type="text" placeholder="Search by name, phone, city, quotation id" style="flex:1;min-width:260px;" />
+      <button id="customerPickerClose" type="button" class="ghost">Close</button>
+    </div>
+    <div id="customerPickerCount" class="small" style="margin-top:8px;"></div>
+    <div style="margin-top:8px;max-height:52vh;overflow:auto;border:1px solid #e4ebf4;border-radius:8px;">
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr>
+            <th style="position:sticky;top:0;background:#f7fbff;">Name</th>
+            <th style="position:sticky;top:0;background:#f7fbff;">Phone</th>
+            <th style="position:sticky;top:0;background:#f7fbff;">City</th>
+            <th style="position:sticky;top:0;background:#f7fbff;">Last Quotation</th>
+            <th style="position:sticky;top:0;background:#f7fbff;">Action</th>
+          </tr>
+        </thead>
+        <tbody id="customerPickerBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <div class="wrap">
 
 <!-- HEADER -->
@@ -1540,6 +1565,176 @@ document.addEventListener('DOMContentLoaded', function() {
     return best;
   }
 
+  function getCustomerScopeMatchForPicker(cust, agent) {
+    if (!cust || !agent) return false;
+    if (agent.role === 'admin') return true;
+    const ownerId = agent?.uid || agent?.id || null;
+    const owners = Array.isArray(cust.owners) ? cust.owners : [];
+    return owners.includes(ownerId) || cust.createdById === ownerId || cust.lastUpdatedById === ownerId;
+  }
+
+  function buildCustomerListFromLocal(agent) {
+    const ownerId = agent?.uid || agent?.id || '';
+    const byPhone = new Map();
+
+    const buckets = [
+      { key: 'savedQuotations', type: 'umrah' },
+      { key: 'savedQuotations_international', type: 'international' },
+      { key: 'savedQuotations_domestic', type: 'domestic' }
+    ];
+
+    for (const bucket of buckets) {
+      const rows = safeJsonArray(localStorage.getItem(bucket.key));
+      for (const q of rows) {
+        const qOwnerId = q?.agentData?.uid || q?.agentData?.id || '';
+        if (agent?.role !== 'admin' && ownerId && qOwnerId && qOwnerId !== ownerId) continue;
+
+        const client = q?.clientData || {};
+        const phoneKey = String(client.phone || '').replace(/\D/g, '');
+        if (!phoneKey) continue;
+
+        const qDate = q?.updatedAt || q?.createdAt || '';
+        const existing = byPhone.get(phoneKey);
+        if (!existing) {
+          byPhone.set(phoneKey, {
+            id: phoneKey,
+            phoneKey,
+            name: client.name || '',
+            phone: client.phone || '',
+            depCity: client.depCity || '',
+            reference: client.reference || '',
+            lastQuotationId: q?.id || '',
+            lastQuotationType: bucket.type,
+            lastQuotationDate: qDate
+          });
+          continue;
+        }
+
+        const oldTs = new Date(existing.lastQuotationDate || 0).getTime();
+        const newTs = new Date(qDate || 0).getTime();
+        if (!Number.isNaN(newTs) && newTs >= oldTs) {
+          existing.lastQuotationId = q?.id || existing.lastQuotationId;
+          existing.lastQuotationType = bucket.type || existing.lastQuotationType;
+          existing.lastQuotationDate = qDate || existing.lastQuotationDate;
+        }
+
+        existing.name = existing.name || client.name || '';
+        existing.depCity = existing.depCity || client.depCity || '';
+      }
+    }
+
+    const cacheCustomers = safeJsonArray(localStorage.getItem('customers_cache'));
+    for (const c of cacheCustomers) {
+      const key = String(c?.phoneKey || c?.id || c?.phone || '').replace(/\D/g, '');
+      if (!key) continue;
+      if (byPhone.has(key)) continue;
+      if (!getCustomerScopeMatchForPicker(c, agent)) continue;
+      byPhone.set(key, c);
+    }
+
+    return Array.from(byPhone.values());
+  }
+
+  let customerPickerRows = [];
+
+  function fillClientFromCustomer(customer) {
+    if (!customer) return;
+    const nameEl = document.getElementById('clientName');
+    const phoneEl = document.getElementById('clientPhone');
+    const cityEl = document.getElementById('depCity');
+    const refEl = document.getElementById('reference');
+
+    if (nameEl) nameEl.value = customer.name || '';
+    if (phoneEl) phoneEl.value = customer.phone || '';
+    if (cityEl && customer.depCity) cityEl.value = customer.depCity;
+    if (refEl && customer.reference && !refEl.value) {
+      refEl.value = customer.reference;
+      refEl.dispatchEvent(new Event('change'));
+    }
+
+    lookupCustomerByPhoneInput();
+    setCustomerSyncStatus('Customer selected from list. Client fields updated.', 'success');
+  }
+
+  function renderCustomerPickerRows(rows) {
+    const body = document.getElementById('customerPickerBody');
+    const countEl = document.getElementById('customerPickerCount');
+    if (!body || !countEl) return;
+
+    body.innerHTML = '';
+    if (!rows.length) {
+      body.innerHTML = '<tr><td colspan="5" class="small" style="padding:10px;">No customers found.</td></tr>';
+      countEl.textContent = '0 customers';
+      return;
+    }
+
+    rows.forEach(c => {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td style="padding:8px;">' + sanitizeInput(c.name || '-') + '</td>' +
+        '<td style="padding:8px;">' + sanitizeInput(c.phone || '-') + '</td>' +
+        '<td style="padding:8px;">' + sanitizeInput(c.depCity || '-') + '</td>' +
+        '<td style="padding:8px;">' + sanitizeInput(c.lastQuotationType || '-') + ' ' + sanitizeInput(c.lastQuotationId || '') + '</td>' +
+        '<td style="padding:8px;"><button type="button" class="ghost">Use</button></td>';
+
+      tr.querySelector('button').addEventListener('click', () => {
+        fillClientFromCustomer(c);
+        document.getElementById('customerPickerModal')?.classList.remove('visible');
+      });
+
+      body.appendChild(tr);
+    });
+
+    countEl.textContent = rows.length + ' customers';
+  }
+
+  function applyCustomerPickerSearch() {
+    const q = (document.getElementById('customerPickerSearch')?.value || '').toLowerCase().trim();
+    if (!q) {
+      renderCustomerPickerRows(customerPickerRows);
+      return;
+    }
+    const filtered = customerPickerRows.filter(c => {
+      const hay = [c.name, c.phone, c.depCity, c.lastQuotationId, c.lastQuotationType].join(' ').toLowerCase();
+      return hay.includes(q);
+    });
+    renderCustomerPickerRows(filtered);
+  }
+
+  async function openCustomerPickerModal() {
+    const modal = document.getElementById('customerPickerModal');
+    if (!modal) return;
+
+    const agent = getCurrentAgent();
+    let rows = [];
+    if (window.firebaseDB && typeof window.firebaseDB.getAll === 'function') {
+      rows = await window.firebaseDB.getAll('customers');
+    }
+
+    if (Array.isArray(rows) && rows.length) {
+      rows = rows.filter(c => getCustomerScopeMatchForPicker(c, agent));
+    } else {
+      rows = buildCustomerListFromLocal(agent);
+    }
+
+    rows.sort((a, b) => {
+      const ta = new Date(a?.updatedAt || a?.lastQuotationDate || 0).getTime();
+      const tb = new Date(b?.updatedAt || b?.lastQuotationDate || 0).getTime();
+      return (Number.isFinite(tb) ? tb : 0) - (Number.isFinite(ta) ? ta : 0);
+    });
+
+    customerPickerRows = rows;
+    const searchEl = document.getElementById('customerPickerSearch');
+    if (searchEl) {
+      const currentPhone = (document.getElementById('clientPhone')?.value || '').trim();
+      searchEl.value = currentPhone;
+    }
+
+    modal.classList.add('visible');
+    applyCustomerPickerSearch();
+    document.getElementById('customerPickerSearch')?.focus();
+  }
+
   async function lookupCustomerByPhoneInput() {
     const phoneRaw = (document.getElementById('clientPhone')?.value || '').trim();
     if (!phoneRaw) {
@@ -1685,9 +1880,13 @@ document.addEventListener('DOMContentLoaded', function() {
   nightsMakkah.addEventListener("input", validateNights);
   nightsMadina.addEventListener("input", validateNights);
   if (btnFindCustomer) {
-    btnFindCustomer.addEventListener('click', lookupCustomerByPhoneInput);
+    btnFindCustomer.addEventListener('click', openCustomerPickerModal);
   }
   document.getElementById('clientPhone')?.addEventListener('blur', lookupCustomerByPhoneInput);
+  document.getElementById('customerPickerClose')?.addEventListener('click', () => {
+    document.getElementById('customerPickerModal')?.classList.remove('visible');
+  });
+  document.getElementById('customerPickerSearch')?.addEventListener('input', applyCustomerPickerSearch);
 
   // --- SAVE CLIENT & PAX DATA WITH VALIDATION ---
   const btnSaveClient = document.getElementById("btnSaveClient");
