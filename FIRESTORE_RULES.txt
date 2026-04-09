@@ -126,6 +126,20 @@ service cloud.firestore {
         || isAdmin()
       );
     }
+
+    // ==================== CUSTOMERS COLLECTION ====================
+    // Customers - shared CRM records generated from quotations
+    match /customers/{customerId} {
+      // Approved users can read customers for lookup in quotation tools
+      allow read: if isApproved();
+
+      // Approved users can create and update customer profiles
+      allow create: if isApproved();
+      allow update: if isApproved();
+
+      // Only admins can delete customer profiles
+      allow delete: if isAdmin();
+    }
     
     // ==================== PACKAGES COLLECTION ====================
     // Packages - Authenticated users can read, admin can write

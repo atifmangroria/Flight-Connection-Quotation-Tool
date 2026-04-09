@@ -1123,7 +1123,11 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="actions" style="margin-top:10px">
       <button id="btnSaveClient" type="button">Save Client & Pax</button>
       <button id="btnCheckClient" type="button">Check Data</button>
+      <button id="btnFindCustomer" type="button" class="ghost">Find Customer</button>
     </div>
+
+    <div id="customerSyncStatus" class="small" style="margin-top:8px;display:none;"></div>
+    <div id="customerSummaryCard" class="section" style="display:none;margin-top:10px;background:#f8fbff;border-color:#d7e8fb;"></div>
   </div>
 
 <!-- PACKAGE SELECTION -->
@@ -1213,9 +1217,100 @@ document.addEventListener('DOMContentLoaded', function() {
     return div.innerHTML;
   }
 
+  function setCustomerSyncStatus(message, type = 'info') {
+    const statusEl = document.getElementById('customerSyncStatus');
+    if (!statusEl) return;
+    if (!message) {
+      statusEl.style.display = 'none';
+      statusEl.textContent = '';
+      return;
+    }
+    const colors = {
+      success: '#155724',
+      error: '#721c24',
+      info: '#0b3f74'
+    };
+    statusEl.style.display = 'block';
+    statusEl.style.color = colors[type] || colors.info;
+    statusEl.textContent = message;
+  }
+
+  function openCustomerQuotationByType(type, quotationId) {
+    if (!quotationId || !type) return;
+    const t = String(type).toLowerCase();
+    let url = '';
+    if (t === 'umrah') url = 'index.html?edit=' + encodeURIComponent(quotationId);
+    if (t === 'international') url = 'International Quotation Tool.html?edit=' + encodeURIComponent(quotationId);
+    if (t === 'domestic') url = 'Domestic Quotation Tool.html?edit=' + encodeURIComponent(quotationId);
+    if (!url) return;
+    localStorage.setItem('selectedQuotationId', quotationId);
+    window.open(url, '_blank');
+  }
+
+  function renderCustomerSummaryCard(customer) {
+    const card = document.getElementById('customerSummaryCard');
+    if (!card) return;
+    if (!customer) {
+      card.style.display = 'none';
+      card.innerHTML = '';
+      return;
+    }
+
+    card.style.display = 'block';
+    card.innerHTML = `
+      <h4 style="margin:0 0 8px;color:#0b76d1;">Customer Summary</h4>
+      <div class="small" style="line-height:1.6;">
+        <div><strong>Name:</strong> ${sanitizeInput(customer.name || '-')}</div>
+        <div><strong>Phone:</strong> ${sanitizeInput(customer.phone || '-')}</div>
+        <div><strong>City:</strong> ${sanitizeInput(customer.depCity || '-')}</div>
+        <div><strong>Last Quotation:</strong> ${sanitizeInput(customer.lastQuotationType || '-')} ${sanitizeInput(customer.lastQuotationId || '')}</div>
+      </div>
+      <div class="actions" style="margin-top:8px;">
+        <button id="openLastCustomerQuoteBtn" type="button" class="ghost">Open Last Quotation</button>
+      </div>
+    `;
+
+    const openBtn = document.getElementById('openLastCustomerQuoteBtn');
+    if (openBtn) {
+      openBtn.disabled = !(customer.lastQuotationId && customer.lastQuotationType);
+      openBtn.addEventListener('click', () => {
+        openCustomerQuotationByType(customer.lastQuotationType, customer.lastQuotationId);
+      });
+    }
+  }
+
+  async function lookupCustomerByPhoneInput() {
+    const phoneRaw = (document.getElementById('clientPhone')?.value || '').trim();
+    if (!phoneRaw) {
+      renderCustomerSummaryCard(null);
+      setCustomerSyncStatus('');
+      return null;
+    }
+
+    const phoneKey = String(phoneRaw).replace(/\D/g, '');
+    if (!phoneKey || !(window.firebaseDB && typeof window.firebaseDB.getData === 'function')) {
+      return null;
+    }
+
+    try {
+      const customer = await window.firebaseDB.getData('customers', phoneKey);
+      if (customer) {
+        renderCustomerSummaryCard(customer);
+        setCustomerSyncStatus('Existing customer found for this phone number.', 'info');
+      } else {
+        renderCustomerSummaryCard(null);
+      }
+      return customer;
+    } catch (error) {
+      console.error('Customer lookup failed:', error);
+      return null;
+    }
+  }
+
   const reference = document.getElementById("reference");
   const refExtraDiv = document.getElementById("refExtraDiv");
   const refExtraLabel = document.getElementById("refExtraLabel");
+  const btnFindCustomer = document.getElementById('btnFindCustomer');
 
   reference.addEventListener("change", () => {
     if (reference.value === "Campaign") {
@@ -1363,6 +1458,7 @@ document.addEventListener('DOMContentLoaded', function() {
       lastSavedPax = getCurrentPaxData();
       lastSavedDates = { dateFrom: dateFrom.value, dateTo: dateTo.value };
       lastSavedClientInfo = { name: clientName.value, phone: clientPhone.value };
+      lookupCustomerByPhoneInput();
     } else {
       showAlert(errorMessage, "Validation Error");
       isClientDataSaved = false;
@@ -1370,6 +1466,10 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   btnSaveClient.addEventListener("click", validateAndSaveClientData);
+  if (btnFindCustomer) {
+    btnFindCustomer.addEventListener('click', lookupCustomerByPhoneInput);
+  }
+  document.getElementById('clientPhone')?.addEventListener('blur', lookupCustomerByPhoneInput);
 
   // Event listeners for PAX changes
   const paxInputs = ['numAdult', 'numChildBed', 'numChildNoBed', 'numInfant'];
@@ -5129,6 +5229,66 @@ btnExportExcel.addEventListener('click', () => {
 });
 
 // Function to save the current quotation
+function normalizeCustomerPhone(phone) {
+  return String(phone || '').replace(/\D/g, '');
+}
+
+function getCustomerOwnerId(agent) {
+  return agent?.uid || agent?.id || null;
+}
+
+async function upsertCustomerFromQuotation(clientData, quotationMeta) {
+  try {
+    const phoneRaw = clientData?.phone || '';
+    const phoneKey = normalizeCustomerPhone(phoneRaw);
+    if (!phoneKey) return { ok: false, reason: 'missing_phone' };
+
+    const agent = getCurrentAgent();
+    const ownerId = getCustomerOwnerId(agent);
+    const nowIso = new Date().toISOString();
+    const existing = await window.firebaseDB.getData('customers', phoneKey);
+
+    const ownersSet = new Set(Array.isArray(existing?.owners) ? existing.owners : []);
+    if (ownerId) ownersSet.add(ownerId);
+
+    const nextRef = {
+      id: quotationMeta?.id || '',
+      type: quotationMeta?.type || '',
+      date: quotationMeta?.date || nowIso
+    };
+    const refs = Array.isArray(existing?.quotationRefs) ? existing.quotationRefs.slice() : [];
+    if (nextRef.id && nextRef.type && !refs.some(r => r?.id === nextRef.id && r?.type === nextRef.type)) {
+      refs.unshift(nextRef);
+    }
+
+    const customerRecord = {
+      id: phoneKey,
+      phoneKey,
+      phone: phoneRaw,
+      name: clientData?.name || existing?.name || '',
+      depCity: clientData?.depCity || existing?.depCity || '',
+      reference: clientData?.reference || existing?.reference || '',
+      owners: Array.from(ownersSet),
+      createdAt: existing?.createdAt || nowIso,
+      updatedAt: nowIso,
+      createdById: existing?.createdById || ownerId || '',
+      createdByName: existing?.createdByName || agent?.name || '',
+      lastUpdatedById: ownerId || '',
+      lastUpdatedByName: agent?.name || '',
+      lastQuotationId: nextRef.id || existing?.lastQuotationId || '',
+      lastQuotationType: nextRef.type || existing?.lastQuotationType || '',
+      lastQuotationDate: nextRef.date || existing?.lastQuotationDate || '',
+      quotationRefs: refs.slice(0, 20)
+    };
+
+    await window.firebaseDB.saveData('customers', phoneKey, customerRecord);
+    return { ok: true, existed: !!existing };
+  } catch (error) {
+    console.error('Customer upsert failed:', error);
+    return { ok: false, error };
+  }
+}
+
 function saveQuotation() {
   try {
     // Check if client data is saved
@@ -5439,6 +5599,26 @@ const customSectionsData = {
       addons: addonsData,
       customSections: customSectionsData  // Add this line
     };
+
+    upsertCustomerFromQuotation(quotationData.clientData, {
+      id: quotationData.id,
+      type: 'domestic',
+      date: quotationData.updatedAt || quotationData.createdAt || new Date().toISOString()
+    }).then(result => {
+      if (result?.ok) {
+        if (result.existed) {
+          setCustomerSyncStatus('Customer exists. Profile refreshed from this quotation.', 'info');
+        } else {
+          setCustomerSyncStatus('New customer profile created from this quotation.', 'success');
+        }
+        lookupCustomerByPhoneInput();
+      } else {
+        setCustomerSyncStatus('Customer sync pending. Quotation saved successfully.', 'error');
+      }
+    }).catch(err => {
+      console.error('Customer sync error:', err);
+      setCustomerSyncStatus('Customer sync failed. Please check your connection and try again.', 'error');
+    });
 
     if (selectedPackageId) {
       quotationData.packageSelection = {

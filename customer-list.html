@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Customer List - Flight Connection</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+  import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDx3Qxt84vJlz_-mXuxiC0W2flaLadr9Ws",
+    authDomain: "fc-quotation-tool.firebaseapp.com",
+    projectId: "fc-quotation-tool",
+    storageBucket: "fc-quotation-tool.firebasestorage.app",
+    messagingSenderId: "370566945624",
+    appId: "1:370566945624:web:a84b20d5a8f99d20a6e32d"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  window.db = db;
+
+  window.firebaseDB = {
+    async saveData(collection_name, docId, data) {
+      try {
+        await setDoc(doc(db, collection_name, docId), data, { merge: true });
+        return true;
+      } catch (error) {
+        console.error("Error saving:", error);
+        return false;
+      }
+    },
+    async getData(collection_name, docId) {
+      try {
+        const docSnap = await getDoc(doc(db, collection_name, docId));
+        return docSnap.exists() ? docSnap.data() : null;
+      } catch (error) {
+        console.error("Error getting:", error);
+        return null;
+      }
+    },
+    async getAll(collection_name) {
+      try {
+        const snapshot = await getDocs(collection(db, collection_name));
+        return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      } catch (error) {
+        console.error("Error listing:", error);
+        return [];
+      }
+    },
+    async deleteData(collection_name, docId) {
+      try {
+        await deleteDoc(doc(db, collection_name, docId));
+        return true;
+      } catch (error) {
+        console.error("Error deleting:", error);
+        return false;
+      }
+    },
+    async updateData(collection_name, docId, updates) {
+      try {
+        await updateDoc(doc(db, collection_name, docId), updates);
+        return true;
+      } catch (error) {
+        console.error("Error updating:", error);
+        return false;
+      }
+    }
+  };
+</script>
+<style>
+  :root{--accent:#0b76d1;--bg:#f3f6fb;--card:#ffffff;--muted:#5f6d7b;--danger:#dc3545;--success:#28a745}
+  body{font-family:Arial,Helvetica,sans-serif;background:var(--bg);margin:0;color:#1b2533}
+  .wrap{max-width:1260px;margin:12px auto;padding:0 12px}
+  .top{background:var(--card);border-radius:10px;padding:14px;box-shadow:0 8px 20px rgba(0,0,0,.06);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+  .title{font-size:22px;font-weight:700}
+  .small{font-size:12px;color:var(--muted)}
+  .actions{display:flex;gap:8px;flex-wrap:wrap}
+  button{background:var(--accent);color:#fff;border:none;padding:8px 12px;border-radius:6px;cursor:pointer}
+  button.ghost{background:#e9f3ff;color:var(--accent);border:1px solid #cfe3fb}
+  button.danger{background:var(--danger)}
+  button:disabled{opacity:.55;cursor:not-allowed}
+  .panel{margin-top:12px;background:var(--card);border-radius:10px;padding:12px;box-shadow:0 8px 20px rgba(0,0,0,.06)}
+  .controls{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px}
+  input,select{width:100%;padding:9px 10px;border:1px solid #d8e2ef;border-radius:6px;box-sizing:border-box}
+  .tableWrap{margin-top:12px;max-height:65vh;overflow:auto;border:1px solid #e4ebf4;border-radius:8px}
+  table{width:100%;border-collapse:collapse;background:#fff}
+  th,td{padding:8px;border-bottom:1px solid #edf2f8;text-align:left;font-size:13px;vertical-align:top}
+  th{position:sticky;top:0;background:#f7fbff;z-index:1}
+  .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;background:#e9f3ff;color:#0b76d1}
+  .rowActions{display:flex;gap:6px;flex-wrap:wrap}
+  .muted{color:var(--muted)}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;align-items:center;justify-content:center;z-index:1000}
+  .modal.visible{display:flex}
+  .modalBox{background:#fff;max-width:520px;width:94%;padding:16px;border-radius:10px}
+  .modalGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .notice{margin-top:8px;font-size:12px;color:var(--muted)}
+  @media (max-width:800px){
+    .controls{grid-template-columns:1fr}
+    .modalGrid{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div>
+      <div class="title">Customer List</div>
+      <div class="small" id="agentInfo">Loading...</div>
+    </div>
+    <div class="actions">
+      <button class="ghost" onclick="window.location.href='dashboard.html'">Back to Dashboard</button>
+      <button id="btnBackfill">Backfill from Quotations</button>
+      <button id="btnExport">Export Excel</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="controls">
+      <input id="searchInput" type="text" placeholder="Search by name, phone, city, quotation id"/>
+      <select id="typeFilter">
+        <option value="">All Types</option>
+        <option value="umrah">Umrah</option>
+        <option value="international">International</option>
+        <option value="domestic">Domestic</option>
+      </select>
+      <button id="btnAdd">Add Customer</button>
+    </div>
+
+    <div class="tableWrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Phone</th>
+            <th>City</th>
+            <th>Last Quotation</th>
+            <th>Last Updated</th>
+            <th>Owner</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="customersBody"></tbody>
+      </table>
+    </div>
+    <div class="notice" id="summaryLine"></div>
+  </div>
+</div>
+
+<div id="customerModal" class="modal">
+  <div class="modalBox">
+    <h3 id="modalTitle">Add Customer</h3>
+    <div class="modalGrid">
+      <div>
+        <label>Name</label>
+        <input id="mName" type="text"/>
+      </div>
+      <div>
+        <label>Phone</label>
+        <input id="mPhone" type="text"/>
+      </div>
+      <div>
+        <label>City</label>
+        <input id="mCity" type="text"/>
+      </div>
+      <div>
+        <label>Email</label>
+        <input id="mEmail" type="text"/>
+      </div>
+      <div>
+        <label>Reference</label>
+        <input id="mReference" type="text"/>
+      </div>
+      <div>
+        <label>Notes</label>
+        <input id="mNotes" type="text"/>
+      </div>
+    </div>
+    <div class="actions" style="margin-top:12px">
+      <button id="btnModalSave">Save</button>
+      <button id="btnModalCancel" class="ghost">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentAgent = null;
+let allCustomers = [];
+let modalEditId = null;
+
+function showNotification(message, type) {
+  const n = document.createElement('div');
+  n.textContent = message;
+  n.style.cssText = 'position:fixed;top:16px;right:16px;padding:10px 14px;border-radius:6px;color:#fff;z-index:2000;';
+  n.style.background = type === 'error' ? '#dc3545' : (type === 'success' ? '#28a745' : '#0b76d1');
+  document.body.appendChild(n);
+  setTimeout(() => n.remove(), 2600);
+}
+
+function sanitizeInput(input) {
+  const div = document.createElement('div');
+  div.textContent = input == null ? '' : String(input);
+  return div.innerHTML;
+}
+
+function getCurrentAgent() {
+  const a = localStorage.getItem('loggedInAgent');
+  return a ? JSON.parse(a) : null;
+}
+
+function getOwnerId(agent) {
+  return agent?.uid || agent?.id || null;
+}
+
+function normalizePhone(phone) {
+  return String(phone || '').replace(/\D/g, '');
+}
+
+function getCustomerScopeMatch(cust, agent) {
+  if (!cust || !agent) return false;
+  if (agent.role === 'admin') return true;
+  const ownerId = getOwnerId(agent);
+  const owners = Array.isArray(cust.owners) ? cust.owners : [];
+  return owners.includes(ownerId) || cust.createdById === ownerId || cust.lastUpdatedById === ownerId;
+}
+
+function rememberLocalCustomers(customers) {
+  try {
+    localStorage.setItem('customers_cache', JSON.stringify(customers || []));
+  } catch (e) {
+    console.warn('Local customer cache failed:', e);
+  }
+}
+
+function readLocalCustomers() {
+  try {
+    return JSON.parse(localStorage.getItem('customers_cache')) || [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function setAgentInfo() {
+  const info = document.getElementById('agentInfo');
+  currentAgent = getCurrentAgent();
+  if (!currentAgent) {
+    showNotification('Please login first.', 'error');
+    setTimeout(() => { window.location.href = 'dashboard.html'; }, 1200);
+    return false;
+  }
+  info.textContent = 'Logged in as: ' + (currentAgent.name || '-') + ' (' + (currentAgent.phone || '-') + ')';
+  return true;
+}
+
+async function loadCustomers() {
+  try {
+    let rows = [];
+    if (window.firebaseDB && typeof window.firebaseDB.getAll === 'function') {
+      rows = await window.firebaseDB.getAll('customers');
+    }
+
+    if (!Array.isArray(rows) || rows.length === 0) {
+      rows = readLocalCustomers();
+    } else {
+      rememberLocalCustomers(rows);
+    }
+
+    allCustomers = rows.filter(c => getCustomerScopeMatch(c, currentAgent));
+    renderCustomers();
+  } catch (error) {
+    console.error(error);
+    allCustomers = readLocalCustomers().filter(c => getCustomerScopeMatch(c, currentAgent));
+    renderCustomers();
+  }
+}
+
+function getFilteredCustomers() {
+  const q = (document.getElementById('searchInput').value || '').toLowerCase().trim();
+  const t = (document.getElementById('typeFilter').value || '').toLowerCase();
+
+  return allCustomers.filter(c => {
+    const hay = [
+      c.name,
+      c.phone,
+      c.depCity,
+      c.lastQuotationId,
+      c.lastQuotationType
+    ].join(' ').toLowerCase();
+
+    const typeOk = !t || String(c.lastQuotationType || '').toLowerCase() === t;
+    const qOk = !q || hay.includes(q);
+    return typeOk && qOk;
+  });
+}
+
+function goToQuotation(customer) {
+  if (!customer || !customer.lastQuotationId || !customer.lastQuotationType) {
+    showNotification('No linked quotation found for this customer.', 'info');
+    return;
+  }
+
+  const type = String(customer.lastQuotationType).toLowerCase();
+  let url = '';
+  if (type === 'umrah') url = 'index.html?edit=' + encodeURIComponent(customer.lastQuotationId);
+  if (type === 'international') url = 'International Quotation Tool.html?edit=' + encodeURIComponent(customer.lastQuotationId);
+  if (type === 'domestic') url = 'Domestic Quotation Tool.html?edit=' + encodeURIComponent(customer.lastQuotationId);
+  if (!url) return;
+
+  localStorage.setItem('selectedQuotationId', customer.lastQuotationId);
+  window.open(url, '_blank');
+}
+
+function renderCustomers() {
+  const body = document.getElementById('customersBody');
+  const summary = document.getElementById('summaryLine');
+  const list = getFilteredCustomers();
+
+  body.innerHTML = '';
+  if (list.length === 0) {
+    body.innerHTML = '<tr><td colspan="7" class="muted">No customers found.</td></tr>';
+    summary.textContent = '0 customers';
+    return;
+  }
+
+  list.forEach(c => {
+    const tr = document.createElement('tr');
+    const canManage = currentAgent && currentAgent.role === 'admin';
+    tr.innerHTML =
+      '<td>' + sanitizeInput(c.name || '-') + '</td>' +
+      '<td>' + sanitizeInput(c.phone || '-') + '</td>' +
+      '<td>' + sanitizeInput(c.depCity || '-') + '</td>' +
+      '<td><span class="badge">' + sanitizeInput(c.lastQuotationType || '-') + '</span> ' + sanitizeInput(c.lastQuotationId || '') + '</td>' +
+      '<td>' + (c.updatedAt ? new Date(c.updatedAt).toLocaleString() : '-') + '</td>' +
+      '<td>' + sanitizeInput(c.lastUpdatedByName || c.createdByName || '-') + '</td>' +
+      '<td><div class="rowActions">' +
+      '<button class="ghost" data-action="open">Open Quotation</button>' +
+      '<button class="ghost" data-action="edit">Edit</button>' +
+      (canManage ? '<button class="danger" data-action="delete">Delete</button>' : '') +
+      '</div></td>';
+
+    tr.querySelector('[data-action="open"]').addEventListener('click', () => goToQuotation(c));
+    tr.querySelector('[data-action="edit"]').addEventListener('click', () => openCustomerModal(c));
+    if (canManage) {
+      const delBtn = tr.querySelector('[data-action="delete"]');
+      delBtn.addEventListener('click', () => deleteCustomer(c));
+    }
+
+    body.appendChild(tr);
+  });
+
+  summary.textContent = list.length + ' customers shown';
+}
+
+function openCustomerModal(customer) {
+  modalEditId = customer?.id || null;
+  document.getElementById('modalTitle').textContent = modalEditId ? 'Edit Customer' : 'Add Customer';
+  document.getElementById('mName').value = customer?.name || '';
+  document.getElementById('mPhone').value = customer?.phone || '';
+  document.getElementById('mCity').value = customer?.depCity || '';
+  document.getElementById('mEmail').value = customer?.email || '';
+  document.getElementById('mReference').value = customer?.reference || '';
+  document.getElementById('mNotes').value = customer?.notes || '';
+  document.getElementById('customerModal').classList.add('visible');
+}
+
+function closeCustomerModal() {
+  document.getElementById('customerModal').classList.remove('visible');
+}
+
+async function saveCustomerFromModal() {
+  const name = document.getElementById('mName').value.trim();
+  const phoneRaw = document.getElementById('mPhone').value.trim();
+  const phoneKey = normalizePhone(phoneRaw);
+
+  if (!name || !phoneKey) {
+    showNotification('Name and phone are required.', 'error');
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const ownerId = getOwnerId(currentAgent);
+  const existing = await window.firebaseDB.getData('customers', phoneKey);
+
+  const owners = new Set(Array.isArray(existing?.owners) ? existing.owners : []);
+  if (ownerId) owners.add(ownerId);
+
+  const docData = {
+    id: phoneKey,
+    phone: phoneRaw,
+    phoneKey: phoneKey,
+    name: name,
+    depCity: document.getElementById('mCity').value.trim(),
+    email: document.getElementById('mEmail').value.trim(),
+    reference: document.getElementById('mReference').value.trim(),
+    notes: document.getElementById('mNotes').value.trim(),
+    owners: Array.from(owners),
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+    createdById: existing?.createdById || ownerId || '',
+    createdByName: existing?.createdByName || currentAgent?.name || '',
+    lastUpdatedById: ownerId || '',
+    lastUpdatedByName: currentAgent?.name || ''
+  };
+
+  const ok = await window.firebaseDB.saveData('customers', phoneKey, docData);
+  if (!ok) {
+    showNotification('Save failed. Please check permissions.', 'error');
+    return;
+  }
+
+  showNotification(existing ? 'Customer updated.' : 'Customer added.', 'success');
+  closeCustomerModal();
+  await loadCustomers();
+}
+
+async function deleteCustomer(customer) {
+  if (!customer) return;
+  if (currentAgent?.role !== 'admin') {
+    showNotification('Only admin can delete customers.', 'error');
+    return;
+  }
+
+  if (!confirm('Delete customer ' + (customer.name || '') + '?')) return;
+  const key = customer.phoneKey || customer.id || normalizePhone(customer.phone);
+  if (!key) return;
+
+  const ok = await window.firebaseDB.deleteData('customers', key);
+  if (!ok) {
+    showNotification('Delete failed. Check permissions.', 'error');
+    return;
+  }
+
+  showNotification('Customer deleted.', 'success');
+  await loadCustomers();
+}
+
+function uniquePush(refs, nextRef) {
+  if (!nextRef || !nextRef.id || !nextRef.type) return refs;
+  const next = Array.isArray(refs) ? refs.slice() : [];
+  if (!next.some(r => r && r.id === nextRef.id && r.type === nextRef.type)) {
+    next.unshift(nextRef);
+  }
+  return next.slice(0, 20);
+}
+
+async function upsertCustomerFromQuotation(clientData, quotationMeta, ownerAgent) {
+  const phoneRaw = clientData?.phone || '';
+  const phoneKey = normalizePhone(phoneRaw);
+  if (!phoneKey) return null;
+
+  const ownerId = getOwnerId(ownerAgent);
+  const now = new Date().toISOString();
+  const existing = await window.firebaseDB.getData('customers', phoneKey);
+
+  const owners = new Set(Array.isArray(existing?.owners) ? existing.owners : []);
+  if (ownerId) owners.add(ownerId);
+
+  const quotationRef = {
+    id: quotationMeta?.id || '',
+    type: quotationMeta?.type || '',
+    date: quotationMeta?.date || now
+  };
+
+  const payload = {
+    id: phoneKey,
+    phone: phoneRaw,
+    phoneKey: phoneKey,
+    name: clientData?.name || existing?.name || '',
+    depCity: clientData?.depCity || existing?.depCity || '',
+    reference: clientData?.reference || existing?.reference || '',
+    owners: Array.from(owners),
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+    createdById: existing?.createdById || ownerId || '',
+    createdByName: existing?.createdByName || ownerAgent?.name || '',
+    lastUpdatedById: ownerId || '',
+    lastUpdatedByName: ownerAgent?.name || '',
+    lastQuotationId: quotationRef.id || existing?.lastQuotationId || '',
+    lastQuotationType: quotationRef.type || existing?.lastQuotationType || '',
+    lastQuotationDate: quotationRef.date || existing?.lastQuotationDate || '',
+    quotationRefs: uniquePush(existing?.quotationRefs, quotationRef)
+  };
+
+  await window.firebaseDB.saveData('customers', phoneKey, payload);
+  return payload;
+}
+
+async function loadAllUsers() {
+  if (!window.firebaseDB || typeof window.firebaseDB.getAll !== 'function') return [];
+  return await window.firebaseDB.getAll('users');
+}
+
+async function loadOwnerQuotations(ownerId) {
+  if (!ownerId) return { umrah: [], international: [], domestic: [] };
+
+  const [u, i, d] = await Promise.all([
+    window.firebaseDB.getData('umrah_quotations', ownerId),
+    window.firebaseDB.getData('international_quotations', ownerId),
+    window.firebaseDB.getData('domestic_quotations', ownerId)
+  ]);
+
+  return {
+    umrah: Array.isArray(u?.quotations) ? u.quotations : [],
+    international: Array.isArray(i?.quotations) ? i.quotations : [],
+    domestic: Array.isArray(d?.quotations) ? d.quotations : []
+  };
+}
+
+async function backfillCustomers() {
+  try {
+    document.getElementById('btnBackfill').disabled = true;
+    let total = 0;
+
+    if (currentAgent.role === 'admin') {
+      const users = await loadAllUsers();
+      for (const user of users) {
+        const ownerId = user.uid || user.id;
+        const ownerAgent = { id: user.id || ownerId, uid: user.uid || ownerId, name: user.name || user.email || 'Agent' };
+        const all = await loadOwnerQuotations(ownerId);
+
+        for (const q of all.umrah) {
+          if (q?.clientData?.phone) {
+            await upsertCustomerFromQuotation(q.clientData, { id: q.id, type: 'umrah', date: q.updatedAt || q.createdAt }, ownerAgent);
+            total++;
+          }
+        }
+        for (const q of all.international) {
+          if (q?.clientData?.phone) {
+            await upsertCustomerFromQuotation(q.clientData, { id: q.id, type: 'international', date: q.updatedAt || q.createdAt }, ownerAgent);
+            total++;
+          }
+        }
+        for (const q of all.domestic) {
+          if (q?.clientData?.phone) {
+            await upsertCustomerFromQuotation(q.clientData, { id: q.id, type: 'domestic', date: q.updatedAt || q.createdAt }, ownerAgent);
+            total++;
+          }
+        }
+      }
+    } else {
+      const ownerId = getOwnerId(currentAgent);
+      const all = await loadOwnerQuotations(ownerId);
+
+      for (const q of all.umrah) {
+        if (q?.clientData?.phone) {
+          await upsertCustomerFromQuotation(q.clientData, { id: q.id, type: 'umrah', date: q.updatedAt || q.createdAt }, currentAgent);
+          total++;
+        }
+      }
+      for (const q of all.international) {
+        if (q?.clientData?.phone) {
+          await upsertCustomerFromQuotation(q.clientData, { id: q.id, type: 'international', date: q.updatedAt || q.createdAt }, currentAgent);
+          total++;
+        }
+      }
+      for (const q of all.domestic) {
+        if (q?.clientData?.phone) {
+          await upsertCustomerFromQuotation(q.clientData, { id: q.id, type: 'domestic', date: q.updatedAt || q.createdAt }, currentAgent);
+          total++;
+        }
+      }
+    }
+
+    showNotification('Backfill complete. Processed ' + total + ' quotation records.', 'success');
+    await loadCustomers();
+  } catch (error) {
+    console.error(error);
+    showNotification('Backfill failed. Check console/permissions.', 'error');
+  } finally {
+    document.getElementById('btnBackfill').disabled = false;
+  }
+}
+
+function exportCustomers() {
+  const data = getFilteredCustomers().map(c => ({
+    Name: c.name || '',
+    Phone: c.phone || '',
+    City: c.depCity || '',
+    Email: c.email || '',
+    Reference: c.reference || '',
+    LastQuotationType: c.lastQuotationType || '',
+    LastQuotationId: c.lastQuotationId || '',
+    LastQuotationDate: c.lastQuotationDate || '',
+    UpdatedAt: c.updatedAt || '',
+    UpdatedBy: c.lastUpdatedByName || ''
+  }));
+
+  if (!data.length) {
+    showNotification('No customers to export.', 'info');
+    return;
+  }
+
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Customers');
+  XLSX.writeFile(wb, 'customers_' + new Date().toISOString().slice(0,10) + '.xlsx');
+}
+
+function wireEvents() {
+  document.getElementById('searchInput').addEventListener('input', renderCustomers);
+  document.getElementById('typeFilter').addEventListener('change', renderCustomers);
+  document.getElementById('btnExport').addEventListener('click', exportCustomers);
+  document.getElementById('btnBackfill').addEventListener('click', backfillCustomers);
+  document.getElementById('btnAdd').addEventListener('click', () => openCustomerModal(null));
+  document.getElementById('btnModalCancel').addEventListener('click', closeCustomerModal);
+  document.getElementById('btnModalSave').addEventListener('click', saveCustomerFromModal);
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  if (!setAgentInfo()) return;
+  wireEvents();
+  await loadCustomers();
+});
+</script>
+</body>
+</html>
