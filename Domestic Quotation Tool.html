@@ -1015,7 +1015,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Load quotations from Firebase
-    window.firebaseDB.getData('domestic_quotations', agent.id).then(firebaseData => {
+    const agentDocId = getAgentDocId(agent);
+    if (!agentDocId) return;
+
+    window.firebaseDB.getData('domestic_quotations', agentDocId).then(firebaseData => {
       if (firebaseData && firebaseData.quotations) {
         const domesticOnly = firebaseData.quotations.filter(q => q && q.quotationMode === 'domestic');
         localStorage.setItem('savedQuotations_domestic', JSON.stringify(domesticOnly));
@@ -1144,6 +1147,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function isDomesticQuotation(q) {
     return !!(q && q.quotationMode === 'domestic');
+  }
+
+  function getAgentDocId(agent) {
+    if (!agent) return '';
+    return agent.id || agent.uid || '';
   }
 
   // Helper function to get current agent
@@ -3926,11 +3934,12 @@ function updateQuotationStatus(quotationId, newStatus) {
       
       // Also save to Firebase
       const agent = getCurrentAgent();
-      if (agent && agent.id) {
-        window.firebaseDB.saveData('domestic_quotations', agent.id, { 
+      const agentDocId = getAgentDocId(agent);
+      if (agentDocId) {
+        window.firebaseDB.saveData('domestic_quotations', agentDocId, { 
           quotations: savedQuotations, 
           updatedAt: new Date(),
-          agentId: agent.id 
+          agentId: agentDocId 
         }).catch(err => console.error('Firebase update error:', err));
       }
       
@@ -5447,6 +5456,8 @@ const customSectionsData = {
       const index = allQuotations.findIndex(q => q.id === currentQuotationId);
       if (index !== -1) {
         allQuotations[index] = quotationData;
+      } else {
+        allQuotations.push(quotationData);
       }
     } else {
       // Add new
@@ -5458,11 +5469,12 @@ const customSectionsData = {
     localStorage.setItem('savedQuotations_domestic', JSON.stringify(allQuotations));
     
     // Save to Firebase
-    if (agent && agent.id) {
-      window.firebaseDB.saveData('domestic_quotations', agent.id, { 
+    const agentDocId = getAgentDocId(agent);
+    if (agentDocId) {
+      window.firebaseDB.saveData('domestic_quotations', agentDocId, { 
         quotations: allQuotations, 
         updatedAt: new Date(),
-        agentId: agent.id 
+        agentId: agentDocId 
       }).catch(err => console.error('Firebase save error:', err));
     }
     
