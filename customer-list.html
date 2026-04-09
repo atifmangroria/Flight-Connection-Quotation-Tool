@@ -204,7 +204,17 @@
       </div>
       <div>
         <label>Reference</label>
-        <input id="mReference" type="text"/>
+        <select id="mReferenceType">
+          <option value="">-- Select --</option>
+          <option value="Campaign">Campaign</option>
+          <option value="Walkin">Walkin</option>
+          <option value="Call">Call</option>
+          <option value="Careoff">Careoff</option>
+        </select>
+      </div>
+      <div id="mRefExtraWrap" style="display:none;">
+        <label id="mRefExtraLabel">Reference Detail</label>
+        <input id="mRefExtra" type="text"/>
       </div>
       <div>
         <label>Notes</label>
@@ -214,6 +224,28 @@
     <div class="actions" style="margin-top:12px">
       <button id="btnModalSave">Save</button>
       <button id="btnModalCancel" class="ghost">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="quotationListModal" class="modal">
+  <div class="modalBox" style="max-width:780px;">
+    <h3 id="quotationListTitle">Customer Quotations</h3>
+    <div class="tableWrap" style="max-height:50vh;margin-top:8px;">
+      <table>
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Quotation ID</th>
+            <th>Date</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="quotationListBody"></tbody>
+      </table>
+    </div>
+    <div class="actions" style="margin-top:12px;justify-content:flex-end;">
+      <button id="btnCloseQuotationList" class="ghost">Close</button>
     </div>
   </div>
 </div>
@@ -502,21 +534,107 @@ function getFilteredCustomers() {
   });
 }
 
-function goToQuotation(customer) {
-  if (!customer || !customer.lastQuotationId || !customer.lastQuotationType) {
-    showNotification('No linked quotation found for this customer.', 'info');
+function openQuotationByType(type, quotationId) {
+  if (!quotationId || !type) return false;
+  const t = String(type).toLowerCase();
+  let url = '';
+  if (t === 'umrah') url = 'index.html?edit=' + encodeURIComponent(quotationId);
+  if (t === 'international') url = 'International Quotation Tool.html?edit=' + encodeURIComponent(quotationId);
+  if (t === 'domestic') url = 'Domestic Quotation Tool.html?edit=' + encodeURIComponent(quotationId);
+  if (!url) return false;
+  localStorage.setItem('selectedQuotationId', quotationId);
+  window.open(url, '_blank');
+  return true;
+}
+
+function getCustomerQuotationRefs(customer) {
+  if (!customer) return [];
+
+  let refs = Array.isArray(customer.quotationRefs) ? customer.quotationRefs.slice() : [];
+  if ((!refs || refs.length === 0) && customer.lastQuotationId && customer.lastQuotationType) {
+    refs = [{
+      id: customer.lastQuotationId,
+      type: customer.lastQuotationType,
+      date: customer.lastQuotationDate || customer.updatedAt || ''
+    }];
+  }
+
+  const unique = [];
+  for (const r of refs) {
+    if (!r || !r.id || !r.type) continue;
+    if (!unique.some(x => x.id === r.id && String(x.type).toLowerCase() === String(r.type).toLowerCase())) {
+      unique.push(r);
+    }
+  }
+
+  unique.sort((a, b) => {
+    const ta = new Date(a?.date || 0).getTime();
+    const tb = new Date(b?.date || 0).getTime();
+    return (Number.isFinite(tb) ? tb : 0) - (Number.isFinite(ta) ? ta : 0);
+  });
+  return unique;
+}
+
+function openQuotationListModal(customer) {
+  const refs = getCustomerQuotationRefs(customer);
+  if (!refs.length) {
+    showNotification('No linked quotations found for this customer.', 'info');
     return;
   }
 
-  const type = String(customer.lastQuotationType).toLowerCase();
-  let url = '';
-  if (type === 'umrah') url = 'index.html?edit=' + encodeURIComponent(customer.lastQuotationId);
-  if (type === 'international') url = 'International Quotation Tool.html?edit=' + encodeURIComponent(customer.lastQuotationId);
-  if (type === 'domestic') url = 'Domestic Quotation Tool.html?edit=' + encodeURIComponent(customer.lastQuotationId);
-  if (!url) return;
+  const modal = document.getElementById('quotationListModal');
+  const title = document.getElementById('quotationListTitle');
+  const body = document.getElementById('quotationListBody');
+  if (!modal || !title || !body) return;
 
-  localStorage.setItem('selectedQuotationId', customer.lastQuotationId);
-  window.open(url, '_blank');
+  title.textContent = 'Quotations - ' + (customer?.name || 'Customer');
+  body.innerHTML = '';
+
+  refs.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + sanitizeInput(r.type || '-') + '</td>' +
+      '<td>' + sanitizeInput(r.id || '-') + '</td>' +
+      '<td>' + (r.date ? new Date(r.date).toLocaleString() : '-') + '</td>' +
+      '<td><button class="ghost" data-id="' + sanitizeInput(r.id) + '" data-type="' + sanitizeInput(r.type) + '">Open</button></td>';
+
+    const btn = tr.querySelector('button');
+    if (btn) {
+      btn.addEventListener('click', () => {
+        const ok = openQuotationByType(r.type, r.id);
+        if (!ok) showNotification('Unable to open quotation type: ' + (r.type || '-'), 'error');
+      });
+    }
+
+    body.appendChild(tr);
+  });
+
+  modal.classList.add('visible');
+}
+
+function closeQuotationListModal() {
+  document.getElementById('quotationListModal')?.classList.remove('visible');
+}
+
+function updateReferenceExtraVisibility() {
+  const typeEl = document.getElementById('mReferenceType');
+  const wrap = document.getElementById('mRefExtraWrap');
+  const label = document.getElementById('mRefExtraLabel');
+  if (!typeEl || !wrap || !label) return;
+
+  if (typeEl.value === 'Campaign') {
+    wrap.style.display = 'block';
+    label.textContent = 'Campaign Name';
+    return;
+  }
+  if (typeEl.value === 'Careoff') {
+    wrap.style.display = 'block';
+    label.textContent = 'Person Name (Careoff)';
+    return;
+  }
+
+  wrap.style.display = 'none';
+  label.textContent = 'Reference Detail';
 }
 
 function renderCustomers() {
@@ -545,12 +663,12 @@ function renderCustomers() {
       '<td>' + (c.updatedAt ? new Date(c.updatedAt).toLocaleString() : '-') + '</td>' +
       '<td>' + sanitizeInput(c.lastUpdatedByName || c.createdByName || '-') + '</td>' +
       '<td><div class="rowActions">' +
-      '<button class="ghost" data-action="open">Open Quotation</button>' +
+      '<button class="ghost" data-action="open">Show Quotations</button>' +
       '<button class="ghost" data-action="edit">Edit</button>' +
       (canManage ? '<button class="danger" data-action="delete">Delete</button>' : '') +
       '</div></td>';
 
-    tr.querySelector('[data-action="open"]').addEventListener('click', () => goToQuotation(c));
+    tr.querySelector('[data-action="open"]').addEventListener('click', () => openQuotationListModal(c));
     tr.querySelector('[data-action="edit"]').addEventListener('click', () => openCustomerModal(c));
     if (canManage) {
       const delBtn = tr.querySelector('[data-action="delete"]');
@@ -580,7 +698,23 @@ function openCustomerModal(customer) {
   document.getElementById('mPhone').value = customer?.phone || '';
   document.getElementById('mCity').value = customer?.depCity || '';
   document.getElementById('mEmail').value = customer?.email || '';
-  document.getElementById('mReference').value = customer?.reference || '';
+  const refTypeEl = document.getElementById('mReferenceType');
+  const refExtraEl = document.getElementById('mRefExtra');
+  const refValue = customer?.reference || '';
+  const known = ['Campaign', 'Walkin', 'Call', 'Careoff'];
+  if (refTypeEl) {
+    refTypeEl.value = known.includes(refValue) ? refValue : '';
+  }
+  if (refExtraEl) {
+    if (refTypeEl && refTypeEl.value === 'Campaign') {
+      refExtraEl.value = customer?.refExtra || '';
+    } else if (refTypeEl && refTypeEl.value === 'Careoff') {
+      refExtraEl.value = customer?.refExtra || '';
+    } else {
+      refExtraEl.value = known.includes(refValue) ? (customer?.refExtra || '') : refValue;
+    }
+  }
+  updateReferenceExtraVisibility();
   document.getElementById('mNotes').value = customer?.notes || '';
   document.getElementById('customerModal').classList.add('visible');
 }
@@ -602,6 +736,9 @@ async function saveCustomerFromModal() {
   const now = new Date().toISOString();
   const ownerId = getOwnerId(currentAgent);
   const existing = await window.firebaseDB.getData('customers', phoneKey);
+  const refType = (document.getElementById('mReferenceType')?.value || '').trim();
+  const refExtra = (document.getElementById('mRefExtra')?.value || '').trim();
+  const finalReference = refType || refExtra;
 
   const owners = new Set(Array.isArray(existing?.owners) ? existing.owners : []);
   if (ownerId) owners.add(ownerId);
@@ -613,7 +750,8 @@ async function saveCustomerFromModal() {
     name: name,
     depCity: document.getElementById('mCity').value.trim(),
     email: document.getElementById('mEmail').value.trim(),
-    reference: document.getElementById('mReference').value.trim(),
+    reference: finalReference,
+    refExtra: refExtra,
     notes: document.getElementById('mNotes').value.trim(),
     owners: Array.from(owners),
     createdAt: existing?.createdAt || now,
@@ -826,6 +964,8 @@ function wireEvents() {
   document.getElementById('btnAdd').addEventListener('click', () => openCustomerModal(null));
   document.getElementById('btnModalCancel').addEventListener('click', closeCustomerModal);
   document.getElementById('btnModalSave').addEventListener('click', saveCustomerFromModal);
+  document.getElementById('btnCloseQuotationList').addEventListener('click', closeQuotationListModal);
+  document.getElementById('mReferenceType').addEventListener('change', updateReferenceExtraVisibility);
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
