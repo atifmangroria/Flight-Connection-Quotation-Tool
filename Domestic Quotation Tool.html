@@ -1017,8 +1017,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Load quotations from Firebase
     window.firebaseDB.getData('domestic_quotations', agent.id).then(firebaseData => {
       if (firebaseData && firebaseData.quotations) {
-        localStorage.setItem('savedQuotations_domestic', JSON.stringify(firebaseData.quotations));
-        savedQuotations = firebaseData.quotations;
+        const domesticOnly = firebaseData.quotations.filter(q => q && q.quotationMode === 'domestic');
+        localStorage.setItem('savedQuotations_domestic', JSON.stringify(domesticOnly));
+        savedQuotations = domesticOnly;
       }
     }).catch(err => console.error('Load error:', err));
   }
@@ -1140,6 +1141,10 @@ document.addEventListener('DOMContentLoaded', function() {
   let lastSavedPax = {};
   let lastSavedDates = {};
   let lastSavedClientInfo = {};
+
+  function isDomesticQuotation(q) {
+    return !!(q && q.quotationMode === 'domestic');
+  }
 
   // Helper function to get current agent
   function getCurrentAgent() {
@@ -4018,31 +4023,20 @@ document.getElementById('btnUpdateStatus').addEventListener('click', () => {
 <script>
 // Default terms and conditions
 const defaultTerms = `
-<h4 style="margin-top: 20px; color: #222; text-align: left; font-size: 16px; font-weight: 600;">1. Payment Policy</h4>
-<p>A 50% advance payment is required at the time of booking to confirm the reservation. The remaining 50% balance must be paid at the time of voucher handover (prior to final ticket issuance or hotel confirmation)</p>
-<p>Payments may be made by bank transfer, cash, or any other approved payment method communicated by Flight Connection Travel.</p>
-<p>Bookings will be processed only after receipt of the advance payment and confirmation from our accounts department.</p>
-<p>Failure to pay the balance by the due time may result in cancellation of the booking and forfeiture of the advance payment, as per supplier rules.</p>
-
-<h4 style="margin-top: 20px; color: #222; text-align: left; font-size: 16px; font-weight: 600;">2. Rates & Availability</h4>
-<p>All rates quoted are subject to change without prior notice due to fluctuations in airline fares, hotel rates, exchange rates, and supplier availability.</p>
-<p>Package prices are calculated based on the prevailing exchange rate at the time of quotation; any change in exchange rate at the time of final payment will be applied accordingly.</p>
-<p>Availability of flights, hotels, and ground transport is not guaranteed until bookings are confirmed and payment has been received.</p>
-<p>Flight Connection Travel reserves the right to revise the quotation if any supplier increases fares or imposes additional charges before confirmation.</p>
-
-<h4 style="margin-top: 20px; color: #222; text-align: left; font-size: 16px; font-weight: 600;">3. Cancellation & Refund Policy</h4>
-<p>Cancellation and refund charges are determined by the respective airlines, hotels, and other service providers. Clients must contact Flight Connection Travel to confirm applicable charges prior to cancelling.</p>
-<p>Airline tickets, hotel reservations, and other supplier services may be non-refundable or partially refundable depending on supplier rules.</p>
-<p>Flight Connection Travel charges a non-refundable service fee for administrative processing; this service fee will not be refunded under any circumstances.</p>
-<p>Any refunds due from suppliers will be processed after deducting applicable supplier charges and Flight Connection Travel service fees. Refund processing times depend on supplier policies.</p>
-<p>In case of cancellations initiated by the supplier (airline/hotel), the supplier's policy for rebooking, refund, or compensation will apply and Flight Connection Travel will assist in accordance with those policies</p>
-
-<h4 style="margin-top: 20px; color: #222; text-align: left; font-size: 16px; font-weight: 600;">4. General Terms</h4>
-<p>Flight Connection Travel acts as an intermediary between the client and third-party service providers (airlines, hotels, ground transport, visa agencies, etc.) and is not liable for delays, cancellations, or service failures caused by those providers.</p>
-<p>Passengers are responsible for ensuring they hold valid travel documents (passport, visas, vaccination certificates, etc.) prior to departure. Flight Connection Travel will not be liable for denied boarding or entry due to invalid documents.</p>
-<p>The company reserves the right to amend or withdraw any quotation or offer without prior notice.</p>
-<p>Acceptance of the quotation and payment of the advance constitutes acceptance of these Terms & Conditions by the client.</p>
-<p>Any disputes arising under these terms shall be governed by the applicable laws of Pakistan and subject to the jurisdiction of competent courts.</p>
+<ul style="padding-left: 18px; margin: 0; text-align: left;">
+  <li>Prices are subject to availability and may change until booking is confirmed.</li>
+  <li>Booking will be confirmed after receiving the agreed payment.</li>
+  <li>Flight, hotel, and transport services are managed by respective airlines and suppliers; any changes or cancellations will follow their policies. Please reconfirm before ticket issuance.</li>
+  <li>Standard hotel check-in and check-out times apply; early check-in or late check-out can be arranged subject to availability.</li>
+  <li>For northern destinations, travel plans may be affected by weather, flight operations, road conditions, or unforeseen situations such as landslides; we will always assist in arranging the best possible alternatives.</li>
+  <li>Any changes in itinerary due to operational, weather, or safety reasons may be made in the best interest of travelers.</li>
+  <li>Cancellation and refund (if applicable) will be processed as per supplier policies, and we will fully support and coordinate the process from our side.</li>
+  <li>In case of delays or changes beyond control (weather, natural conditions, or government restrictions), we will make every effort to provide suitable assistance and solutions.</li>
+  <li>Hotels provide facilities such as hot water, heating, and electricity as per their standard operations and local conditions; while we carefully select our partners, availability of such services may vary, and we will always coordinate with the hotel to resolve any concerns during your stay.</li>
+  <li>Guests are requested to carry valid identification (CNIC) and ensure timely arrival for all departures.</li>
+  <li>Any unused services are non-refundable as per standard supplier policies.</li>
+  <li>We act as facilitators for all travel services and remain committed to assisting our clients throughout the journey to ensure a smooth experience.</li>
+</ul>
 `;
 
 // Store custom terms in localStorage
@@ -4797,12 +4791,6 @@ if (hasHotels) {
   });
 }
 
-// Check for visa exclusion
-const hasVisa = document.getElementById('visaBlock');
-if (!hasVisa) {
-  quotationHTML += `<li>Visa is not included in this package</li>`;
-}
-
 // Check for transfer exclusion
 const hasTransfers = document.querySelectorAll("[id^='transferBlock_']").length > 0;
 if (!hasTransfers) {
@@ -4827,16 +4815,7 @@ quotationHTML += `
    <div style="margin-bottom: 20px; border: 1px solid #e3f2fd; padding: 15px; border-radius: 8px; background-color: #ffffff;">
     <h3 style="margin-top:0; color:#0b76d1; text-align:left; margin-bottom:10px;">Terms & Conditions</h3>
     <div style="font-size: 13px; line-height: 1.6; text-align: left;">
-    <ul style="padding-left: 18px; margin: 0; text-align: left;">
-      <li>50% advance required to confirm booking; remaining 50% before ticket/voucher issuance. Non-payment may result in cancellation &amp; loss of advance.</li>
-      <li>Rates are subject to change due to fares, exchange rate, taxes, and availability. Booking is confirmed only after payment.</li>
-      <li>Most services are non-refundable and non-changeable. Please confirm cancellation/change policy before payment. Once issued, non-refundable/non-changeable services will be fully lost in case of cancellation or no-show.</li>
-      <li>We recommend confirming all services (tickets, hotels, transport, etc.) after visa approval. If issued/confirmed before visa approval and visa is refused, refund will be as per respective supplier policy; for non-refundable services, no refund will be applicable.</li>
-      <li>Standard hotel check-in is usually 14:00–15:00 and check-out 11:00–12:00; however, in some destinations (e.g. Saudi Arabia) check-in may be 16:00–18:00. Early check-in/late check-out subject to availability and extra charges.</li>
-      <li>Flight Connection Travel facilitates bookings with airlines and hotels; all services are subject to respective supplier terms and conditions.</li>
-      <li>Passenger must have valid passport, visa, and travel documents. No liability for denied boarding/entry.</li>
-      <li>Any increase in taxes or supplier charges before confirmation will be applicable. Payment confirms acceptance of terms.</li>
-    </ul>
+    ${customTerms || defaultTerms}
   </div>
   </div>
 
@@ -5414,6 +5393,7 @@ const customSectionsData = {
     // Create a complete quotation object
     const quotationData = {
       id: currentQuotationId || 'DOM-' + Date.now().toString().slice(-6),
+      quotationMode: 'domestic',
       clientData: {
         name: savedClientData.name || clientName,
         phone: savedClientData.phone || clientPhone,
@@ -5509,6 +5489,11 @@ function loadQuotation(quotationId) {
     
     if (!quotation) {
       showNotification("Quotation not found.", "error");
+      return;
+    }
+
+    if (!isDomesticQuotation(quotation)) {
+      showNotification("This is not a domestic quotation.", "error");
       return;
     }
     
@@ -6055,8 +6040,7 @@ document.getElementById('btnLoadQuotation').addEventListener('click', () => {
   // Filter quotations for current agent only
   const userQuotations = allSavedQuotations.filter(q => {
     if (!q || !q.agentData || q.agentData.id !== currentAgent.id) return false;
-    const qid = String(q.id || '');
-    return !qid.startsWith('INT-');
+    return isDomesticQuotation(q);
   });
   
   if (userQuotations.length === 0) {
