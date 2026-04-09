@@ -135,6 +135,7 @@
   .stat-card.danger{border-left-color:var(--danger)}
   .stat-card.info{border-left-color:var(--info)}
   .stat-value{font-size:28px;font-weight:bold;margin:5px 0}
+  .stat-value.money{font-size:22px;line-height:1.2;word-break:break-word}
   .stat-label{font-size:14px;color:var(--muted)}
   .filters-section{display:flex;gap:10px;align-items:center;margin-bottom:20px;flex-wrap:wrap;background:#f8f9fa;padding:15px;border-radius:8px}
   .filters-section input, .filters-section select{padding:8px;border:1px solid #ddd;border-radius:4px;font-size:16px}
@@ -420,6 +421,26 @@
     <div class="stat-card info">
       <div class="stat-label">Expiring Soon</div>
       <div class="stat-value" id="expiringQuotations">0</div>
+    </div>
+    <div class="stat-card info">
+      <div class="stat-label" id="periodQuotationLabel">Quotations (Selected Period)</div>
+      <div class="stat-value" id="periodQuotationCount">0</div>
+    </div>
+    <div class="stat-card success">
+      <div class="stat-label" id="periodSalesLabel">Expected Sales (Selected Period)</div>
+      <div class="stat-value money" id="periodExpectedSales">PKR 0</div>
+    </div>
+    <div class="stat-card success">
+      <div class="stat-label">Booked Sales (Selected Period)</div>
+      <div class="stat-value money" id="periodBookedSales">PKR 0</div>
+    </div>
+    <div class="stat-card info">
+      <div class="stat-label">Pending Sales (Selected Period)</div>
+      <div class="stat-value money" id="periodPendingSales">PKR 0</div>
+    </div>
+    <div class="stat-card warning">
+      <div class="stat-label">Follow-up Sales (Selected Period)</div>
+      <div class="stat-value money" id="periodFollowupSales">PKR 0</div>
     </div>
   </div>
 
@@ -1571,6 +1592,87 @@ function changeViewMode(mode) {
   applyFilter();
 }
 
+function getSelectedPeriodLabel() {
+  const period = document.getElementById('filterPeriod')?.value || 'maximum';
+  if (period === 'today') return 'Today';
+  if (period === 'yesterday') return 'Yesterday';
+  if (period === 'lastweek') return 'Last Week';
+  if (period === 'last30days') return 'Last 30 Days';
+  if (period === 'month') return 'This Month';
+  if (period === 'custom') {
+    const start = document.getElementById('filterStartDate')?.value;
+    const end = document.getElementById('filterEndDate')?.value;
+    if (start && end) return `Custom (${start} to ${end})`;
+    return 'Custom Range';
+  }
+  return 'Maximum (All Quotations)';
+}
+
+function toNumberSafe(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function getExpectedSalesAmount(quotation) {
+  if (!quotation || typeof quotation !== 'object') return 0;
+
+  const directCandidates = [
+    quotation.totalAmount,
+    quotation.totalSell,
+    quotation.totalSellPKR,
+    quotation.finalTotal,
+    quotation.finalTotalSellPKR,
+    quotation.grandTotal,
+    quotation.grandTotalPKR,
+    quotation.netTotal,
+    quotation.netTotalPKR,
+    quotation.packageTotal,
+    quotation.packageTotalPKR,
+    quotation.amount,
+    quotation.amountPKR,
+    quotation.expectedSales,
+    quotation.expectedSalesPKR,
+    quotation.total
+  ];
+
+  for (const candidate of directCandidates) {
+    const n = toNumberSafe(candidate);
+    if (n > 0) return n;
+  }
+
+  const nestedCandidates = [
+    quotation.pricing,
+    quotation.prices,
+    quotation.summary,
+    quotation.calcSummary,
+    quotation.totals,
+    quotation.calculation
+  ].filter(Boolean);
+
+  for (const nested of nestedCandidates) {
+    const nestedValues = [
+      nested.totalAmount,
+      nested.totalSell,
+      nested.totalSellPKR,
+      nested.finalTotal,
+      nested.finalTotalSellPKR,
+      nested.grandTotal,
+      nested.grandTotalPKR,
+      nested.netTotal,
+      nested.netTotalPKR,
+      nested.expectedSales,
+      nested.expectedSalesPKR,
+      nested.total
+    ];
+    for (const candidate of nestedValues) {
+      const n = toNumberSafe(candidate);
+      if (n > 0) return n;
+    }
+  }
+
+  return 0;
+}
+
 // Update statistics
 function updateStatistics() {
   const total = filteredAllQuotations.length;
@@ -1597,6 +1699,27 @@ function updateStatistics() {
   document.getElementById('cancelledQuotations').textContent = cancelled;
   document.getElementById('expiredQuotations').textContent = expired;
   document.getElementById('expiringQuotations').textContent = expiring;
+
+  const periodLabel = getSelectedPeriodLabel();
+  const periodQuotationCount = filteredAllQuotations.length;
+  const periodExpectedSales = filteredAllQuotations.reduce((sum, q) => sum + getExpectedSalesAmount(q), 0);
+  const periodBookedSales = filteredAllQuotations
+    .filter(q => q.status === 'booked')
+    .reduce((sum, q) => sum + getExpectedSalesAmount(q), 0);
+  const periodPendingSales = filteredAllQuotations
+    .filter(q => q.status === 'pending')
+    .reduce((sum, q) => sum + getExpectedSalesAmount(q), 0);
+  const periodFollowupSales = filteredAllQuotations
+    .filter(q => q.status === 'followup')
+    .reduce((sum, q) => sum + getExpectedSalesAmount(q), 0);
+
+  document.getElementById('periodQuotationLabel').textContent = `Quotations (${periodLabel})`;
+  document.getElementById('periodSalesLabel').textContent = `Expected Sales (${periodLabel})`;
+  document.getElementById('periodQuotationCount').textContent = periodQuotationCount;
+  document.getElementById('periodExpectedSales').textContent = `PKR ${Math.round(periodExpectedSales).toLocaleString('en-PK')}`;
+  document.getElementById('periodBookedSales').textContent = `PKR ${Math.round(periodBookedSales).toLocaleString('en-PK')}`;
+  document.getElementById('periodPendingSales').textContent = `PKR ${Math.round(periodPendingSales).toLocaleString('en-PK')}`;
+  document.getElementById('periodFollowupSales').textContent = `PKR ${Math.round(periodFollowupSales).toLocaleString('en-PK')}`;
 }
 
 // Render quotations table
