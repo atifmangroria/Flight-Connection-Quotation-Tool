@@ -100,6 +100,32 @@ service cloud.firestore {
         || isAdmin()
       );
     }
+
+    // ==================== DOMESTIC QUOTATIONS ====================
+    // Domestic Quotations - Approved users only
+    match /domestic_quotations/{quotationId} {
+      // Approved users can read quotations
+      allow read: if isApproved();
+
+      // Approved users can create quotations
+      allow create: if isApproved();
+
+      // Users can update their own quotations; admins can manage all for reassignment
+      allow update: if isApproved() && (
+        resource.data.userId == request.auth.uid
+        || resource.data.agentId == request.auth.uid
+        || quotationId == request.auth.uid
+        || isAdmin()
+      );
+
+      // Users can delete their own quotations; admins can delete during transfers/removals
+      allow delete: if isApproved() && (
+        resource.data.userId == request.auth.uid
+        || resource.data.agentId == request.auth.uid
+        || quotationId == request.auth.uid
+        || isAdmin()
+      );
+    }
     
     // ==================== PACKAGES COLLECTION ====================
     // Packages - Authenticated users can read, admin can write
