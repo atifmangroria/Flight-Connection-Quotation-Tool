@@ -34,13 +34,17 @@
   // ========== Firebase Cloud Storage Utility Functions ==========
   window.firebaseDB = {
     // Save data to Firestore
-    async saveData(collection_name, docId, data) {
+    async saveData(collection_name, docId, data, options = {}) {
       try {
         console.log('Attempting to save to Firebase:', collection_name, docId, data);  // Added logging
         await setDoc(doc(db, collection_name, docId), data, { merge: true });
         console.log('Successfully saved to Firebase:', collection_name, docId);  // Added logging
         return true;
       } catch (error) {
+        const isPermissionDenied = (error?.code === 'permission-denied') || String(error?.message || '').toLowerCase().includes('insufficient permissions');
+        if (options?.silentPermissionDenied && isPermissionDenied) {
+          return false;
+        }
         console.error(`Error saving to ${collection_name}:`, error);  // Existing, but ensure it's visible
         showNotification(`Failed to save to Firebase: ${error.message}`, 'error');  // Added user notification
         return false;
@@ -48,7 +52,7 @@
     },
 
     // Get data from Firestore
-    async getData(collection_name, docId) {
+    async getData(collection_name, docId, options = {}) {
       try {
         console.log('Attempting to get from Firebase:', collection_name, docId);  // Added logging
         const docSnap = await getDoc(doc(db, collection_name, docId));
@@ -56,6 +60,10 @@
         console.log('Successfully retrieved from Firebase:', collection_name, docId, result);  // Added logging
         return result;
       } catch (error) {
+        const isPermissionDenied = (error?.code === 'permission-denied') || String(error?.message || '').toLowerCase().includes('insufficient permissions');
+        if (options?.silentPermissionDenied && isPermissionDenied) {
+          return null;
+        }
         console.error(`Error getting from ${collection_name}:`, error);  // Existing
         showNotification(`Failed to load from Firebase: ${error.message}`, 'error');  // Added user notification
         return null;
@@ -1095,14 +1103,19 @@ async function saveQuotationsToFirebase(agent, umrahQuotations, internationalQuo
       if (!success) throw new Error('Failed to save International quotations to Firebase');
     }
 
-    if (domesticQuotations) {
+    if (Array.isArray(domesticQuotations) && domesticQuotations.length > 0) {
       const success = await window.firebaseDB.saveData('domestic_quotations', ownerId, {
         quotations: domesticQuotations,
         updatedAt: new Date(),
         agentId: ownerId,
         userId: ownerId
-      });
-      if (!success) throw new Error('Failed to save Domestic quotations to Firebase');
+      }, { silentPermissionDenied: true });
+      if (!success) {
+        if (!window.__domesticPermissionsWarned) {
+          showNotification('Domestic quotations are currently not synced (Firestore permissions).', 'warning');
+          window.__domesticPermissionsWarned = true;
+        }
+      }
     }
 
     // Keep local snapshots aligned only after successful Firebase writes.
@@ -1128,7 +1141,7 @@ async function loadQuotationsFromFirebase(agent, explicitOwnerId = null) {
     
     const umrahData = await window.firebaseDB.getData('umrah_quotations', ownerId);
     const internationalData = await window.firebaseDB.getData('international_quotations', ownerId);
-    const domesticData = await window.firebaseDB.getData('domestic_quotations', ownerId);
+    const domesticData = await window.firebaseDB.getData('domestic_quotations', ownerId, { silentPermissionDenied: true });
     const result = {
       umrah: umrahData?.quotations || [],
       international: internationalData?.quotations || [],
