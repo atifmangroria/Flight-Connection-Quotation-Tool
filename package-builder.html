@@ -383,11 +383,13 @@ async function generateImage() {
     const nights = toNumber(item.querySelector('.htlNights')?.value);
     const doubleRate = toNumber(item.querySelector('.htlDouble')?.value);
     const tripleRate = toNumber(item.querySelector('.htlTriple')?.value);
+    const childBedCharge = toNumber(item.querySelector('.htlChildBed')?.value);
     const perAdultDoubleHotel = toPKR((doubleRate * nights) / 2, c, r);
     const perAdultTripleHotel = toPKR((tripleRate * nights) / 3, c, r);
+    const perChildWithBedHotel = toPKR((childBedCharge * nights), c, r);
     adultDouble += perAdultDoubleHotel;
     adultTriple += perAdultTripleHotel;
-    childWithBed += perAdultDoubleHotel;
+    childWithBed += perChildWithBedHotel;
   });
   const applyMoveService = (item, prefix) => {
     const currency = item.querySelector(`.${prefix}Currency`)?.value || 'PKR';
@@ -1587,15 +1589,17 @@ async function generatePDF() {
     const nights = toNumber(item.querySelector('.htlNights')?.value);
     const doubleRate = toNumber(item.querySelector('.htlDouble')?.value);
     const tripleRate = toNumber(item.querySelector('.htlTriple')?.value);
+    const childBedCharge = toNumber(item.querySelector('.htlChildBed')?.value);
 
     const perAdultDoubleHotel = toPKR((doubleRate * nights) / 2, c, r);
     const perAdultTripleHotel = toPKR((tripleRate * nights) / 3, c, r);
+    const perChildWithBedHotel = toPKR((childBedCharge * nights), c, r);
 
     adultDouble += perAdultDoubleHotel;
     adultTriple += perAdultTripleHotel;
 
-    // Child with bed same as adult hotel share
-    childWithBed += perAdultDoubleHotel;
+    // Child with bed uses child extra bed charge from hotel row.
+    childWithBed += perChildWithBedHotel;
   });
 
   // Transfer + Tour (your rule block had transfer repeated; this applies same logic to both)
