@@ -541,121 +541,10 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus, 
   }
   @media print{ .no-print{display:none} }
 
-  /* Rich Text Editor Styles */
-.rich-editor-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  padding: 10px;
-  background: #f5f5f5;
-  border: 1px solid #ddd;
-  border-bottom: none;
-  border-radius: 6px 6px 0 0;
-}
-
-.rich-editor-btn {
-  padding: 8px 12px;
-  border: 1px solid #1a237e;
-  background: #1a237e;
-  cursor: pointer;
-  border-radius: 4px;
-  font-size: 14px;
-  font-weight: bold;
-  transition: all 0.2s;
-  min-width: 30px;
-  text-align: center;
-  color: white !important;
-  box-shadow: 0 2px 4px rgba(26, 35, 126, 0.3);
-}
-
-.rich-editor-btn:hover {
-  background: #283593;
-  border-color: #3949ab;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(26, 35, 126, 0.4);
-}
-
-.rich-editor-btn.active {
-  background: #0d47a1;
-  color: white !important;
-  border-color: #0d47a1;
-  box-shadow: 0 2px 6px rgba(13, 71, 161, 0.4);
-}
-
-.rich-editor-separator {
-  width: 1px;
-  background: #ccc;
-  margin: 0 5px;
-}
-
-/* Section Toggle Styles */
-.section-toggle-container {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 15px;
-  padding: 10px;
-  background: #f8f9fa;
-  border: 1px solid #dee2e6;
-  border-radius: 6px;
-}
-
-.section-toggle-label {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-weight: bold;
-  color: #333;
-}
-
-.toggle-switch {
-  position: relative;
-  width: 50px;
-  height: 24px;
-  background: #ccc;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: background 0.3s;
-}
-
-.toggle-switch.active {
-  background: var(--accent);
-}
-
-.toggle-switch::after {
-  content: '';
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 20px;
-  height: 20px;
-  background: white;
-  border-radius: 50%;
-  transition: transform 0.3s;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-}
-
-.toggle-switch.active::after {
-  transform: translateX(26px);
-}
-
-.section-disabled {
-  opacity: 0.5;
-  pointer-events: none;
-}
-
-.section-status {
-  font-size: 12px;
-  color: #666;
-  font-style: italic;
-}
-
 /* Add this to your main <style> section */
 @media print {
   * {
     -webkit-print-color-adjust: exact !important;
-    color-adjust: exact !important;
-    print-color-adjust: exact !important;
   }
 }
 
@@ -816,7 +705,7 @@ function updateAgentUI() {
 
 let availablePackages = [];
 
-async function loadPackages(type = 'international') {
+async function loadPackages(type = 'domestic') {
   const packageSelect = document.getElementById('packageSelect');
   if (!packageSelect) return;
   packageSelect.innerHTML = '<option value="">-- No Package --</option>';
@@ -1098,18 +987,13 @@ document.getElementById('btnDashboard').addEventListener('click', () => {
   window.location.href = 'dashboard.html';
 });
 
-// Function to get current agent
-function getCurrentAgent() {
-  return JSON.parse(localStorage.getItem("loggedInAgent"));
-}
-
 // --- INITIALIZATION ---
 document.addEventListener('DOMContentLoaded', function() {
   // Check authentication on page load
   const agent = checkAuthentication();
   if (agent) {
     updateAgentUI();
-    loadPackages();
+    loadPackages('domestic');
 
     const packageSelect = document.getElementById('packageSelect');
     if (packageSelect) {
@@ -7097,8 +6981,15 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!select) return;
     const id = (select.id || '').toLowerCase();
     if (id.includes('currency')) {
-      select.innerHTML = '<option value="PKR">PKR</option>';
-      select.value = 'PKR';
+      const alreadyFixed =
+        select.options.length === 1 &&
+        select.options[0].value === 'PKR' &&
+        select.value === 'PKR';
+
+      if (!alreadyFixed) {
+        select.innerHTML = '<option value="PKR">PKR</option>';
+        select.value = 'PKR';
+      }
     }
   }
 
@@ -7109,7 +7000,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const options = ["Car", "Hiace", "Coaster", "Bus", "4x4"];
     const current = select.value;
-    select.innerHTML = options.map(function(v) { return '<option>' + v + '</option>'; }).join('');
+    const existingOptions = Array.from(select.options).map(function(opt) { return opt.value || opt.text; });
+    const hasExpectedOptions =
+      existingOptions.length === options.length &&
+      existingOptions.every(function(opt, idx) { return opt === options[idx]; });
+
+    if (!hasExpectedOptions) {
+      select.innerHTML = options.map(function(v) { return '<option>' + v + '</option>'; }).join('');
+    }
+
     if (options.indexOf(current) !== -1) {
       select.value = current;
     } else {
@@ -7285,10 +7184,17 @@ document.addEventListener('DOMContentLoaded', function() {
       window.loadPackages('domestic');
     }
 
+    var isDomesticUiSyncing = false;
     var observer = new MutationObserver(function() {
-      removeVisaUI();
-      localizePlaceholders();
-      forcePKRUI();
+      if (isDomesticUiSyncing) return;
+      isDomesticUiSyncing = true;
+      try {
+        removeVisaUI();
+        localizePlaceholders();
+        forcePKRUI();
+      } finally {
+        isDomesticUiSyncing = false;
+      }
     });
     observer.observe(document.body, { childList: true, subtree: true });
   });
