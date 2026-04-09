@@ -1015,9 +1015,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Load quotations from Firebase
-    window.firebaseDB.getData('international_quotations', agent.id).then(firebaseData => {
+    window.firebaseDB.getData('domestic_quotations', agent.id).then(firebaseData => {
       if (firebaseData && firebaseData.quotations) {
-        localStorage.setItem('savedQuotations_international', JSON.stringify(firebaseData.quotations));
+        localStorage.setItem('savedQuotations_domestic', JSON.stringify(firebaseData.quotations));
         savedQuotations = firebaseData.quotations;
       }
     }).catch(err => console.error('Load error:', err));
@@ -1135,7 +1135,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <script>
   let isClientDataSaved = false;
-  let savedQuotations = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
+  let savedQuotations = JSON.parse(localStorage.getItem('savedQuotations_domestic')) || [];
   let currentQuotationId = null;
   let lastSavedPax = {};
   let lastSavedDates = {};
@@ -3908,7 +3908,7 @@ updateServiceChargeVisibility();
 function updateQuotationStatus(quotationId, newStatus) {
   try {
     // Get all quotations
-    let savedQuotations = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
+    let savedQuotations = JSON.parse(localStorage.getItem('savedQuotations_domestic')) || [];
     
     // Find and update the quotation
     const quotationIndex = savedQuotations.findIndex(q => q.id === quotationId);
@@ -3917,12 +3917,12 @@ function updateQuotationStatus(quotationId, newStatus) {
       savedQuotations[quotationIndex].updatedAt = new Date().toISOString();
       
       // Save back to localStorage and Firebase
-      localStorage.setItem('savedQuotations_international', JSON.stringify(savedQuotations));
+      localStorage.setItem('savedQuotations_domestic', JSON.stringify(savedQuotations));
       
       // Also save to Firebase
       const agent = getCurrentAgent();
       if (agent && agent.id) {
-        window.firebaseDB.saveData('international_quotations', agent.id, { 
+        window.firebaseDB.saveData('domestic_quotations', agent.id, { 
           quotations: savedQuotations, 
           updatedAt: new Date(),
           agentId: agent.id 
@@ -3930,7 +3930,7 @@ function updateQuotationStatus(quotationId, newStatus) {
       }
       
       // Trigger dashboard refresh
-      sessionStorage.setItem('refreshDashboard_international', 'true');
+      sessionStorage.setItem('refreshDashboard_domestic', 'true');
       
       showNotification(`Quotation status updated to: ${newStatus}`, "success");
       
@@ -3953,7 +3953,7 @@ function showStatusSection() {
   const quotationStatus = document.getElementById('quotationStatus');
   
   // Get all quotations from localStorage
-  const allSavedQuotations = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
+  const allSavedQuotations = JSON.parse(localStorage.getItem('savedQuotations_domestic')) || [];
   
   if (currentQuotationId) {
     statusSection.style.display = 'block';
@@ -4285,7 +4285,7 @@ async function printQuotation() {
   const agentData = getCurrentAgent();
   
   if (!currentQuotationId) {
-    currentQuotationId = 'INT-' + Date.now().toString().slice(-6);
+    currentQuotationId = 'DOM-' + Date.now().toString().slice(-6);
   }
   
   let totalCostPKR = 0;
@@ -5128,7 +5128,7 @@ btnExportExcel.addEventListener('click', () => {
     
     // Generate a filename with date and quotation ID
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const filename = `Quotation_${currentQuotationId || 'INT'}_${date}.xlsx`;
+    const filename = `Quotation_${currentQuotationId || 'DOM'}_${date}.xlsx`;
     
     // Save the file
     XLSX.writeFile(wb, filename);
@@ -5413,7 +5413,7 @@ const customSectionsData = {
 
     // Create a complete quotation object
     const quotationData = {
-      id: currentQuotationId || 'INT-' + Date.now().toString().slice(-6),
+      id: currentQuotationId || 'DOM-' + Date.now().toString().slice(-6),
       clientData: {
         name: savedClientData.name || clientName,
         phone: savedClientData.phone || clientPhone,
@@ -5459,7 +5459,7 @@ const customSectionsData = {
     }
     
     // Get ALL existing quotations from localStorage
-    let allQuotations = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
+    let allQuotations = JSON.parse(localStorage.getItem('savedQuotations_domestic')) || [];
     
     // Add or update the quotation
     if (currentQuotationId) {
@@ -5475,11 +5475,11 @@ const customSectionsData = {
     }
     
     // Save to localStorage
-    localStorage.setItem('savedQuotations_international', JSON.stringify(allQuotations));
+    localStorage.setItem('savedQuotations_domestic', JSON.stringify(allQuotations));
     
     // Save to Firebase
     if (agent && agent.id) {
-      window.firebaseDB.saveData('international_quotations', agent.id, { 
+      window.firebaseDB.saveData('domestic_quotations', agent.id, { 
         quotations: allQuotations, 
         updatedAt: new Date(),
         agentId: agent.id 
@@ -5502,7 +5502,7 @@ const customSectionsData = {
 function loadQuotation(quotationId) {
   try {
     // Get all saved quotations
-    savedQuotations = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
+    savedQuotations = JSON.parse(localStorage.getItem('savedQuotations_domestic')) || [];
     
     // Find the quotation
     const quotation = savedQuotations.find(q => q.id === quotationId);
@@ -6050,10 +6050,14 @@ document.getElementById('btnLoadQuotation').addEventListener('click', () => {
   }
   
   // Get all quotations
-  const allSavedQuotations = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
+  const allSavedQuotations = JSON.parse(localStorage.getItem('savedQuotations_domestic')) || [];
   
   // Filter quotations for current agent only
-  const userQuotations = allSavedQuotations.filter(q => q.agentData && q.agentData.id === currentAgent.id);
+  const userQuotations = allSavedQuotations.filter(q => {
+    if (!q || !q.agentData || q.agentData.id !== currentAgent.id) return false;
+    const qid = String(q.id || '');
+    return !qid.startsWith('INT-');
+  });
   
   if (userQuotations.length === 0) {
     showAlert("No saved quotations found for your account.");
