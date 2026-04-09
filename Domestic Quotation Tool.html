@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Domestic Quotation Tool - Flight Connection</title>
+<script>
+(async function renderDomesticQuotationPage() {
+  try {
+    const response = await fetch('International Quotation Tool.html', { cache: 'no-store' });
+    if (!response.ok) {
+      throw new Error('Failed to load base quotation template');
+    }
+
+    let html = await response.text();
+
+    const replacements = [
+      [/International Quotation Tool — Flight Connection/g, 'Domestic Quotation Tool - Flight Connection'],
+      [/International Tour Quotation Tool — Flight Connection/g, 'Domestic Tour Quotation Tool - Flight Connection'],
+      [/International Quotation/g, 'Domestic Quotation'],
+      [/savedQuotations_international/g, 'savedQuotations_domestic'],
+      [/savedClientData_international/g, 'savedClientData_domestic'],
+      [/customTerms_international/g, 'customTerms_domestic'],
+      [/section1Content_international/g, 'section1Content_domestic'],
+      [/section2Content_international/g, 'section2Content_domestic'],
+      [/international_quotations/g, 'domestic_quotations'],
+      [/'INT-'/g, "'DOM-'"]
+    ];
+
+    replacements.forEach(([pattern, value]) => {
+      html = html.replace(pattern, value);
+    });
+
+    const domesticTerms = `
+<h4 style="margin-top: 20px; color: #222; text-align: left; font-size: 16px; font-weight: 600;">Terms & Conditions</h4>
+<p>Prices are subject to availability and may change until booking is confirmed.</p>
+<p>Booking will be confirmed after receiving the agreed payment.</p>
+<p>Flight, hotel, and transport services are managed by respective airlines and suppliers; any changes or cancellations will follow their policies. Please reconfirm before ticket issuance.</p>
+<p>Standard hotel check-in and check-out times apply. Early check-in or late check-out can be arranged subject to availability.</p>
+<p>For northern destinations, travel plans may be affected by weather, flight operations, road conditions, or unforeseen situations such as landslides; we will always assist in arranging the best possible alternatives.</p>
+<p>Any changes in itinerary due to operational, weather, or safety reasons may be made in the best interest of travelers.</p>
+<p>Cancellation and refund (if applicable) will be processed as per supplier policies, and we will fully support and coordinate the process from our side.</p>
+<p>In case of delays or changes beyond control (weather, natural conditions, or government restrictions), we will make every effort to provide suitable assistance and solutions.</p>
+<p>Hotels provide facilities such as hot water, heating, and electricity as per their standard operations and local conditions; while we carefully select our partners, availability of such services may vary, and we will always coordinate with the hotel to resolve any concerns during your stay.</p>
+<p>Guests are requested to carry valid identification (CNIC) and ensure timely arrival for all departures.</p>
+<p>Any unused services are non-refundable as per standard supplier policies.</p>
+<p>We act as facilitators for all travel services and remain committed to assisting our clients throughout the journey to ensure a smooth experience.</p>
+`;
+
+    html = html.replace(/const defaultTerms = `[\s\S]*?`;/, `const defaultTerms = \`${domesticTerms}\`;`);
+
+    const domesticPatchScript = `
+<script>
+(function patchDomesticBehavior() {
+  window.addEventListener('DOMContentLoaded', function() {
+    const visaWrapper = document.getElementById('visaWrapper');
+    if (visaWrapper) {
+      visaWrapper.style.display = 'none';
+    }
+
+    if (typeof addVisa === 'function') {
+      window.addVisa = function() {
+        if (typeof showNotification === 'function') {
+          showNotification('Visa is not included in Domestic Quotation.', 'info');
+        }
+      };
+    }
+
+    if (typeof removeVisa === 'function') {
+      window.removeVisa = function() {};
+    }
+
+    if (typeof visaAdded !== 'undefined') {
+      visaAdded = false;
+    }
+  });
+})();
+<\/script>
+`;
+
+    html = html.replace('</body>', domesticPatchScript + '\n</body>');
+
+    document.open();
+    document.write(html);
+    document.close();
+  } catch (error) {
+    document.body.innerHTML = '<div style="font-family:Arial,sans-serif;padding:20px;color:#c62828;">Failed to load Domestic Quotation Tool.</div>';
+    console.error(error);
+  }
+})();
+</script>
+</head>
+<body></body>
+</html>

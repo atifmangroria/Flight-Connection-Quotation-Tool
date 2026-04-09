@@ -158,6 +158,7 @@
             <option value="">-- Select --</option>
             <option value="umrah">Umrah</option>
             <option value="international">International</option>
+            <option value="domestic">Domestic</option>
           </select>
         </div>
       </div>
@@ -763,9 +764,9 @@ async function loadPackageForEditing(packageId, options = {}) {
     row.querySelector('.vsChild').value = v.priceChild ?? '';
     row.querySelector('.vsInfant').value = v.priceInfant ?? '';
   });
-  if (!(data.visas || []).length) addVisa();
+  if ((data.type || '') !== 'domestic' && !(data.visas || []).length) addVisa();
 
-  if ((data.type || '') === 'international') {
+  if ((data.type || '') === 'international' || (data.type || '') === 'domestic') {
     (data.tours || []).forEach(t => {
       addTour();
       const row = document.querySelector('#toursContainer .subsection:last-child');
@@ -892,7 +893,23 @@ function showNotification(msg, type = 'success') {
 
 function updateSections() {
   const type = document.getElementById('packageType').value;
-  document.getElementById('tourSection').classList.toggle('hidden', type !== 'international');
+  document.getElementById('tourSection').classList.toggle('hidden', !(type === 'international' || type === 'domestic'));
+
+  const visaSection = document.getElementById('visasContainer')?.closest('.section');
+  if (visaSection) {
+    visaSection.classList.toggle('hidden', type === 'domestic');
+  }
+
+  if (type === 'domestic') {
+    const visaContainer = document.getElementById('visasContainer');
+    if (visaContainer) visaContainer.innerHTML = '';
+    visaCount = 0;
+  } else {
+    const visaContainer = document.getElementById('visasContainer');
+    if (visaContainer && visaContainer.children.length === 0) {
+      addVisa();
+    }
+  }
 }
 
 // DESTINATIONS
@@ -1213,24 +1230,26 @@ document.getElementById('packageForm').addEventListener('submit', async (e) => {
   });
   if (transfers.length === 0) { showNotification('Add at least one transfer', 'error'); return; }
 
-  // Collect visas
+  // Collect visas (domestic does not include visa)
   const visas = [];
-  document.querySelectorAll('#visasContainer .subsection').forEach(item => {
-    visas.push({
-      country: item.querySelector('.vsCountry').value,
-      vendor: item.querySelector('.vsVendor').value,
-      currency: item.querySelector('.vsCurrency').value,
-      roe: parseFloat(item.querySelector('.vsROE').value),
-      type: item.querySelector('.vsType').value,
-      priceAdult: parseFloat(item.querySelector('.vsAdult').value),
-      priceChild: parseFloat(item.querySelector('.vsChild').value),
-      priceInfant: parseFloat(item.querySelector('.vsInfant').value)
+  if (pkgType !== 'domestic') {
+    document.querySelectorAll('#visasContainer .subsection').forEach(item => {
+      visas.push({
+        country: item.querySelector('.vsCountry').value,
+        vendor: item.querySelector('.vsVendor').value,
+        currency: item.querySelector('.vsCurrency').value,
+        roe: parseFloat(item.querySelector('.vsROE').value),
+        type: item.querySelector('.vsType').value,
+        priceAdult: parseFloat(item.querySelector('.vsAdult').value),
+        priceChild: parseFloat(item.querySelector('.vsChild').value),
+        priceInfant: parseFloat(item.querySelector('.vsInfant').value)
+      });
     });
-  });
+  }
 
-  // Collect tours (if international)
+  // Collect tours (international/domestic)
   const tours = [];
-  if (pkgType === 'international') {
+  if (pkgType === 'international' || pkgType === 'domestic') {
     document.querySelectorAll('#toursContainer .subsection').forEach(item => {
       tours.push({
         name: item.querySelector('.trName').value,
@@ -1250,8 +1269,8 @@ document.getElementById('packageForm').addEventListener('submit', async (e) => {
     });
   }
 
-  // Validate tours (if international)
-  if (pkgType === 'international') {
+  // Validate tours (international/domestic)
+  if (pkgType === 'international' || pkgType === 'domestic') {
     let invalidTour = false;
     document.querySelectorAll('#toursContainer .subsection').forEach((item, index) => {
       const perVehicle = parseFloat(item.querySelector('.trPerVehicle').value) || 0;
@@ -1314,7 +1333,7 @@ document.getElementById('packageForm').addEventListener('submit', async (e) => {
     hotels,
     transfers,
     visas,
-    tours: pkgType === 'international' ? tours : [],
+    tours: (pkgType === 'international' || pkgType === 'domestic') ? tours : [],
     serviceCharge: {
       adult: parseFloat(document.getElementById('chargeAdult').value),
       childBed: parseFloat(document.getElementById('chargeChildBed').value),
@@ -1848,7 +1867,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     addFlight();
     addHotel();
     addTransfer();
-    addVisa();
+    if ((document.getElementById('packageType')?.value || '') !== 'domestic') {
+      addVisa();
+    }
   }
 });
 </script>

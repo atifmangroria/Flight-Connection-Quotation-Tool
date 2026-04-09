@@ -421,6 +421,7 @@
       <option value="">All Types</option>
       <option value="umrah">Umrah</option>
       <option value="international">International</option>
+      <option value="domestic">Domestic</option>
     </select>
     <select id="userFilter" style="display: none;">
       <option value="">All Users</option>
@@ -489,6 +490,9 @@
         <button class="btn-primary" onclick="createInternationalQuotation()" style="width: 100%;">
           International Quotation
         </button>
+        <button class="btn-primary" onclick="createDomesticQuotation()" style="width: 100%;">
+          Domestic Quotation
+        </button>
       </div>
     </div>
   </div>
@@ -545,6 +549,7 @@
               <option value="">-- Select package type --</option>
               <option value="umrah">Umrah</option>
               <option value="international">International</option>
+              <option value="domestic">Domestic</option>
               <option value="both">Both</option>
             </select>
           </div>
@@ -977,6 +982,7 @@ const itemsPerPage = 10;
 let filteredAllQuotations = [];
 let allUmrahQuotations = [];
 let allInternationalQuotations = [];
+let allDomesticQuotations = [];
 let allUsersQuotations = [];
 let viewMode = 'active'; // 'active', 'expired', 'all-users'
 
@@ -1035,30 +1041,34 @@ function waitForFirebaseAuthSession(timeoutMs = 5000) {
 function getLocalQuotationsSnapshot() {
   return {
     umrah: JSON.parse(localStorage.getItem('savedQuotations')) || [],
-    international: JSON.parse(localStorage.getItem('savedQuotations_international')) || []
+    international: JSON.parse(localStorage.getItem('savedQuotations_international')) || [],
+    domestic: JSON.parse(localStorage.getItem('savedQuotations_domestic')) || []
   };
 }
 
-function saveLocalQuotationsSnapshot(umrahQuotations, internationalQuotations) {
+function saveLocalQuotationsSnapshot(umrahQuotations, internationalQuotations, domesticQuotations) {
   if (Array.isArray(umrahQuotations)) {
     localStorage.setItem('savedQuotations', JSON.stringify(umrahQuotations));
   }
   if (Array.isArray(internationalQuotations)) {
     localStorage.setItem('savedQuotations_international', JSON.stringify(internationalQuotations));
   }
+  if (Array.isArray(domesticQuotations)) {
+    localStorage.setItem('savedQuotations_domestic', JSON.stringify(domesticQuotations));
+  }
 }
 
 // Helper function to save quotations to Firebase
-async function saveQuotationsToFirebase(agent, umrahQuotations, internationalQuotations, explicitOwnerId = null) {
+async function saveQuotationsToFirebase(agent, umrahQuotations, internationalQuotations, domesticQuotations, explicitOwnerId = null) {
   try {
     const ownerId = explicitOwnerId || getOwnerId(agent);
     if (!ownerId) {
-      saveLocalQuotationsSnapshot(umrahQuotations, internationalQuotations);
+      saveLocalQuotationsSnapshot(umrahQuotations, internationalQuotations, domesticQuotations);
       return true;
     }
 
     if (!isFirebaseAvailableForDashboard()) {
-      saveLocalQuotationsSnapshot(umrahQuotations, internationalQuotations);
+      saveLocalQuotationsSnapshot(umrahQuotations, internationalQuotations, domesticQuotations);
       showNotification('Running without Firebase session. Changes saved locally.', 'warning');
       return true;
     }
@@ -1085,8 +1095,18 @@ async function saveQuotationsToFirebase(agent, umrahQuotations, internationalQuo
       if (!success) throw new Error('Failed to save International quotations to Firebase');
     }
 
+    if (domesticQuotations) {
+      const success = await window.firebaseDB.saveData('domestic_quotations', ownerId, {
+        quotations: domesticQuotations,
+        updatedAt: new Date(),
+        agentId: ownerId,
+        userId: ownerId
+      });
+      if (!success) throw new Error('Failed to save Domestic quotations to Firebase');
+    }
+
     // Keep local snapshots aligned only after successful Firebase writes.
-    saveLocalQuotationsSnapshot(umrahQuotations, internationalQuotations);
+    saveLocalQuotationsSnapshot(umrahQuotations, internationalQuotations, domesticQuotations);
     
     return true;
   } catch (error) {
@@ -1108,19 +1128,21 @@ async function loadQuotationsFromFirebase(agent, explicitOwnerId = null) {
     
     const umrahData = await window.firebaseDB.getData('umrah_quotations', ownerId);
     const internationalData = await window.firebaseDB.getData('international_quotations', ownerId);
+    const domesticData = await window.firebaseDB.getData('domestic_quotations', ownerId);
     const result = {
       umrah: umrahData?.quotations || [],
-      international: internationalData?.quotations || []
+      international: internationalData?.quotations || [],
+      domestic: domesticData?.quotations || []
     };
 
-    saveLocalQuotationsSnapshot(result.umrah, result.international);
+    saveLocalQuotationsSnapshot(result.umrah, result.international, result.domestic);
     
     return result;
   } catch (error) {
     console.error('Error loading quotations from Firebase:', error);
     if (isFirebaseAvailableForDashboard()) {
       showNotification('Could not load Firebase data due to permissions. Local cache was not used.', 'error');
-      return { umrah: [], international: [] };
+      return { umrah: [], international: [], domestic: [] };
     }
     showNotification('Could not load Firebase data. Showing local quotations.', 'warning');
     return getLocalQuotationsSnapshot();
@@ -1128,7 +1150,8 @@ async function loadQuotationsFromFirebase(agent, explicitOwnerId = null) {
 }
 
 function findQuotationOwnerId(quotationId, quotationType) {
-  const list = quotationType === 'umrah' ? allUsersQuotations.concat(allUmrahQuotations) : allUsersQuotations.concat(allInternationalQuotations);
+  const ownQuotations = [...allUmrahQuotations, ...allInternationalQuotations, ...allDomesticQuotations];
+  const list = allUsersQuotations.concat(ownQuotations);
   const target = list.find(q => q?.id === quotationId && q?.type === quotationType);
   return target?.agentId || null;
 }
@@ -1193,6 +1216,12 @@ function createInternationalQuotation() {
   window.open('International Quotation Tool.html', '_blank');
 }
 
+function createDomesticQuotation() {
+  closeQuotationTypeModal();
+  localStorage.removeItem('selectedQuotationId');
+  window.open('Domestic Quotation Tool.html', '_blank');
+}
+
 // Load agent information
 function loadAgentInfo() {
   const agent = checkAgentLogin();
@@ -1227,6 +1256,7 @@ async function loadAllQuotations() {
 
   allUmrahQuotations = firebaseData.umrah.map(q => ({...q, type: 'umrah', agentId: agent.id, agentName: agent.name}));
   allInternationalQuotations = firebaseData.international.map(q => ({...q, type: 'international', agentId: agent.id, agentName: agent.name}));
+  allDomesticQuotations = (firebaseData.domestic || []).map(q => ({...q, type: 'domestic', agentId: agent.id, agentName: agent.name}));
 
   // Only admins can see all users' quotations in 'all-users' view
   if (agent.role === 'admin') {
@@ -1250,7 +1280,8 @@ async function loadAllQuotations() {
         const displayName = userData.fullName || userData.name || userData.email || userData.id;
         allUsersQuotations = allUsersQuotations.concat(
           (userQuotations.umrah || []).map(q => ({...q, type: 'umrah', agentId: userData.id, agentName: displayName})),
-          (userQuotations.international || []).map(q => ({...q, type: 'international', agentId: userData.id, agentName: displayName}))
+          (userQuotations.international || []).map(q => ({...q, type: 'international', agentId: userData.id, agentName: displayName})),
+          (userQuotations.domestic || []).map(q => ({...q, type: 'domestic', agentId: userData.id, agentName: displayName}))
         );
       }
       populateUserFilter();
@@ -1273,6 +1304,7 @@ async function loadAllQuotations() {
   const now = new Date();
   let updatedUmrah = false;
   let updatedInternational = false;
+  let updatedDomestic = false;
   
   allUmrahQuotations.forEach(q => {
     if (new Date(q.expiresAt) < now && q.status !== 'booked' && q.status !== 'cancelled') {
@@ -1287,10 +1319,17 @@ async function loadAllQuotations() {
       updatedInternational = true;
     }
   });
+
+  allDomesticQuotations.forEach(q => {
+    if (new Date(q.expiresAt) < now && q.status !== 'booked' && q.status !== 'cancelled') {
+      q.status = 'expired';
+      updatedDomestic = true;
+    }
+  });
   
   // Save updates to Firebase if any changes
-  if (updatedUmrah || updatedInternational) {
-    await saveQuotationsToFirebase(agent, allUmrahQuotations, allInternationalQuotations);
+  if (updatedUmrah || updatedInternational || updatedDomestic) {
+    await saveQuotationsToFirebase(agent, allUmrahQuotations, allInternationalQuotations, allDomesticQuotations);
   }
   
   applyFilter();
@@ -1346,7 +1385,7 @@ function applyFilter() {
     baseQuotations = allUsersQuotations;
   } else {
     // Agents + admin active/expired views: only own quotations
-    baseQuotations = [...allUmrahQuotations, ...allInternationalQuotations];
+    baseQuotations = [...allUmrahQuotations, ...allInternationalQuotations, ...allDomesticQuotations];
   }
   
   // Separate active (< 30 days old) from archived (30+ days expired)
@@ -1531,9 +1570,11 @@ function renderQuotationsTable() {
     }
     
     // Create type badge
-    const typeBadge = quotation.type === 'umrah' 
+    const typeBadge = quotation.type === 'umrah'
       ? '<span class="quotation-type-badge umrah-badge">Umrah</span>'
-      : '<span class="quotation-type-badge international-badge">International</span>';
+      : quotation.type === 'domestic'
+        ? '<span class="quotation-type-badge" style="background:#f39c12;color:white">Domestic</span>'
+        : '<span class="quotation-type-badge international-badge">International</span>';
     
     // Get destination based on type
     const destination = quotation.type === 'umrah' 
@@ -1642,8 +1683,16 @@ async function transferQuotation(quotationId, quotationType, fromAgentId) {
     const sourceData = await loadQuotationsFromFirebase({ id: fromAgentId });
     const targetData = await loadQuotationsFromFirebase({ id: targetUser.id });
 
-    const sourceList = quotationType === 'umrah' ? [...(sourceData.umrah || [])] : [...(sourceData.international || [])];
-    const targetList = quotationType === 'umrah' ? [...(targetData.umrah || [])] : [...(targetData.international || [])];
+    const sourceList = quotationType === 'umrah'
+      ? [...(sourceData.umrah || [])]
+      : quotationType === 'domestic'
+        ? [...(sourceData.domestic || [])]
+        : [...(sourceData.international || [])];
+    const targetList = quotationType === 'umrah'
+      ? [...(targetData.umrah || [])]
+      : quotationType === 'domestic'
+        ? [...(targetData.domestic || [])]
+        : [...(targetData.international || [])];
 
     const sourceIndex = sourceList.findIndex(q => q.id === quotationId);
     if (sourceIndex === -1) {
@@ -1671,7 +1720,8 @@ async function transferQuotation(quotationId, quotationType, fromAgentId) {
     const sourceSaveSuccess = await saveQuotationsToFirebase(
       { id: fromAgentId },
       quotationType === 'umrah' ? sourceList : sourceData.umrah,
-      quotationType === 'international' ? sourceList : sourceData.international
+      quotationType === 'international' ? sourceList : sourceData.international,
+      quotationType === 'domestic' ? sourceList : sourceData.domestic
     );
 
     if (!sourceSaveSuccess) {
@@ -1682,15 +1732,17 @@ async function transferQuotation(quotationId, quotationType, fromAgentId) {
     const targetSaveSuccess = await saveQuotationsToFirebase(
       { id: targetUser.id },
       quotationType === 'umrah' ? targetList : targetData.umrah,
-      quotationType === 'international' ? targetList : targetData.international
+      quotationType === 'international' ? targetList : targetData.international,
+      quotationType === 'domestic' ? targetList : targetData.domestic
     );
 
     if (!targetSaveSuccess) {
       sourceList.splice(sourceIndex, 0, sourceData[quotationType][sourceIndex]);
       await saveQuotationsToFirebase(
         { id: fromAgentId },
-        quotationType === 'umrah' ? sourceData.umrah : sourceData.umrah,
-        quotationType === 'international' ? sourceData.international : sourceData.international
+        sourceData.umrah,
+        sourceData.international,
+        sourceData.domestic
       );
       showNotification('Failed to add quotation to target user. Transfer rolled back.', 'error');
       return;
@@ -1755,7 +1807,11 @@ async function updateStatusFromTable(quotationId, quotationType, newStatus) {
   
   // Load current data from Firebase
   const firebaseData = await loadQuotationsFromFirebase(agent);
-  let quotations = quotationType === 'umrah' ? firebaseData.umrah : firebaseData.international;
+  let quotations = quotationType === 'umrah'
+    ? firebaseData.umrah
+    : quotationType === 'domestic'
+      ? firebaseData.domestic
+      : firebaseData.international;
   
   const quotationIndex = quotations.findIndex(q => q.id === quotationId);
   if (quotationIndex !== -1) {
@@ -1763,7 +1819,12 @@ async function updateStatusFromTable(quotationId, quotationType, newStatus) {
     quotations[quotationIndex].updatedAt = new Date().toISOString();
     
     // Save updated data to Firebase
-    const success = await saveQuotationsToFirebase(agent, quotationType === 'umrah' ? quotations : firebaseData.umrah, quotationType === 'international' ? quotations : firebaseData.international);
+    const success = await saveQuotationsToFirebase(
+      agent,
+      quotationType === 'umrah' ? quotations : firebaseData.umrah,
+      quotationType === 'international' ? quotations : firebaseData.international,
+      quotationType === 'domestic' ? quotations : firebaseData.domestic
+    );
     if (success) {
       await loadAllQuotations(); // Reload to reflect changes
       showNotification('Status updated successfully', 'success');
@@ -1776,6 +1837,8 @@ function viewQuotation(quotationId, quotationType) {
   
   if (quotationType === 'umrah') {
     window.open('index.html?view=' + quotationId, '_blank');
+  } else if (quotationType === 'domestic') {
+    window.open('Domestic Quotation Tool.html?view=' + quotationId, '_blank');
   } else {
     window.open('International Quotation Tool.html?view=' + quotationId, '_blank');
   }
@@ -1786,6 +1849,8 @@ function editQuotation(quotationId, quotationType) {
   
   if (quotationType === 'umrah') {
     window.open('index.html?edit=' + quotationId, '_blank');
+  } else if (quotationType === 'domestic') {
+    window.open('Domestic Quotation Tool.html?edit=' + quotationId, '_blank');
   } else {
     window.open('International Quotation Tool.html?edit=' + quotationId, '_blank');
   }
@@ -1801,12 +1866,22 @@ async function deleteQuotation(quotationId, quotationType) {
   
   // Load current data from Firebase
   const firebaseData = await loadQuotationsFromFirebase(agent, ownerId);
-  let quotations = quotationType === 'umrah' ? firebaseData.umrah : firebaseData.international;
+  let quotations = quotationType === 'umrah'
+    ? firebaseData.umrah
+    : quotationType === 'domestic'
+      ? firebaseData.domestic
+      : firebaseData.international;
   
   quotations = quotations.filter(q => q.id !== quotationId);
   
   // Save updated data to Firebase
-  const success = await saveQuotationsToFirebase(agent, quotationType === 'umrah' ? quotations : firebaseData.umrah, quotationType === 'international' ? quotations : firebaseData.international, ownerId);
+  const success = await saveQuotationsToFirebase(
+    agent,
+    quotationType === 'umrah' ? quotations : firebaseData.umrah,
+    quotationType === 'international' ? quotations : firebaseData.international,
+    quotationType === 'domestic' ? quotations : firebaseData.domestic,
+    ownerId
+  );
   if (success) {
     await loadAllQuotations(); // Reload to reflect changes
     showNotification('Quotation deleted successfully', 'success');
@@ -1852,6 +1927,7 @@ window.showQuotationTypeModal = showQuotationTypeModal;
 window.closeQuotationTypeModal = closeQuotationTypeModal;
 window.createUmrahQuotation = createUmrahQuotation;
 window.createInternationalQuotation = createInternationalQuotation;
+window.createDomesticQuotation = createDomesticQuotation;
 window.applyFilter = applyFilter;
 window.resetFilter = resetFilter;
 window.viewQuotation = viewQuotation;
