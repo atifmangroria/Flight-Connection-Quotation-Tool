@@ -1487,6 +1487,59 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
+  function safeJsonArray(raw) {
+    try {
+      const parsed = JSON.parse(raw || '[]');
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function findCustomerFromLocalSources(phoneKey) {
+    const cacheCustomers = safeJsonArray(localStorage.getItem('customers_cache'));
+    const fromCache = cacheCustomers.find(c => {
+      const k = String(c?.phoneKey || c?.id || c?.phone || '').replace(/\D/g, '');
+      return k === phoneKey;
+    });
+    if (fromCache) return fromCache;
+
+    const buckets = [
+      { key: 'savedQuotations', type: 'umrah' },
+      { key: 'savedQuotations_international', type: 'international' },
+      { key: 'savedQuotations_domestic', type: 'domestic' }
+    ];
+
+    let best = null;
+    let bestTs = -1;
+    for (const bucket of buckets) {
+      const rows = safeJsonArray(localStorage.getItem(bucket.key));
+      for (const q of rows) {
+        const client = q?.clientData || {};
+        const qPhoneKey = String(client.phone || '').replace(/\D/g, '');
+        if (!qPhoneKey || qPhoneKey !== phoneKey) continue;
+        const ts = new Date(q?.updatedAt || q?.createdAt || 0).getTime();
+        const score = Number.isFinite(ts) ? ts : 0;
+        if (score >= bestTs) {
+          bestTs = score;
+          best = {
+            id: phoneKey,
+            phoneKey,
+            name: client.name || '',
+            phone: client.phone || '',
+            depCity: client.depCity || '',
+            reference: client.reference || '',
+            lastQuotationId: q?.id || '',
+            lastQuotationType: bucket.type,
+            lastQuotationDate: q?.updatedAt || q?.createdAt || ''
+          };
+        }
+      }
+    }
+
+    return best;
+  }
+
   async function lookupCustomerByPhoneInput() {
     const phoneRaw = (document.getElementById('clientPhone')?.value || '').trim();
     if (!phoneRaw) {
@@ -1505,12 +1558,29 @@ document.addEventListener('DOMContentLoaded', function() {
       if (customer) {
         renderCustomerSummaryCard(customer);
         setCustomerSyncStatus('Existing customer found for this phone number.', 'info');
-      } else {
-        renderCustomerSummaryCard(null);
+        return customer;
       }
-      return customer;
+
+      const localCustomer = findCustomerFromLocalSources(phoneKey);
+      if (localCustomer) {
+        renderCustomerSummaryCard(localCustomer);
+        setCustomerSyncStatus('Customer found from local quotation history.', 'info');
+        return localCustomer;
+      }
+
+      renderCustomerSummaryCard(null);
+      setCustomerSyncStatus('No customer found for this phone number.', 'info');
+      return null;
     } catch (error) {
       console.error('Customer lookup failed:', error);
+      const localCustomer = findCustomerFromLocalSources(phoneKey);
+      if (localCustomer) {
+        renderCustomerSummaryCard(localCustomer);
+        setCustomerSyncStatus('Customer found from local quotation history.', 'info');
+        return localCustomer;
+      }
+      renderCustomerSummaryCard(null);
+      setCustomerSyncStatus('Customer lookup failed. Please check permissions or connection.', 'error');
       return null;
     }
   }

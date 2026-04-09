@@ -203,6 +203,14 @@
 let currentAgent = null;
 let allCustomers = [];
 let modalEditId = null;
+let customerLoadMeta = {
+  source: 'unknown',
+  rawCount: 0,
+  shownCount: 0,
+  hiddenByScope: 0,
+  quotationRowsMatched: 0,
+  dedupedByPhone: 0
+};
 
 function showNotification(message, type) {
   const n = document.createElement('div');
@@ -276,6 +284,7 @@ function getLocalQuotationBuckets() {
 function buildCustomersFromLocalQuotations(agent) {
   const ownerId = getOwnerId(agent);
   const byPhone = new Map();
+  let quotationRowsMatched = 0;
 
   for (const bucket of getLocalQuotationBuckets()) {
     for (const q of bucket.rows) {
@@ -283,6 +292,7 @@ function buildCustomersFromLocalQuotations(agent) {
       const phoneRaw = client.phone || '';
       const phoneKey = normalizePhone(phoneRaw);
       if (!phoneKey) continue;
+      quotationRowsMatched++;
 
       const qAgentId = q?.agentData?.uid || q?.agentData?.id || '';
       if (agent?.role !== 'admin' && ownerId && qAgentId && qAgentId !== ownerId) continue;
@@ -340,7 +350,10 @@ function buildCustomersFromLocalQuotations(agent) {
     }
   }
 
-  return Array.from(byPhone.values());
+  return {
+    customers: Array.from(byPhone.values()),
+    quotationRowsMatched
+  };
 }
 
 function setAgentInfo() {
@@ -359,6 +372,7 @@ async function loadCustomers() {
   try {
     let rows = [];
     let usedQuotationFallback = false;
+    let quotationRowsMatched = 0;
     if (window.firebaseDB && typeof window.firebaseDB.getAll === 'function') {
       rows = await window.firebaseDB.getAll('customers');
     }
@@ -367,7 +381,9 @@ async function loadCustomers() {
     const denied = !!(lastError && (lastError.code === 'permission-denied' || String(lastError.message || '').toLowerCase().includes('insufficient permissions')));
 
     if ((!Array.isArray(rows) || rows.length === 0) && denied) {
-      rows = buildCustomersFromLocalQuotations(currentAgent);
+      const fallback = buildCustomersFromLocalQuotations(currentAgent);
+      rows = fallback.customers;
+      quotationRowsMatched = fallback.quotationRowsMatched;
       usedQuotationFallback = Array.isArray(rows) && rows.length > 0;
       if (usedQuotationFallback) {
         rememberLocalCustomers(rows);
@@ -381,7 +397,19 @@ async function loadCustomers() {
       rememberLocalCustomers(rows);
     }
 
+    const rawCount = Array.isArray(rows) ? rows.length : 0;
     allCustomers = rows.filter(c => getCustomerScopeMatch(c, currentAgent));
+    const shownCount = allCustomers.length;
+
+    customerLoadMeta = {
+      source: usedQuotationFallback ? 'quotation-fallback' : 'customers-store',
+      rawCount,
+      shownCount,
+      hiddenByScope: Math.max(rawCount - shownCount, 0),
+      quotationRowsMatched,
+      dedupedByPhone: usedQuotationFallback ? Math.max(quotationRowsMatched - rawCount, 0) : 0
+    };
+
     renderCustomers();
 
     if (usedQuotationFallback) {
@@ -391,6 +419,14 @@ async function loadCustomers() {
   } catch (error) {
     console.error(error);
     allCustomers = readLocalCustomers().filter(c => getCustomerScopeMatch(c, currentAgent));
+    customerLoadMeta = {
+      source: 'cache',
+      rawCount: allCustomers.length,
+      shownCount: allCustomers.length,
+      hiddenByScope: 0,
+      quotationRowsMatched: 0,
+      dedupedByPhone: 0
+    };
     renderCustomers();
   }
 }
@@ -439,7 +475,10 @@ function renderCustomers() {
   body.innerHTML = '';
   if (list.length === 0) {
     body.innerHTML = '<tr><td colspan="7" class="muted">No customers found.</td></tr>';
-    summary.textContent = '0 customers';
+    const sourceHint0 = customerLoadMeta.source === 'quotation-fallback'
+      ? ' | source: quotation fallback'
+      : (customerLoadMeta.source === 'customers-store' ? ' | source: customers store' : '');
+    summary.textContent = '0 customers' + sourceHint0;
     return;
   }
 
@@ -469,7 +508,17 @@ function renderCustomers() {
     body.appendChild(tr);
   });
 
-  summary.textContent = list.length + ' customers shown';
+  const sourceHint = customerLoadMeta.source === 'quotation-fallback'
+    ? ' | source: quotation fallback'
+    : (customerLoadMeta.source === 'customers-store' ? ' | source: customers store' : '');
+  const hiddenHint = customerLoadMeta.hiddenByScope > 0
+    ? (' | hidden by ownership scope: ' + customerLoadMeta.hiddenByScope)
+    : '';
+  const dedupeHint = customerLoadMeta.dedupedByPhone > 0
+    ? (' | merged by same phone: ' + customerLoadMeta.dedupedByPhone)
+    : '';
+
+  summary.textContent = list.length + ' customers shown' + sourceHint + hiddenHint + dedupeHint;
 }
 
 function openCustomerModal(customer) {
