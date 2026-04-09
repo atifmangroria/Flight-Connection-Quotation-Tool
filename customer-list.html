@@ -21,52 +21,66 @@
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
   window.db = db;
+  window.firebaseDBState = { lastError: null };
 
   window.firebaseDB = {
     async saveData(collection_name, docId, data) {
       try {
+        window.firebaseDBState.lastError = null;
         await setDoc(doc(db, collection_name, docId), data, { merge: true });
         return true;
       } catch (error) {
+        window.firebaseDBState.lastError = error;
         console.error("Error saving:", error);
         return false;
       }
     },
     async getData(collection_name, docId) {
       try {
+        window.firebaseDBState.lastError = null;
         const docSnap = await getDoc(doc(db, collection_name, docId));
         return docSnap.exists() ? docSnap.data() : null;
       } catch (error) {
+        window.firebaseDBState.lastError = error;
         console.error("Error getting:", error);
         return null;
       }
     },
     async getAll(collection_name) {
       try {
+        window.firebaseDBState.lastError = null;
         const snapshot = await getDocs(collection(db, collection_name));
         return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       } catch (error) {
+        window.firebaseDBState.lastError = error;
         console.error("Error listing:", error);
         return [];
       }
     },
     async deleteData(collection_name, docId) {
       try {
+        window.firebaseDBState.lastError = null;
         await deleteDoc(doc(db, collection_name, docId));
         return true;
       } catch (error) {
+        window.firebaseDBState.lastError = error;
         console.error("Error deleting:", error);
         return false;
       }
     },
     async updateData(collection_name, docId, updates) {
       try {
+        window.firebaseDBState.lastError = null;
         await updateDoc(doc(db, collection_name, docId), updates);
         return true;
       } catch (error) {
+        window.firebaseDBState.lastError = error;
         console.error("Error updating:", error);
         return false;
       }
+    },
+    getLastError() {
+      return window.firebaseDBState.lastError || null;
     }
   };
 </script>
@@ -112,7 +126,7 @@
     </div>
     <div class="actions">
       <button class="ghost" onclick="window.location.href='dashboard.html'">Back to Dashboard</button>
-      <button id="btnBackfill">Backfill from Quotations</button>
+      <button id="btnBackfill" title="Creates or updates customer records in Firestore using saved quotation history">Backfill CRM from Quotations</button>
       <button id="btnExport">Export Excel</button>
     </div>
   </div>
@@ -242,6 +256,93 @@ function readLocalCustomers() {
   }
 }
 
+function safeJsonArray(raw) {
+  try {
+    const parsed = JSON.parse(raw || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function getLocalQuotationBuckets() {
+  return [
+    { type: 'umrah', rows: safeJsonArray(localStorage.getItem('savedQuotations')) },
+    { type: 'international', rows: safeJsonArray(localStorage.getItem('savedQuotations_international')) },
+    { type: 'domestic', rows: safeJsonArray(localStorage.getItem('savedQuotations_domestic')) }
+  ];
+}
+
+function buildCustomersFromLocalQuotations(agent) {
+  const ownerId = getOwnerId(agent);
+  const byPhone = new Map();
+
+  for (const bucket of getLocalQuotationBuckets()) {
+    for (const q of bucket.rows) {
+      const client = q?.clientData || {};
+      const phoneRaw = client.phone || '';
+      const phoneKey = normalizePhone(phoneRaw);
+      if (!phoneKey) continue;
+
+      const qAgentId = q?.agentData?.uid || q?.agentData?.id || '';
+      if (agent?.role !== 'admin' && ownerId && qAgentId && qAgentId !== ownerId) continue;
+
+      const qDate = q?.updatedAt || q?.createdAt || new Date().toISOString();
+      const existing = byPhone.get(phoneKey);
+      const nextRef = {
+        id: q?.id || '',
+        type: bucket.type,
+        date: qDate
+      };
+
+      if (!existing) {
+        byPhone.set(phoneKey, {
+          id: phoneKey,
+          phoneKey,
+          phone: phoneRaw,
+          name: client.name || '',
+          depCity: client.depCity || '',
+          reference: client.reference || '',
+          owners: ownerId ? [ownerId] : [],
+          createdAt: qDate,
+          updatedAt: qDate,
+          createdById: ownerId || '',
+          createdByName: agent?.name || '',
+          lastUpdatedById: ownerId || '',
+          lastUpdatedByName: agent?.name || '',
+          lastQuotationId: nextRef.id,
+          lastQuotationType: nextRef.type,
+          lastQuotationDate: nextRef.date,
+          quotationRefs: nextRef.id ? [nextRef] : []
+        });
+        continue;
+      }
+
+      existing.phone = existing.phone || phoneRaw;
+      existing.name = existing.name || client.name || '';
+      existing.depCity = existing.depCity || client.depCity || '';
+      existing.reference = existing.reference || client.reference || '';
+
+      const refs = Array.isArray(existing.quotationRefs) ? existing.quotationRefs : [];
+      if (nextRef.id && !refs.some(r => r?.id === nextRef.id && r?.type === nextRef.type)) {
+        refs.unshift(nextRef);
+      }
+      existing.quotationRefs = refs.slice(0, 20);
+
+      const existingTime = new Date(existing.lastQuotationDate || existing.updatedAt || 0).getTime();
+      const nextTime = new Date(nextRef.date || 0).getTime();
+      if (!Number.isNaN(nextTime) && nextTime >= existingTime) {
+        existing.lastQuotationId = nextRef.id;
+        existing.lastQuotationType = nextRef.type;
+        existing.lastQuotationDate = nextRef.date;
+        existing.updatedAt = nextRef.date;
+      }
+    }
+  }
+
+  return Array.from(byPhone.values());
+}
+
 function setAgentInfo() {
   const info = document.getElementById('agentInfo');
   currentAgent = getCurrentAgent();
@@ -257,8 +358,21 @@ function setAgentInfo() {
 async function loadCustomers() {
   try {
     let rows = [];
+    let usedQuotationFallback = false;
     if (window.firebaseDB && typeof window.firebaseDB.getAll === 'function') {
       rows = await window.firebaseDB.getAll('customers');
+    }
+
+    const lastError = window.firebaseDB?.getLastError ? window.firebaseDB.getLastError() : null;
+    const denied = !!(lastError && (lastError.code === 'permission-denied' || String(lastError.message || '').toLowerCase().includes('insufficient permissions')));
+
+    if ((!Array.isArray(rows) || rows.length === 0) && denied) {
+      rows = buildCustomersFromLocalQuotations(currentAgent);
+      usedQuotationFallback = Array.isArray(rows) && rows.length > 0;
+      if (usedQuotationFallback) {
+        rememberLocalCustomers(rows);
+      }
+      showNotification('Firestore customer access denied. Showing customers from saved quotations on this device.', 'info');
     }
 
     if (!Array.isArray(rows) || rows.length === 0) {
@@ -269,6 +383,11 @@ async function loadCustomers() {
 
     allCustomers = rows.filter(c => getCustomerScopeMatch(c, currentAgent));
     renderCustomers();
+
+    if (usedQuotationFallback) {
+      const summary = document.getElementById('summaryLine');
+      summary.textContent = allCustomers.length + ' customers shown (from quotation fallback on this device)';
+    }
   } catch (error) {
     console.error(error);
     allCustomers = readLocalCustomers().filter(c => getCustomerScopeMatch(c, currentAgent));
