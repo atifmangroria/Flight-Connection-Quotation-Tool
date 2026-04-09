@@ -542,12 +542,6 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus, 
   @media print{ .no-print{display:none} }
 
 /* Add this to your main <style> section */
-@media print {
-  * {
-    -webkit-print-color-adjust: exact !important;
-  }
-}
-
 @page { 
   margin: 0.5in; 
   size: A4;
@@ -4045,26 +4039,40 @@ let customTerms = defaultTerms; // Temporary default
 
 // Load custom terms from Firebase on startup
 async function loadCustomTermsFromFirebase() {
+  const localTerms =
+    localStorage.getItem('customTerms_domestic') ||
+    localStorage.getItem('customTerms_international') ||
+    defaultTerms;
+
+  // Always render instantly from local storage first.
+  customTerms = localTerms;
+
   try {
     const agent = getCurrentAgent();
-    if (agent && agent.uid) {
-      const data = await window.firebaseDB.getData('agents/' + agent.uid + '/data', 'customTerms_international');
+    if (agent && agent.uid && window.firebaseDB && typeof window.firebaseDB.getData === 'function') {
+      const timeoutMs = 2000;
+      const timeoutPromise = new Promise((resolve) => {
+        setTimeout(() => resolve(null), timeoutMs);
+      });
+
+      const data = await Promise.race([
+        window.firebaseDB.getData('agents/' + agent.uid + '/data', 'customTerms_international'),
+        timeoutPromise
+      ]);
+
       if (data && data.value) {
         customTerms = data.value;
-        localStorage.setItem('customTerms_international', data.value);
+        localStorage.setItem('customTerms_domestic', data.value);
       } else {
-        // If no custom terms in Firebase, use default and save
-        customTerms = defaultTerms;
-        await window.firebaseDB.saveData('agents/' + agent.uid + '/data', 'customTerms_international', { value: defaultTerms });
-        localStorage.setItem('customTerms_international', defaultTerms);
+        customTerms = localTerms;
       }
     } else {
       // Fallback to localStorage if no agent
-      customTerms = localStorage.getItem('customTerms_international') || defaultTerms;
+      customTerms = localTerms;
     }
   } catch (error) {
-    console.log('Could not load custom terms from Firebase, using local:', error);
-    customTerms = localStorage.getItem('customTerms_international') || defaultTerms;
+    console.debug('Custom terms Firebase fetch failed; using local terms.', error);
+    customTerms = localTerms;
   }
 }
 
@@ -7042,6 +7050,24 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  function localizePlaceholdersInNode(root) {
+    if (!root) return;
+
+    if (root.id === 'tourDestination') {
+      root.placeholder = 'e.g. Hunza, Skardu, Murree, Swat';
+    }
+
+    if (typeof root.querySelectorAll === 'function') {
+      root.querySelectorAll('#tourDestination').forEach(function(dest) {
+        dest.placeholder = 'e.g. Hunza, Skardu, Murree, Swat';
+      });
+
+      root.querySelectorAll('input[id^="tourName_"], input[id^="tourAddonName_"]').forEach(function(input) {
+        input.placeholder = 'Skardu Tour, Attabad Lake Tour, Murree Day Trip';
+      });
+    }
+  }
+
   function forcePKRUI() {
     document.querySelectorAll('select').forEach(function(select) {
       forcePKROnSelect(select);
@@ -7054,6 +7080,22 @@ document.addEventListener('DOMContentLoaded', function() {
       roeWrap.readOnly = true;
       var lbl = roeWrap.previousElementSibling;
       if (lbl && lbl.tagName === 'LABEL') lbl.textContent = 'PKR Rate (Domestic Fixed)';
+    }
+  }
+
+  function forcePKRInNode(root) {
+    if (!root) return;
+
+    if (root.tagName === 'SELECT') {
+      forcePKROnSelect(root);
+      applyVehicleOptions(root);
+    }
+
+    if (typeof root.querySelectorAll === 'function') {
+      root.querySelectorAll('select').forEach(function(select) {
+        forcePKROnSelect(select);
+        applyVehicleOptions(select);
+      });
     }
   }
 
@@ -7185,16 +7227,48 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     var isDomesticUiSyncing = false;
-    var observer = new MutationObserver(function() {
+    var observerTickScheduled = false;
+    var pendingNodes = [];
+
+    function processPendingNodes() {
       if (isDomesticUiSyncing) return;
       isDomesticUiSyncing = true;
       try {
         removeVisaUI();
-        localizePlaceholders();
-        forcePKRUI();
+
+        if (pendingNodes.length === 0) {
+          localizePlaceholders();
+          forcePKRUI();
+          return;
+        }
+
+        pendingNodes.forEach(function(node) {
+          localizePlaceholdersInNode(node);
+          forcePKRInNode(node);
+        });
       } finally {
+        pendingNodes = [];
+        observerTickScheduled = false;
         isDomesticUiSyncing = false;
       }
+    }
+
+    var observer = new MutationObserver(function() {
+      if (isDomesticUiSyncing) return;
+
+      for (var i = 0; i < arguments[0].length; i++) {
+        var mutation = arguments[0][i];
+        for (var j = 0; j < mutation.addedNodes.length; j++) {
+          var node = mutation.addedNodes[j];
+          if (node && node.nodeType === 1) {
+            pendingNodes.push(node);
+          }
+        }
+      }
+
+      if (observerTickScheduled) return;
+      observerTickScheduled = true;
+      requestAnimationFrame(processPendingNodes);
     });
     observer.observe(document.body, { childList: true, subtree: true });
   });
