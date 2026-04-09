@@ -8,6 +8,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
   import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+  import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyDx3Qxt84vJlz_-mXuxiC0W2flaLadr9Ws",
@@ -20,7 +21,10 @@
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
+  const auth = getAuth(app);
   window.db = db;
+  window.auth = auth;
+  window.onAuthStateChanged = onAuthStateChanged;
   window.firebaseDBState = { lastError: null };
 
   window.firebaseDB = {
@@ -31,6 +35,11 @@
         return true;
       } catch (error) {
         window.firebaseDBState.lastError = error;
+        const isPermissionDenied = error?.code === 'permission-denied' || String(error?.message || '').toLowerCase().includes('insufficient permissions');
+        if (isPermissionDenied) {
+          console.warn("Save blocked by Firestore permissions for", collection_name, docId);
+          return false;
+        }
         console.error("Error saving:", error);
         return false;
       }
@@ -42,6 +51,11 @@
         return docSnap.exists() ? docSnap.data() : null;
       } catch (error) {
         window.firebaseDBState.lastError = error;
+        const isPermissionDenied = error?.code === 'permission-denied' || String(error?.message || '').toLowerCase().includes('insufficient permissions');
+        if (isPermissionDenied) {
+          console.warn("Read blocked by Firestore permissions for", collection_name, docId);
+          return null;
+        }
         console.error("Error getting:", error);
         return null;
       }
@@ -53,6 +67,11 @@
         return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       } catch (error) {
         window.firebaseDBState.lastError = error;
+        const isPermissionDenied = error?.code === 'permission-denied' || String(error?.message || '').toLowerCase().includes('insufficient permissions');
+        if (isPermissionDenied) {
+          console.warn("List blocked by Firestore permissions for", collection_name);
+          return [];
+        }
         console.error("Error listing:", error);
         return [];
       }
@@ -211,6 +230,39 @@ let customerLoadMeta = {
   quotationRowsMatched: 0,
   dedupedByPhone: 0
 };
+
+async function ensureFirebaseAuthSession(timeoutMs = 3000) {
+  try {
+    const auth = window.auth;
+    const watchAuth = window.onAuthStateChanged;
+    if (!auth || typeof watchAuth !== 'function') return false;
+    if (auth.currentUser) return true;
+
+    return await new Promise((resolve) => {
+      let done = false;
+      let unsub = null;
+
+      const finish = (value) => {
+        if (done) return;
+        done = true;
+        if (typeof unsub === 'function') unsub();
+        resolve(!!value);
+      };
+
+      const timer = setTimeout(() => finish(auth.currentUser), timeoutMs);
+      unsub = watchAuth(auth, (user) => {
+        clearTimeout(timer);
+        finish(user);
+      }, () => {
+        clearTimeout(timer);
+        finish(false);
+      });
+    });
+  } catch (error) {
+    console.warn('Unable to verify Firebase auth session:', error);
+    return false;
+  }
+}
 
 function showNotification(message, type) {
   const n = document.createElement('div');
@@ -778,6 +830,10 @@ function wireEvents() {
 
 document.addEventListener('DOMContentLoaded', async () => {
   if (!setAgentInfo()) return;
+  const hasFirebaseSession = await ensureFirebaseAuthSession();
+  if (!hasFirebaseSession) {
+    showNotification('Firebase session missing. Please login again if Firestore actions are blocked.', 'info');
+  }
   wireEvents();
   await loadCustomers();
 });
