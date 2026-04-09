@@ -52,12 +52,60 @@
     const domesticPatchScript = `
 <script>
 (function patchDomesticBehavior() {
-  window.addEventListener('DOMContentLoaded', function() {
-    const visaWrapper = document.getElementById('visaWrapper');
-    if (visaWrapper) {
-      visaWrapper.style.display = 'none';
-    }
+  function forcePKR(root = document) {
+    const currencySelects = root.querySelectorAll('select[id*="Currency"], select[id*="currency"]');
+    currencySelects.forEach(select => {
+      if (!select) return;
+      select.innerHTML = '<option value="PKR">PKR</option>';
+      select.value = 'PKR';
+    });
+  }
 
+  function enforceDomesticVehicleOptions(root = document) {
+    const vehicleOptions = '<option>Car</option><option>Hiace</option><option>Coaster</option><option>Bus</option><option>4x4</option>';
+    root.querySelectorAll('select[id^="tCar_"], select[id^="tourVehicle_"], select[id^="tourAddonVehicle_"]').forEach(select => {
+      const current = select.value;
+      select.innerHTML = vehicleOptions;
+      if ([...select.options].some(o => o.value === current)) {
+        select.value = current;
+      }
+    });
+  }
+
+  function applyDomesticText() {
+    const heading = document.querySelector('h1');
+    if (heading) heading.textContent = 'Domestic Quotation';
+    document.title = 'Domestic Quotation Tool - Flight Connection';
+
+    const destinationLabel = document.querySelector('label[for="tourDestination"]');
+    if (destinationLabel) destinationLabel.textContent = 'Tour Destination';
+    const destinationInput = document.getElementById('tourDestination');
+    if (destinationInput) {
+      destinationInput.placeholder = 'eg Gilgit, Hunza, Skardu, Murree';
+    }
+  }
+
+  function patchDomesticPackages() {
+    if (typeof loadPackages !== 'function') return;
+    const originalLoadPackages = loadPackages;
+    window.loadPackages = async function() {
+      await originalLoadPackages('domestic');
+      const packageSelect = document.getElementById('packageSelect');
+      if (!packageSelect || !Array.isArray(window.availablePackages)) return;
+      const keep = new Set(
+        window.availablePackages
+          .filter(pkg => pkg.type === 'domestic' || pkg.type === 'both')
+          .map(pkg => pkg.id || String(pkg.name || '').replace(/\s+/g, '_').toLowerCase())
+      );
+      Array.from(packageSelect.options).forEach(opt => {
+        if (opt.value && !keep.has(opt.value)) {
+          opt.remove();
+        }
+      });
+    };
+  }
+
+  function patchDomesticFunctions() {
     if (typeof addVisa === 'function') {
       window.addVisa = function() {
         if (typeof showNotification === 'function') {
@@ -65,14 +113,69 @@
         }
       };
     }
-
     if (typeof removeVisa === 'function') {
       window.removeVisa = function() {};
+    }
+
+    const functionNames = ['addFlight', 'addHotel', 'addTransfer', 'addTour', 'addDirectFlightAddon', 'addMealTypeAddon'];
+    functionNames.forEach(name => {
+      if (typeof window[name] === 'function') {
+        const original = window[name];
+        window[name] = async function(...args) {
+          const result = await original.apply(this, args);
+          forcePKR();
+          enforceDomesticVehicleOptions();
+          return result;
+        };
+      }
+    });
+  }
+
+  function applyTourPlaceholders() {
+    document.querySelectorAll('input[id^="tourName_"], input[id^="tourAddonName_"]').forEach(input => {
+      input.placeholder = 'Skardu Tour, Attabad Lake Tour';
+    });
+  }
+
+  window.addEventListener('DOMContentLoaded', function() {
+    applyDomesticText();
+
+    const visaWrapper = document.getElementById('visaWrapper');
+    if (visaWrapper) {
+      visaWrapper.style.display = 'none';
     }
 
     if (typeof visaAdded !== 'undefined') {
       visaAdded = false;
     }
+
+    const btnAddVisa = document.getElementById('btnAddVisa');
+    if (btnAddVisa) btnAddVisa.style.display = 'none';
+    const visaContainer = document.getElementById('visaContainer');
+    if (visaContainer) visaContainer.innerHTML = '';
+
+    patchDomesticPackages();
+    patchDomesticFunctions();
+
+    forcePKR();
+    enforceDomesticVehicleOptions();
+    applyTourPlaceholders();
+
+    const observer = new MutationObserver((mutations) => {
+      let hasNodes = false;
+      for (const m of mutations) {
+        if (m.addedNodes && m.addedNodes.length > 0) {
+          hasNodes = true;
+          break;
+        }
+      }
+      if (hasNodes) {
+        forcePKR();
+        enforceDomesticVehicleOptions();
+        applyTourPlaceholders();
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
   });
 })();
 <\/script>
