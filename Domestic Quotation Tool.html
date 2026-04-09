@@ -10,6 +10,12 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
+<script>
+  window.firebaseReady = new Promise((resolve) => {
+    window.__resolveFirebaseReady = resolve;
+  });
+</script>
+
 <!-- Firebase SDK -->
 <script type="module">
   // Import the functions you need from the SDKs you need
@@ -99,6 +105,11 @@
   window.doc = doc;
   window.deleteDoc = deleteDoc;
   window.updateDoc = updateDoc;
+
+  if (typeof window.__resolveFirebaseReady === 'function') {
+    window.__resolveFirebaseReady(true);
+    window.__resolveFirebaseReady = null;
+  }
 </script>
 
 <style>
@@ -4048,8 +4059,16 @@ async function loadCustomTermsFromFirebase() {
   customTerms = localTerms;
 
   try {
+    const readyTimeout = new Promise((resolve) => {
+      setTimeout(() => resolve(false), 2500);
+    });
+    const firebaseReady = await Promise.race([
+      window.firebaseReady || Promise.resolve(false),
+      readyTimeout
+    ]);
+
     const agent = getCurrentAgent();
-    if (agent && agent.uid && window.firebaseDB && typeof window.firebaseDB.getData === 'function') {
+    if (firebaseReady && agent && agent.uid && window.firebaseDB && typeof window.firebaseDB.getData === 'function') {
       const timeoutMs = 2000;
       const timeoutPromise = new Promise((resolve) => {
         setTimeout(() => resolve(null), timeoutMs);
