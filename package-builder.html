@@ -395,10 +395,10 @@ async function generateImage() {
     const perVehicleRaw = toNumber(item.querySelector(`.${prefix}PerVehicle`)?.value);
     const perVehicle = toPKR(perVehicleRaw, currency, roe);
     if (perVehicleRaw > 0) {
-      const totalAdultsForSplit = 1;
-      const adultPart = totalAdultsForSplit > 0 ? perVehicle / totalAdultsForSplit : 0;
-      adultDouble += adultPart;
-      adultTriple += adultPart;
+      const doubleShare = perVehicle / 2;
+      const tripleShare = perVehicle / 3;
+      adultDouble += doubleShare;
+      adultTriple += tripleShare;
       return;
     }
     const a = toPKR(item.querySelector(`.${prefix}Adult`)?.value, currency, roe);
@@ -1606,11 +1606,11 @@ async function generatePDF() {
     const perVehicle = toPKR(perVehicleRaw, currency, roe);
 
     if (perVehicleRaw > 0) {
-      // Adult: divide vehicle price by total adults; others: no charge
-      const totalAdultsForSplit = 1;
-      const adultPart = totalAdultsForSplit > 0 ? perVehicle / totalAdultsForSplit : 0;
-      adultDouble += adultPart;
-      adultTriple += adultPart;
+      // Split vehicle amount by occupancy basis for adult plans.
+      const doubleShare = perVehicle / 2;
+      const tripleShare = perVehicle / 3;
+      adultDouble += doubleShare;
+      adultTriple += tripleShare;
       return;
     }
 
