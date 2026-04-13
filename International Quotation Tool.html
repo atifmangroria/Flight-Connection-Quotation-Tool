@@ -800,6 +800,37 @@
         });
     }
 
+    function showHotelPriceModeDialog() {
+      return new Promise(resolve => {
+        const currentMode = typeof getHotelPriceMode === 'function' ? getHotelPriceMode() : 'actual';
+        modalTitle.textContent = 'Hotel Pricing Mode';
+        modalMessage.textContent = 'How would you like to display the hotel price per person?';
+        modalButtons.innerHTML = '';
+        const actualBtn = document.createElement('button');
+        actualBtn.textContent = '📊 Per Room Type (Actual)';
+        if (currentMode === 'actual') actualBtn.style.outline = '2px solid #0b76d1';
+        actualBtn.addEventListener('click', () => {
+          const radio = document.getElementById('hotelPriceModeActual');
+          if (radio) radio.checked = true;
+          customModal.classList.remove('visible');
+          resolve('actual');
+        });
+        const avgBtn = document.createElement('button');
+        avgBtn.textContent = '≈ Average Per Person';
+        avgBtn.classList.add('ghost');
+        if (currentMode === 'average') avgBtn.style.outline = '2px solid #0b76d1';
+        avgBtn.addEventListener('click', () => {
+          const radio = document.getElementById('hotelPriceModeAverage');
+          if (radio) radio.checked = true;
+          customModal.classList.remove('visible');
+          resolve('average');
+        });
+        modalButtons.appendChild(actualBtn);
+        modalButtons.appendChild(avgBtn);
+        customModal.classList.add('visible');
+      });
+    }
+
 // --- SIMPLE AUTHENTICATION CHECK ---
 function checkAuthentication() {
   const agent = JSON.parse(localStorage.getItem("loggedInAgent"));
@@ -2296,8 +2327,8 @@ function validateAllHotels(showErrors = true) {
     const clientData = getClientData();
     if (!clientData) return false;
     
-    const totalPax = clientData.totalPax;
-    const totalChildNoBed = clientData.totalChildNoBed;
+    const totalPax = (parseInt(clientData.adults) || 0) + (parseInt(clientData.childBed) || 0);
+    const totalChildNoBed = parseInt(clientData.childNoBed) || 0;
     const { totalCapacity, totalChildNoBedCapacity } = calculateTotalHotelCapacity();
 
     let isValid = true;
@@ -3897,7 +3928,7 @@ function updateHotelPriceModeVisibility() {
 }
 
 // Replace the entire performCalculation function with this corrected version
-function performCalculation() {
+async function performCalculation() {
   // Check if the calculation was triggered by a button click
   const isButtonClick = document.activeElement === btnCalculate || document.activeElement === btnRecalculate;
 
@@ -3934,9 +3965,8 @@ function performCalculation() {
     if (hasHotels && !validateAllHotels(true)) {
       return;
     }
-    if (hasHotels && hasMultipleRoomTypesInAnyHotel()) {
-      const selectedMode = getHotelPriceMode() === 'actual' ? 'Per Room Type (Actual)' : 'Average Per Person';
-      showNotification(`Multiple room types detected. Hotel pricing mode: ${selectedMode}.`, "info", 4500);
+    if (hasHotels) {
+      await showHotelPriceModeDialog();
     }
     
     showNotification("✅ All details verified. Generating quotation...", "success");
@@ -4074,10 +4104,6 @@ function performCalculation() {
         hotelBreakdownText.push(`${room.roomType} (${room.count} room${room.count > 1 ? 's' : ''}): PKR ${fmt(perPerson)} x ${totalRoomPax}`);
       }
     });
-    // Show summary breakdown below hotel rows
-    if (hotelBreakdownText.length > 0) {
-      calcSummaryBody.innerHTML += `<tr style="background:#f5faff;"><td colspan="9"><b>Hotel Room Breakdown:</b> ${hotelBreakdownText.join(' &nbsp; | &nbsp; ')}</td></tr>`;
-    }
   } else {
     // Average mode: sum all hotel costs and divide by total paying pax
     hotelRooms.forEach(room => {
@@ -4102,7 +4128,6 @@ function performCalculation() {
     let desc = `All rooms combined<br>Total Pax: ${hotelTotalPax}`;
     if (hotelTotalCostOrig + hotelTotalSvcOrig > 0) {
       addDetailedRow(`Hotel`, 'All Rooms', desc, 'USD', hotelTotalCostOrig, hotelTotalSvcOrig, perPersonText, false);
-      calcSummaryBody.innerHTML += `<tr style=\"background:#f5faff;\"><td colspan=\"9\"><b>Hotel Average Breakdown:</b> PKR ${fmt(avgPerPerson)} x ${hotelTotalPax}</td></tr>`;
     }
   }
 
@@ -4243,16 +4268,23 @@ function performCalculation() {
   const { perAdult, perChildBed, perChildNoBed, perInfant } = perPersonCosts;
 
   let packagePricingText = [];
-  if (numAdult > 0) packagePricingText.push(`Adult x${numAdult}: PKR ${fmt(perAdult)}`);
-  if (numChildBed > 0) packagePricingText.push(`Child (bed) x${numChildBed}: PKR ${fmt(perChildBed)}`);
-  if (numChildNoBed > 0) packagePricingText.push(`Child (no bed) x${numChildNoBed}: PKR ${fmt(perChildNoBed)}`);
-  if (numInfant > 0) packagePricingText.push(`Infant x${numInfant}: PKR ${fmt(perInfant)}`);
-  if (hotelPriceMode === 'actual' && hotelRooms.length > 0) {
-    const hotelRoomPricing = hotelRooms
-      .filter((r) => r.rooms > 0 && r.nights > 0)
-      .map((r) => `${r.roomType}${r.roomName ? ` (${r.roomName})` : ''}: PKR ${fmt(convertToPKR((r.costNight + r.svcNight) * r.nights, r.currency))}`)
-      .join(' | ');
-    if (hotelRoomPricing) packagePricingText.push(`Hotel by room: ${hotelRoomPricing}`);
+  if (hotelPriceMode === 'actual' && hotelRoomBreakdown.length > 0) {
+    const hotelPayingPaxP = numAdult + numChildBed;
+    const totalHotelPKR_p = hotelRooms.reduce((sum, r) => r.rooms > 0 && r.nights > 0 ? sum + convertToPKR((r.costNight + r.svcNight) * r.nights * r.rooms, r.currency) : sum, 0);
+    const avgHotelPerAdult_p = hotelPayingPaxP > 0 ? totalHotelPKR_p / hotelPayingPaxP : 0;
+    const basePerAdult_p = perAdult - avgHotelPerAdult_p;
+    hotelRoomBreakdown.forEach(rb => {
+      const perPersonInRoom = basePerAdult_p + rb.perPerson;
+      packagePricingText.push(`Adult x${rb.totalRoomPax} (${rb.roomType} Sharing): PKR ${fmt(perPersonInRoom)}`);
+    });
+    if (numChildBed > 0) packagePricingText.push(`Child (bed) x${numChildBed}: PKR ${fmt(perChildBed)}`);
+    if (numChildNoBed > 0) packagePricingText.push(`Child (no bed) x${numChildNoBed}: PKR ${fmt(perChildNoBed)}`);
+    if (numInfant > 0) packagePricingText.push(`Infant x${numInfant}: PKR ${fmt(perInfant)}`);
+  } else {
+    if (numAdult > 0) packagePricingText.push(`Adult x${numAdult}: PKR ${fmt(perAdult)}`);
+    if (numChildBed > 0) packagePricingText.push(`Child (bed) x${numChildBed}: PKR ${fmt(perChildBed)}`);
+    if (numChildNoBed > 0) packagePricingText.push(`Child (no bed) x${numChildNoBed}: PKR ${fmt(perChildNoBed)}`);
+    if (numInfant > 0) packagePricingText.push(`Infant x${numInfant}: PKR ${fmt(perInfant)}`);
   }
   packagePricingText = packagePricingText.join(', ');
 
@@ -5022,6 +5054,18 @@ async function printQuotation() {
     (perInfantCost * numInfant);
   const totalPackageAmount = finalTotalSellPKR > 0 ? finalTotalSellPKR : computedPackageAmount;
 
+  // Per-room-type per-adult pricing for Package Price section
+  const totalHotelPKR_q = hotelEntries.reduce((sum, r) => r.rooms > 0 && r.nights > 0 ? sum + convertToPKR((r.costNight + r.svcNight) * r.nights * r.rooms, r.currency) : sum, 0);
+  const avgHotelPerAdult_q = hotelPayingPax > 0 ? totalHotelPKR_q / hotelPayingPax : 0;
+  const basePerAdultCost_q = perAdultCost - avgHotelPerAdult_q;
+  const validHotelEntries_q = hotelEntries.filter(r => r.rooms > 0 && r.nights > 0);
+  const perAdultLines_q = (hotelPriceMode === 'actual' && validHotelEntries_q.length > 0)
+    ? validHotelEntries_q.map(r => {
+        const roomPerAdult = basePerAdultCost_q + convertToPKR((r.costNight + r.svcNight) * r.nights, r.currency);
+        return `<li>Per Adult (${sanitizeInput(r.roomType)} Sharing): <strong>PKR ${fmt(roomPerAdult)}</strong></li>`;
+      })
+    : [`<li>Per Adult: <strong>PKR ${fmt(perAdultCost)}</strong></li>`];
+
   // Build the HTML for the quotation preview
   let quotationHTML = `
     <div style="text-align: center; margin-bottom: 12px; border-bottom: 1px solid #dbe6f3; padding-bottom: 8px;">
@@ -5056,13 +5100,11 @@ async function printQuotation() {
     <div style="margin-bottom: 10px; border: 1px solid #eee; padding: 8px 12px; border-radius: 6px;">
       <h3 style="margin-top: 0; color: #0b76d1; border-bottom: 2px solid #0b76d1; padding-bottom: 3px; margin-bottom: 6px;">Package Price</h3>
       <ul style="list-style: disc; padding-left: 18px; margin: 0; line-height: 1.8;">
-        <li>Per Adult: <strong>PKR ${fmt(perAdultCost)}</strong></li>
+        ${perAdultLines_q.join('')}
         ${numChildBed > 0 ? `<li>Per Child (with bed): <strong>PKR ${fmt(perChildBedCost)}</strong></li>` : ''}
         ${numChildNoBed > 0 ? `<li>Per Child (without bed): <strong>PKR ${fmt(perChildNoBedCost)}</strong></li>` : ''}
         ${numInfant > 0 ? `<li>Per Infant: <strong>PKR ${fmt(perInfantCost)}</strong></li>` : ''}
       </ul>
-      ${hotelEntries.length > 0 ? `<div style="margin-top:6px;font-size:12px;color:#333;"><strong>Hotel Price Mode:</strong> ${hotelPriceMode === 'actual' ? 'Per Room Type (Actual)' : 'Average Per Person'}</div>` : ''}
-      ${hotelEntries.length > 0 && hotelPriceMode === 'actual' ? `<div style="margin-top:6px;font-size:12px;color:#333;"><strong>Hotel Per Person By Room Type:</strong><ul style="margin:4px 0 0 18px;line-height:1.5;">${hotelEntries.filter(r => r.rooms > 0 && r.nights > 0).map(r => `<li>${sanitizeInput(r.name)} (${sanitizeInput(r.city)}): ${sanitizeInput(r.roomType)}${r.roomName ? ` (${sanitizeInput(r.roomName)})` : ''} x${r.rooms} - PKR ${fmt(convertToPKR((r.costNight + r.svcNight) * r.nights, r.currency))} per person</li>`).join('')}</ul></div>` : ''}
       <div style="margin-top: 5px; padding-top: 5px; border-top: 1px solid #ddd; font-weight: bold; color: #0b76d1;">Total Package Amount: PKR ${fmt(totalPackageAmount)}</div>
     </div>
         
@@ -5079,7 +5121,7 @@ async function printQuotation() {
   <div style="margin-bottom: 5px; padding: 4px 6px; background:#f0f7ff; border-left:3px solid #0b76d1; border-radius:3px;">
     <strong>🏨 ${sanitizeInput(hotel.city)} Hotel</strong> &mdash; ${sanitizeInput(hotel.name)} &bull; ${hotel.nights} nights<br>
     <span style="font-size:11px;color:#555;">Check-in: ${formatDateToDMY(hotel.checkIn)} &bull; Check-out: ${formatDateToDMY(hotel.checkOut)}</span>
-    <div style="margin-top:4px;font-size:11px;color:#333;">${hotel.roomTypes.map((r) => `${sanitizeInput(r.roomType)}${r.roomName ? ` (${sanitizeInput(r.roomName)})` : ''} x${r.rooms} &bull; ${sanitizeInput(r.serviceType)} &bull; ${r.currency} ${fmt(r.costNight)} + Svc ${fmt(r.svcNight)}/night`).join('<br>')}</div>
+    <div style="margin-top:4px;font-size:11px;color:#333;">${hotel.roomTypes.map((r) => `${sanitizeInput(r.roomType)}${r.roomName ? ` (${sanitizeInput(r.roomName)})` : ''} x${r.rooms} &bull; ${sanitizeInput(r.serviceType)}`).join('<br>')}</div>
   </div>
     `).join('') : ''}
   ${document.getElementById('visaBlock') ? `
@@ -5359,23 +5401,17 @@ if (flightElements && flightElements.length > 0) {
 }
 
 // Check for hotels
-const hotelElements = document.querySelectorAll("[id^='hotelBlock_']");
-if (hotelElements && hotelElements.length > 0) {
-  hotelElements.forEach((el) => {
-    if (el && el.id) {
-      const idx = el.id.split("_")[1];
-      const hotelName = document.getElementById(`hotelName_${idx}`)?.value || "Hotel";
-      const city = document.getElementById(`hotelCity_${idx}`)?.value || "City";
-      const nights = document.getElementById(`hotelNights_${idx}`)?.value || 0;
-      const serviceType = document.getElementById(`hotelService_${idx}`)?.value || "Room Only";
-      const roomType = document.getElementById(`hotelRoomType_${idx}`)?.value || "Room Type";
-      const rooms = document.getElementById(`hotelRooms_${idx}`)?.value || 0;
-      
-      inclusionsList.push(`${nights} nights, ${rooms} ${roomType} ${serviceType.toLowerCase()} Accommodation in ${sanitizeInput(hotelName)}, ${sanitizeInput(city)}`);
-      if (serviceType === "With Breakfast") {
-        inclusionsList.push(`Breakfast in ${sanitizeInput(hotelName)}`);
+const hotelGroupsList = getHotelGroups();
+if (hotelGroupsList.length > 0) {
+  hotelGroupsList.forEach(hotel => {
+    hotel.roomTypes.forEach(room => {
+      if ((room.rooms || 0) > 0) {
+        inclusionsList.push(`${hotel.nights} nights, ${room.rooms} ${room.roomType} ${(room.serviceType || 'Room Only').toLowerCase()} Accommodation in ${sanitizeInput(hotel.name)}, ${sanitizeInput(hotel.city)}`);
+        if ((room.serviceType || '').includes('Breakfast')) {
+          inclusionsList.push(`Breakfast in ${sanitizeInput(hotel.name)}`);
+        }
       }
-    }
+    });
   });
 }
 
