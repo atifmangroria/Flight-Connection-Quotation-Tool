@@ -1034,11 +1034,26 @@ async function applyPackageToForm(pkg) {
     const idx = nextHotelNumber;
     if (document.getElementById(`hotelName_${idx}`)) document.getElementById(`hotelName_${idx}`).value = hotel.name || '';
     if (document.getElementById(`hotelCity_${idx}`)) document.getElementById(`hotelCity_${idx}`).value = hotel.city || '';
-    if (document.getElementById(`hotelRoomName_${idx}`)) document.getElementById(`hotelRoomName_${idx}`).value = hotel.category || '';
-    if (document.getElementById(`hotelService_${idx}`)) document.getElementById(`hotelService_${idx}`).value = mapMealPlan(hotel.mealPlan);
-    if (document.getElementById(`hotelCostNight_${idx}`)) document.getElementById(`hotelCostNight_${idx}`).value = hotel.doubleRate || hotel.tripleRate || hotel.quadRate || 0;
-    if (document.getElementById(`hotelCurrency_${idx}`)) document.getElementById(`hotelCurrency_${idx}`).value = hotel.currency || 'USD';
-    if (document.getElementById(`hotelSvcNight_${idx}`)) document.getElementById(`hotelSvcNight_${idx}`).value = 0;
+
+    const roomRows = document.querySelectorAll(`#hotelRoomTypes_${idx} [id^='hotelRoomTypeRow_']`);
+    const firstRoomRow = roomRows[0] || null;
+    if (firstRoomRow) {
+      const roomTypeEl = firstRoomRow.querySelector('.hotelRoomTypeSel');
+      const roomNameEl = firstRoomRow.querySelector('.hotelRoomNameInp');
+      const roomsEl = firstRoomRow.querySelector('.hotelRoomsInp');
+      const serviceEl = firstRoomRow.querySelector('.hotelServiceSel');
+      const costNightEl = firstRoomRow.querySelector('.hotelCostNightInp');
+      const currencyEl = firstRoomRow.querySelector('.hotelCurrencySel');
+      const svcNightEl = firstRoomRow.querySelector('.hotelSvcNightInp');
+
+      if (roomTypeEl) roomTypeEl.value = 'Double';
+      if (roomNameEl) roomNameEl.value = hotel.category || '';
+      if (roomsEl) roomsEl.value = hotel.rooms || 1;
+      if (serviceEl) serviceEl.value = mapMealPlan(hotel.mealPlan);
+      if (costNightEl) costNightEl.value = hotel.doubleRate || hotel.tripleRate || hotel.quadRate || 0;
+      if (currencyEl) currencyEl.value = hotel.currency || 'USD';
+      if (svcNightEl) svcNightEl.value = 0;
+    }
 
     const hotelNights = Number(hotel.nights) || 0;
     const checkInField = document.getElementById(`hotelCheckIn_${idx}`);
@@ -3777,6 +3792,57 @@ function getHotelPriceMode() {
   return actual && actual.checked ? 'actual' : 'average';
 }
 
+function getHotelRoomEntries() {
+  const entries = [];
+  document.querySelectorAll("[id^='hotelBlock_']").forEach((hotelBlock) => {
+    const idx = hotelBlock.id.split("_")[1];
+    const name = document.getElementById(`hotelName_${idx}`)?.value || "Not specified";
+    const city = document.getElementById(`hotelCity_${idx}`)?.value || "Not specified";
+    const checkIn = document.getElementById(`hotelCheckIn_${idx}`)?.value || "Not specified";
+    const checkOut = document.getElementById(`hotelCheckOut_${idx}`)?.value || "Not specified";
+    const nights = parseFloat(document.getElementById(`hotelNights_${idx}`)?.value || 0);
+
+    const rowNodes = hotelBlock.querySelectorAll('[id^="hotelRoomTypeRow_"]');
+    if (rowNodes.length > 0) {
+      rowNodes.forEach((roomRow) => {
+        const roomType = roomRow.querySelector('.hotelRoomTypeSel')?.value || "Not specified";
+        const roomName = roomRow.querySelector('.hotelRoomNameInp')?.value || "";
+        const rooms = parseFloat(roomRow.querySelector('.hotelRoomsInp')?.value || 0);
+        const serviceType = roomRow.querySelector('.hotelServiceSel')?.value || "Room Only";
+        const costNight = parseFloat(roomRow.querySelector('.hotelCostNightInp')?.value || 0);
+        const svcNight = parseFloat(roomRow.querySelector('.hotelSvcNightInp')?.value || 0);
+        const currency = roomRow.querySelector('.hotelCurrencySel')?.value || "USD";
+
+        let capacity = 2;
+        if (roomType.toLowerCase().includes('triple')) capacity = 3;
+        else if (roomType.toLowerCase().includes('quad')) capacity = 4;
+        else if (roomType.toLowerCase().includes('single')) capacity = 1;
+        else if (roomType.toLowerCase().includes('family')) capacity = 4;
+
+        entries.push({ idx, name, city, checkIn, checkOut, nights, roomType, roomName, rooms, serviceType, costNight, svcNight, currency, capacity });
+      });
+    } else {
+      // Backward compatibility with old single-room hotel fields.
+      const roomType = document.getElementById(`hotelRoomType_${idx}`)?.value || "Not specified";
+      const roomName = document.getElementById(`hotelRoomName_${idx}`)?.value || "";
+      const rooms = parseFloat(document.getElementById(`hotelRooms_${idx}`)?.value || 0);
+      const serviceType = document.getElementById(`hotelService_${idx}`)?.value || "Room Only";
+      const costNight = parseFloat(document.getElementById(`hotelCostNight_${idx}`)?.value || 0);
+      const svcNight = parseFloat(document.getElementById(`hotelSvcNight_${idx}`)?.value || 0);
+      const currency = document.getElementById(`hotelCurrency_${idx}`)?.value || "USD";
+
+      let capacity = 2;
+      if (roomType.toLowerCase().includes('triple')) capacity = 3;
+      else if (roomType.toLowerCase().includes('quad')) capacity = 4;
+      else if (roomType.toLowerCase().includes('single')) capacity = 1;
+      else if (roomType.toLowerCase().includes('family')) capacity = 4;
+
+      entries.push({ idx, name, city, checkIn, checkOut, nights, roomType, roomName, rooms, serviceType, costNight, svcNight, currency, capacity });
+    }
+  });
+  return entries;
+}
+
 // Replace the entire performCalculation function with this corrected version
 function performCalculation() {
   // Check if the calculation was triggered by a button click
@@ -3915,31 +3981,7 @@ function performCalculation() {
   let hotelTotalChildBed = 0;
   let hotelPerPersonRows = [];
 
-  // Collect all hotel room info
-  const hotelRooms = [];
-  document.querySelectorAll("[id^='hotelBlock_']").forEach((el) => {
-    const idx = el.id.split("_")[1];
-    const name = document.getElementById(`hotelName_${idx}`)?.value || "Not specified";
-    const city = document.getElementById(`hotelCity_${idx}`)?.value || "Not specified";
-    const checkIn = document.getElementById(`hotelCheckIn_${idx}`)?.value || "Not specified";
-    const checkOut = document.getElementById(`hotelCheckOut_${idx}`)?.value || "Not specified";
-    const nights = parseFloat(document.getElementById(`hotelNights_${idx}`)?.value || 0);
-    const roomType = document.getElementById(`hotelRoomType_${idx}`)?.value || "Not specified";
-    const rooms = parseFloat(document.getElementById(`hotelRooms_${idx}`)?.value || 0);
-    const serviceType = document.getElementById(`hotelService_${idx}`)?.value || "Room Only";
-    const costNight = parseFloat(document.getElementById(`hotelCostNight_${idx}`)?.value || 0);
-    const svcNight = parseFloat(document.getElementById(`hotelSvcNight_${idx}`)?.value || 0);
-    const currency = document.getElementById(`hotelCurrency_${idx}`)?.value || "USD";
-
-    // Room capacity by type
-    let capacity = 2;
-    if (roomType.toLowerCase().includes('triple')) capacity = 3;
-    else if (roomType.toLowerCase().includes('quad')) capacity = 4;
-    else if (roomType.toLowerCase().includes('single')) capacity = 1;
-    else if (roomType.toLowerCase().includes('family')) capacity = 4;
-
-    hotelRooms.push({ idx, name, city, checkIn, checkOut, nights, roomType, rooms, serviceType, costNight, svcNight, currency, capacity });
-  });
+  const hotelRooms = getHotelRoomEntries();
 
   if (hotelPriceMode === 'actual') {
     // Per room type breakdown
@@ -3988,7 +4030,13 @@ function performCalculation() {
       }
     });
     // Average per person
-    const avgPerPerson = hotelTotalPax > 0 ? convertToPKR(hotelTotalCostOrig + hotelTotalSvcOrig, 'USD') / hotelTotalPax : 0;
+    const totalHotelPKR = hotelRooms.reduce((sum, room) => {
+      if (room.rooms > 0 && room.nights > 0 && room.costNight > 0) {
+        return sum + convertToPKR((room.costNight + room.svcNight) * room.nights * room.rooms, room.currency);
+      }
+      return sum;
+    }, 0);
+    const avgPerPerson = hotelTotalPax > 0 ? totalHotelPKR / hotelTotalPax : 0;
     let perPersonText = `Avg: PKR ${fmt(avgPerPerson)} x ${hotelTotalPax}`;
     let desc = `All rooms combined<br>Total Pax: ${hotelTotalPax}`;
     if (hotelTotalCostOrig + hotelTotalSvcOrig > 0) {
@@ -4380,23 +4428,15 @@ function calculatePerPersonCosts(packageCostPKR, packageServicePKR, paxData) {
   // Calculate Hotel costs per person (only for adults and children with bed)
   const hotelPayingPax = numAdult + numChildBed;
   
-  document.querySelectorAll("[id^='hotelBlock_']").forEach((el) => {
-    const idx = el.id.split("_")[1];
-    const nights = parseFloat(document.getElementById(`hotelNights_${idx}`)?.value || 0);
-    const rooms = parseFloat(document.getElementById(`hotelRooms_${idx}`)?.value || 0);
-    const costNight = parseFloat(document.getElementById(`hotelCostNight_${idx}`)?.value || 0);
-    const svcNight = parseFloat(document.getElementById(`hotelSvcNight_${idx}`)?.value || 0);
-    const currency = document.getElementById(`hotelCurrency_${idx}`)?.value || "USD";
-    
-    if (hotelPayingPax > 0) {
-      const totalCost = (costNight + svcNight) * nights * rooms;
-      const totalCostPKR = convertToPKR(totalCost, currency);
+  const hotelRows = getHotelRoomEntries();
+  if (hotelPayingPax > 0) {
+    hotelRows.forEach((room) => {
+      const totalCostPKR = convertToPKR((room.costNight + room.svcNight) * room.nights * room.rooms, room.currency);
       const perPersonCost = totalCostPKR / hotelPayingPax;
-      
       if (numAdult > 0) perAdultCost += perPersonCost;
       if (numChildBed > 0) perChildBedCost += perPersonCost;
-    }
-  });
+    });
+  }
   
   // Calculate Visa costs per person
   if (document.getElementById('visaBlock')) {
@@ -5842,25 +5882,53 @@ function saveQuotation() {
       flightsData.push(flightData);
     });
     
-    // Collect hotel data
+    // Collect hotel data (supports multiple room types per hotel)
     const hotelsData = [];
     document.querySelectorAll("[id^='hotelBlock_']").forEach((el) => {
       const idx = el.id.split("_")[1];
-      const hotelData = {
+      const roomTypes = [];
+      el.querySelectorAll('[id^="hotelRoomTypeRow_"]').forEach((roomRow) => {
+        roomTypes.push({
+          roomType: roomRow.querySelector('.hotelRoomTypeSel')?.value || "",
+          roomName: roomRow.querySelector('.hotelRoomNameInp')?.value || "",
+          rooms: parseInt(roomRow.querySelector('.hotelRoomsInp')?.value || 1),
+          serviceType: roomRow.querySelector('.hotelServiceSel')?.value || "Room Only",
+          costNight: parseFloat(roomRow.querySelector('.hotelCostNightInp')?.value || 0),
+          currency: roomRow.querySelector('.hotelCurrencySel')?.value || "USD",
+          svcNight: parseFloat(roomRow.querySelector('.hotelSvcNightInp')?.value || 0)
+        });
+      });
+
+      // Backward compatibility when loading legacy single-row UI data
+      if (roomTypes.length === 0) {
+        roomTypes.push({
+          roomType: document.getElementById(`hotelRoomType_${idx}`)?.value || "",
+          roomName: document.getElementById(`hotelRoomName_${idx}`)?.value || "",
+          rooms: parseInt(document.getElementById(`hotelRooms_${idx}`)?.value || 1),
+          serviceType: document.getElementById(`hotelService_${idx}`)?.value || "Room Only",
+          costNight: parseFloat(document.getElementById(`hotelCostNight_${idx}`)?.value || 0),
+          currency: document.getElementById(`hotelCurrency_${idx}`)?.value || "USD",
+          svcNight: parseFloat(document.getElementById(`hotelSvcNight_${idx}`)?.value || 0)
+        });
+      }
+
+      const firstRoom = roomTypes[0] || {};
+      hotelsData.push({
         name: document.getElementById(`hotelName_${idx}`)?.value || "",
         city: document.getElementById(`hotelCity_${idx}`)?.value || "",
         checkIn: document.getElementById(`hotelCheckIn_${idx}`)?.value || "",
         checkOut: document.getElementById(`hotelCheckOut_${idx}`)?.value || "",
         nights: parseInt(document.getElementById(`hotelNights_${idx}`)?.value || 0),
-        roomType: document.getElementById(`hotelRoomType_${idx}`)?.value || "",
-        roomName: document.getElementById(`hotelRoomName_${idx}`)?.value || "",
-        rooms: parseInt(document.getElementById(`hotelRooms_${idx}`)?.value || 1),
-        serviceType: document.getElementById(`hotelService_${idx}`)?.value || "",
-        costNight: parseFloat(document.getElementById(`hotelCostNight_${idx}`)?.value || 0),
-        currency: document.getElementById(`hotelCurrency_${idx}`)?.value || "USD",
-        svcNight: parseFloat(document.getElementById(`hotelSvcNight_${idx}`)?.value || 0)
-      };
-      hotelsData.push(hotelData);
+        roomTypes,
+        // Keep old fields for backward compatibility.
+        roomType: firstRoom.roomType || "",
+        roomName: firstRoom.roomName || "",
+        rooms: firstRoom.rooms || 1,
+        serviceType: firstRoom.serviceType || "Room Only",
+        costNight: firstRoom.costNight || 0,
+        currency: firstRoom.currency || "USD",
+        svcNight: firstRoom.svcNight || 0
+      });
     });
     
     // Collect transfer data
@@ -6360,20 +6428,43 @@ function loadQuotation(quotationId) {
               document.getElementById(`hotelCheckOut_${idx}`).value = hotelData.checkOut || "";
             if (document.getElementById(`hotelNights_${idx}`)) 
               document.getElementById(`hotelNights_${idx}`).value = hotelData.nights || 0;
-            if (document.getElementById(`hotelRoomType_${idx}`)) 
-              document.getElementById(`hotelRoomType_${idx}`).value = hotelData.roomType || "";
-            if (document.getElementById(`hotelRoomName_${idx}`)) 
-              document.getElementById(`hotelRoomName_${idx}`).value = hotelData.roomName || "";
-            if (document.getElementById(`hotelRooms_${idx}`)) 
-              document.getElementById(`hotelRooms_${idx}`).value = hotelData.rooms || 1;
-            if (document.getElementById(`hotelService_${idx}`)) 
-              document.getElementById(`hotelService_${idx}`).value = hotelData.serviceType || "";
-            if (document.getElementById(`hotelCostNight_${idx}`)) 
-              document.getElementById(`hotelCostNight_${idx}`).value = hotelData.costNight || 0;
-            if (document.getElementById(`hotelCurrency_${idx}`)) 
-              document.getElementById(`hotelCurrency_${idx}`).value = hotelData.currency || "USD";
-            if (document.getElementById(`hotelSvcNight_${idx}`)) 
-              document.getElementById(`hotelSvcNight_${idx}`).value = hotelData.svcNight || 0;
+
+            const roomTypesWrap = document.getElementById(`hotelRoomTypes_${idx}`);
+            if (roomTypesWrap) roomTypesWrap.innerHTML = "";
+
+            const roomTypes = (Array.isArray(hotelData.roomTypes) && hotelData.roomTypes.length > 0)
+              ? hotelData.roomTypes
+              : [{
+                  roomType: hotelData.roomType || "",
+                  roomName: hotelData.roomName || "",
+                  rooms: hotelData.rooms || 1,
+                  serviceType: hotelData.serviceType || "Room Only",
+                  costNight: hotelData.costNight || 0,
+                  currency: hotelData.currency || "USD",
+                  svcNight: hotelData.svcNight || 0
+                }];
+
+            roomTypes.forEach((roomTypeData) => {
+              addRoomTypeRow(idx);
+              const lastRow = document.querySelector(`#hotelRoomTypes_${idx} [id^='hotelRoomTypeRow_']:last-child`);
+              if (!lastRow) return;
+
+              const roomTypeEl = lastRow.querySelector('.hotelRoomTypeSel');
+              const roomNameEl = lastRow.querySelector('.hotelRoomNameInp');
+              const roomsEl = lastRow.querySelector('.hotelRoomsInp');
+              const serviceEl = lastRow.querySelector('.hotelServiceSel');
+              const costNightEl = lastRow.querySelector('.hotelCostNightInp');
+              const currencyEl = lastRow.querySelector('.hotelCurrencySel');
+              const svcNightEl = lastRow.querySelector('.hotelSvcNightInp');
+
+              if (roomTypeEl) roomTypeEl.value = roomTypeData.roomType || "Double";
+              if (roomNameEl) roomNameEl.value = roomTypeData.roomName || "";
+              if (roomsEl) roomsEl.value = roomTypeData.rooms || 1;
+              if (serviceEl) serviceEl.value = roomTypeData.serviceType || "Room Only";
+              if (costNightEl) costNightEl.value = roomTypeData.costNight || 0;
+              if (currencyEl) currencyEl.value = roomTypeData.currency || "USD";
+              if (svcNightEl) svcNightEl.value = roomTypeData.svcNight || 0;
+            });
           }, 100);
         }, 200 * hotelIndex);
       });
