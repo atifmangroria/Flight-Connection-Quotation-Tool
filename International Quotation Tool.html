@@ -3917,7 +3917,11 @@ function getHotelGroups() {
 }
 
 function hasMultipleRoomTypesInAnyHotel() {
-  return getHotelGroups().some((hotel) => hotel.roomTypes.filter((r) => (r.rooms || 0) > 0).length > 1);
+  // Only show if >1 and different room types in a hotel
+  return getHotelGroups().some((hotel) => {
+    const types = hotel.roomTypes.filter((r) => (r.rooms || 0) > 0).map(r => r.roomType);
+    return new Set(types).size > 1;
+  });
 }
 
 function updateHotelPriceModeVisibility() {
@@ -5055,16 +5059,25 @@ async function printQuotation() {
   const totalPackageAmount = finalTotalSellPKR > 0 ? finalTotalSellPKR : computedPackageAmount;
 
   // Per-room-type per-adult pricing for Package Price section
-  const totalHotelPKR_q = hotelEntries.reduce((sum, r) => r.rooms > 0 && r.nights > 0 ? sum + convertToPKR((r.costNight + r.svcNight) * r.nights * r.rooms, r.currency) : sum, 0);
-  const avgHotelPerAdult_q = hotelPayingPax > 0 ? totalHotelPKR_q / hotelPayingPax : 0;
-  const basePerAdultCost_q = perAdultCost - avgHotelPerAdult_q;
+  // Per-room-type per-adult pricing for Package Price section
   const validHotelEntries_q = hotelEntries.filter(r => r.rooms > 0 && r.nights > 0);
-  const perAdultLines_q = (hotelPriceMode === 'actual' && validHotelEntries_q.length > 0)
-    ? validHotelEntries_q.map(r => {
-        const roomPerAdult = basePerAdultCost_q + convertToPKR((r.costNight + r.svcNight) * r.nights, r.currency);
-        return `<li>Per Adult (${sanitizeInput(r.roomType)} Sharing): <strong>PKR ${fmt(roomPerAdult)}</strong></li>`;
-      })
-    : [`<li>Per Adult: <strong>PKR ${fmt(perAdultCost)}</strong></li>`];
+  let perAdultLines_q;
+  if (hotelPriceMode === 'actual' && validHotelEntries_q.length > 0) {
+    // Group by room type, sum total pax and total cost per type
+    const roomTypeMap = {};
+    validHotelEntries_q.forEach(r => {
+      const key = r.roomType;
+      if (!roomTypeMap[key]) roomTypeMap[key] = { totalPax: 0, totalCost: 0, label: key };
+      roomTypeMap[key].totalPax += (r.rooms * (r.capacity || 1));
+      roomTypeMap[key].totalCost += convertToPKR((r.costNight + r.svcNight) * r.nights * r.rooms, r.currency);
+    });
+    perAdultLines_q = Object.values(roomTypeMap).map(rt => {
+      const perPerson = rt.totalPax > 0 ? rt.totalCost / rt.totalPax : 0;
+      return `<li>Per Adult (${sanitizeInput(rt.label)} Sharing): <strong>PKR ${fmt(perPerson)}</strong></li>`;
+    });
+  } else {
+    perAdultLines_q = [`<li>Per Adult: <strong>PKR ${fmt(perAdultCost)}</strong></li>`];
+  }
 
   // Build the HTML for the quotation preview
   let quotationHTML = `
@@ -5403,12 +5416,17 @@ if (flightElements && flightElements.length > 0) {
 // Check for hotels
 const hotelGroupsList = getHotelGroups();
 if (hotelGroupsList.length > 0) {
+  const breakfastSet = new Set();
   hotelGroupsList.forEach(hotel => {
     hotel.roomTypes.forEach(room => {
       if ((room.rooms || 0) > 0) {
         inclusionsList.push(`${hotel.nights} nights, ${room.rooms} ${room.roomType} ${(room.serviceType || 'Room Only').toLowerCase()} Accommodation in ${sanitizeInput(hotel.name)}, ${sanitizeInput(hotel.city)}`);
         if ((room.serviceType || '').includes('Breakfast')) {
-          inclusionsList.push(`Breakfast in ${sanitizeInput(hotel.name)}`);
+          const key = `Breakfast in ${sanitizeInput(hotel.name)}`;
+          if (!breakfastSet.has(key)) {
+            inclusionsList.push(key);
+            breakfastSet.add(key);
+          }
         }
       }
     });
@@ -5501,16 +5519,7 @@ if (!hasFlights) {
 // Check for hotel exclusions
 const hasHotels = document.querySelectorAll("[id^='hotelBlock_']").length > 0;
 
-if (hasHotels) {
-  document.querySelectorAll("[id^='hotelBlock_']").forEach((el) => {
-    const idx = el.id.split("_")[1];
-    const serviceType = document.getElementById(`hotelService_${idx}`)?.value || "Room Only";
-    if (serviceType === "Room Only") {
-      const hotelName = document.getElementById(`hotelName_${idx}`)?.value || "Hotel";
-      quotationHTML += `<li>Meals in ${sanitizeInput(hotelName)}</li>`;
-    }
-  });
-}
+// Removed Meals in [Hotel] exclusion as per request
 
 // Check for visa exclusion
 const hasVisa = document.getElementById('visaBlock');
