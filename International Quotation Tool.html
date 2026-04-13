@@ -3562,6 +3562,22 @@ function removeAddon(id){
   </div>
 </div>
 
+
+<!-- Hotel Price Mode Toggle -->
+<div class="section" id="hotelPriceModeSection" style="margin-bottom: 0;">
+  <label style="font-weight: bold;">Hotel Price Calculation Mode:</label>
+  <div style="display: flex; gap: 18px; margin-top: 6px;">
+    <label style="display: flex; align-items: center; gap: 6px;">
+      <input type="radio" name="hotelPriceMode" id="hotelPriceModeActual" value="actual" checked>
+      <span>Per Room Type (Actual)</span>
+    </label>
+    <label style="display: flex; align-items: center; gap: 6px;">
+      <input type="radio" name="hotelPriceMode" id="hotelPriceModeAverage" value="average">
+      <span>Average Per Person</span>
+    </label>
+  </div>
+</div>
+
 <div id="calcSummarySection" class="section" style="display:none;">
   <h3>📊 Package Calculation Summary</h3>
 
@@ -3651,6 +3667,14 @@ const baseCurrencyInput = document.getElementById("baseCurrency");
 const usdToPkrRateInput = document.getElementById("usdToPkrRate");
 
 // --- UPDATED CURRENCY CONVERSION FUNCTION ---
+// --- Hotel Price Mode Toggle Event ---
+document.addEventListener('DOMContentLoaded', function() {
+  const hotelPriceModeActual = document.getElementById('hotelPriceModeActual');
+  const hotelPriceModeAverage = document.getElementById('hotelPriceModeAverage');
+  if (hotelPriceModeActual) hotelPriceModeActual.addEventListener('change', performCalculation);
+  if (hotelPriceModeAverage) hotelPriceModeAverage.addEventListener('change', performCalculation);
+});
+
 function convertToPKR(amount, currency) {
   // Default to USD if currency is not specified
   if (!currency) currency = 'USD'; 
@@ -3720,6 +3744,12 @@ function toggleServiceOption(option) {
   
   // Recalculate after changing options
   performCalculation();
+}
+
+// --- Hotel Price Mode Helper ---
+function getHotelPriceMode() {
+  const actual = document.getElementById('hotelPriceModeActual');
+  return actual && actual.checked ? 'actual' : 'average';
 }
 
 // Replace the entire performCalculation function with this corrected version
@@ -3852,6 +3882,16 @@ function performCalculation() {
   });
 
   // --- HOTELS ---
+  const hotelPriceMode = getHotelPriceMode();
+  let hotelRoomBreakdown = [];
+  let hotelTotalCostOrig = 0;
+  let hotelTotalSvcOrig = 0;
+  let hotelTotalPax = 0;
+  let hotelTotalChildBed = 0;
+  let hotelPerPersonRows = [];
+
+  // Collect all hotel room info
+  const hotelRooms = [];
   document.querySelectorAll("[id^='hotelBlock_']").forEach((el) => {
     const idx = el.id.split("_")[1];
     const name = document.getElementById(`hotelName_${idx}`)?.value || "Not specified";
@@ -3866,31 +3906,71 @@ function performCalculation() {
     const svcNight = parseFloat(document.getElementById(`hotelSvcNight_${idx}`)?.value || 0);
     const currency = document.getElementById(`hotelCurrency_${idx}`)?.value || "USD";
 
-    // Calculate totals in ORIGINAL currency
-    const totalCostOrig = costNight * nights * rooms;
-    const totalSvcOrig = svcNight * nights * rooms;
-    
-    const payingPax = paxData.adults + paxData.childBed;
-    const perPersonCost = payingPax > 0 ? convertToPKR((costNight + svcNight) * nights * rooms, currency) / payingPax : 0;
-    const perAdult = paxData.adults > 0 ? perPersonCost : 0;
-    const perChildBed = paxData.childBed > 0 ? perPersonCost : 0;
-    
-    const details = `${name} (${city})<br>
-                    Check-in: ${formatDateToDMY(checkIn)}, Check-out: ${formatDateToDMY(checkOut)}<br>
-                    ${nights} nights, ${roomType} × ${rooms} rooms<br>
-                    Service: ${serviceType}<br>
-                    Rate: ${currency} ${fmt(costNight)}/night<br>
-                    Charged to: Adults (${paxData.adults}) + Children with bed (${paxData.childBed})`;
+    // Room capacity by type
+    let capacity = 2;
+    if (roomType.toLowerCase().includes('triple')) capacity = 3;
+    else if (roomType.toLowerCase().includes('quad')) capacity = 4;
+    else if (roomType.toLowerCase().includes('single')) capacity = 1;
+    else if (roomType.toLowerCase().includes('family')) capacity = 4;
 
-    let perPersonText = [];
-    if (paxData.adults > 0) perPersonText.push(`Adult x${paxData.adults}: PKR ${fmt(perAdult)}`);
-    if (paxData.childBed > 0) perPersonText.push(`Child (with bed) x${paxData.childBed}: PKR ${fmt(perChildBed)}`);
-    perPersonText = perPersonText.join(', ');
-
-    if (totalCostOrig + totalSvcOrig > 0) {
-      addDetailedRow(`Hotel ${idx}`, name, details, currency, totalCostOrig, totalSvcOrig, perPersonText, false);
-    }
+    hotelRooms.push({ idx, name, city, checkIn, checkOut, nights, roomType, rooms, serviceType, costNight, svcNight, currency, capacity });
   });
+
+  if (hotelPriceMode === 'actual') {
+    // Per room type breakdown
+    let hotelBreakdownText = [];
+    hotelRooms.forEach(room => {
+      if (room.rooms > 0 && room.nights > 0 && room.costNight > 0) {
+        const totalRoomPax = room.rooms * room.capacity;
+        const totalCost = room.costNight * room.nights * room.rooms;
+        const totalSvc = room.svcNight * room.nights * room.rooms;
+        hotelTotalCostOrig += totalCost;
+        hotelTotalSvcOrig += totalSvc;
+        hotelTotalPax += totalRoomPax;
+
+        // Per person cost for this room type
+        const perPerson = totalRoomPax > 0 ? convertToPKR((room.costNight + room.svcNight) * room.nights, room.currency) : 0;
+        hotelRoomBreakdown.push({
+          roomType: room.roomType,
+          count: room.rooms,
+          perPerson,
+          totalRoomPax,
+          name: room.name,
+          city: room.city
+        });
+
+        // Output row for each room type
+        let desc = `${room.name} (${room.city})<br>Check-in: ${formatDateToDMY(room.checkIn)}, Check-out: ${formatDateToDMY(room.checkOut)}<br>${room.nights} nights, ${room.roomType} × ${room.rooms} rooms<br>Service: ${room.serviceType}<br>Rate: ${room.currency} ${fmt(room.costNight)}/night`;
+        let perPersonText = `${room.roomType}: PKR ${fmt(perPerson)} x ${totalRoomPax}`;
+        addDetailedRow(`Hotel ${room.idx}`, room.name, desc, room.currency, totalCost, totalSvc, perPersonText, false);
+        hotelBreakdownText.push(`${room.roomType} (${room.count} room${room.count > 1 ? 's' : ''}): PKR ${fmt(perPerson)} x ${totalRoomPax}`);
+      }
+    });
+    // Show summary breakdown below hotel rows
+    if (hotelBreakdownText.length > 0) {
+      calcSummaryBody.innerHTML += `<tr style="background:#f5faff;"><td colspan="9"><b>Hotel Room Breakdown:</b> ${hotelBreakdownText.join(' &nbsp; | &nbsp; ')}</td></tr>`;
+    }
+  } else {
+    // Average mode: sum all hotel costs and divide by total paying pax
+    hotelRooms.forEach(room => {
+      if (room.rooms > 0 && room.nights > 0 && room.costNight > 0) {
+        const totalRoomPax = room.rooms * room.capacity;
+        const totalCost = room.costNight * room.nights * room.rooms;
+        const totalSvc = room.svcNight * room.nights * room.rooms;
+        hotelTotalCostOrig += totalCost;
+        hotelTotalSvcOrig += totalSvc;
+        hotelTotalPax += totalRoomPax;
+      }
+    });
+    // Average per person
+    const avgPerPerson = hotelTotalPax > 0 ? convertToPKR(hotelTotalCostOrig + hotelTotalSvcOrig, 'USD') / hotelTotalPax : 0;
+    let perPersonText = `Avg: PKR ${fmt(avgPerPerson)} x ${hotelTotalPax}`;
+    let desc = `All rooms combined<br>Total Pax: ${hotelTotalPax}`;
+    if (hotelTotalCostOrig + hotelTotalSvcOrig > 0) {
+      addDetailedRow(`Hotel`, 'All Rooms', desc, 'USD', hotelTotalCostOrig, hotelTotalSvcOrig, perPersonText, false);
+      calcSummaryBody.innerHTML += `<tr style=\"background:#f5faff;\"><td colspan=\"9\"><b>Hotel Average Breakdown:</b> PKR ${fmt(avgPerPerson)} x ${hotelTotalPax}</td></tr>`;
+    }
+  }
 
   // --- TRANSFERS ---
   document.querySelectorAll("[id^='transferBlock_']").forEach((el) => {
