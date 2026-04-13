@@ -61,96 +61,98 @@
     },
 
     // Get all documents from a collection
-    async getAll(collection_name) {
-      try {
-        const snapshot = await getDocs(collection(db, collection_name));
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      } catch (error) {
-        console.error(`Error getting all from ${collection_name}:`, error);
-        return [];
-      }
-    },
+    // --- HOTELS ---
+    const hotelPriceMode = getHotelPriceMode();
+    let hotelRoomBreakdown = [];
+    let hotelTotalCostOrig = 0;
+    let hotelTotalSvcOrig = 0;
+    let hotelTotalPax = 0;
+    let hotelTotalChildBed = 0;
+    let hotelPerPersonRows = [];
 
-    // Delete data from Firestore
-    async deleteData(collection_name, docId) {
-      try {
-        await deleteDoc(doc(db, collection_name, docId));
-        return true;
-      } catch (error) {
-        console.error(`Error deleting from ${collection_name}:`, error);
-        return false;
-      }
-    },
+    // Collect all hotel room info from all hotels and all room type rows
+    const hotelRooms = [];
+    document.querySelectorAll("[id^='hotelBlock_']").forEach((hotelBlock) => {
+      const idx = hotelBlock.id.split("_")[1];
+      const name = document.getElementById(`hotelName_${idx}`)?.value || "Not specified";
+      const city = document.getElementById(`hotelCity_${idx}`)?.value || "Not specified";
+      const checkIn = document.getElementById(`hotelCheckIn_${idx}`)?.value || "Not specified";
+      const checkOut = document.getElementById(`hotelCheckOut_${idx}`)?.value || "Not specified";
+      const nights = parseFloat(document.getElementById(`hotelNights_${idx}`)?.value || 0);
+      // For each room type row in this hotel
+      hotelBlock.querySelectorAll('[id^="hotelRoomTypeRow_"]').forEach(roomRow => {
+        const roomType = roomRow.querySelector('.hotelRoomTypeSel')?.value || "Not specified";
+        const roomName = roomRow.querySelector('.hotelRoomNameInp')?.value || "";
+        const rooms = parseFloat(roomRow.querySelector('.hotelRoomsInp')?.value || 0);
+        const serviceType = roomRow.querySelector('.hotelServiceSel')?.value || "Room Only";
+        const costNight = parseFloat(roomRow.querySelector('.hotelCostNightInp')?.value || 0);
+        const svcNight = parseFloat(roomRow.querySelector('.hotelSvcNightInp')?.value || 0);
+        const currency = roomRow.querySelector('.hotelCurrencySel')?.value || "USD";
+        // Room capacity by type
+        let capacity = 2;
+        if (roomType.toLowerCase().includes('triple')) capacity = 3;
+        else if (roomType.toLowerCase().includes('quad')) capacity = 4;
+        else if (roomType.toLowerCase().includes('single')) capacity = 1;
+        else if (roomType.toLowerCase().includes('family')) capacity = 4;
+        hotelRooms.push({ idx, name, city, checkIn, checkOut, nights, roomType, roomName, rooms, serviceType, costNight, svcNight, currency, capacity });
+      });
+    });
 
-    // Update specific fields
-    async updateData(collection_name, docId, updates) {
-      try {
-        await updateDoc(doc(db, collection_name, docId), updates);
-        return true;
-      } catch (error) {
-        console.error(`Error updating ${collection_name}:`, error);
-        return false;
+    if (hotelPriceMode === 'actual') {
+      // Per room type breakdown
+      let hotelBreakdownText = [];
+      hotelRooms.forEach(room => {
+        if (room.rooms > 0 && room.nights > 0 && room.costNight > 0) {
+          const totalRoomPax = room.rooms * room.capacity;
+          const totalCost = room.costNight * room.nights * room.rooms;
+          const totalSvc = room.svcNight * room.nights * room.rooms;
+          hotelTotalCostOrig += totalCost;
+          hotelTotalSvcOrig += totalSvc;
+          hotelTotalPax += totalRoomPax;
+
+          // Per person cost for this room type
+          const perPerson = totalRoomPax > 0 ? convertToPKR((room.costNight + room.svcNight) * room.nights, room.currency) : 0;
+          hotelRoomBreakdown.push({
+            roomType: room.roomType,
+            count: room.rooms,
+            perPerson,
+            totalRoomPax,
+            name: room.name,
+            city: room.city
+          });
+
+          // Output row for each room type
+          let desc = `${room.name} (${room.city})<br>Check-in: ${formatDateToDMY(room.checkIn)}, Check-out: ${formatDateToDMY(room.checkOut)}<br>${room.nights} nights, ${room.roomType} × ${room.rooms} rooms<br>Service: ${room.serviceType}<br>Rate: ${room.currency} ${fmt(room.costNight)}/night`;
+          let perPersonText = `${room.roomType}: PKR ${fmt(perPerson)} x ${totalRoomPax}`;
+          addDetailedRow(`Hotel ${room.idx}`, room.name, desc, room.currency, totalCost, totalSvc, perPersonText, false);
+          hotelBreakdownText.push(`${room.roomType} (${room.count} room${room.count > 1 ? 's' : ''}): PKR ${fmt(perPerson)} x ${totalRoomPax}`);
+        }
+      });
+      // Show summary breakdown below hotel rows
+      if (hotelBreakdownText.length > 0) {
+        calcSummaryBody.innerHTML += `<tr style=\"background:#f5faff;\"><td colspan=\"9\"><b>Hotel Room Breakdown:</b> ${hotelBreakdownText.join(' &nbsp; | &nbsp; ')}</td></tr>`;
+      }
+    } else {
+      // Average mode: sum all hotel costs and divide by total paying pax
+      hotelRooms.forEach(room => {
+        if (room.rooms > 0 && room.nights > 0 && room.costNight > 0) {
+          const totalRoomPax = room.rooms * room.capacity;
+          const totalCost = room.costNight * room.nights * room.rooms;
+          const totalSvc = room.svcNight * room.nights * room.rooms;
+          hotelTotalCostOrig += totalCost;
+          hotelTotalSvcOrig += totalSvc;
+          hotelTotalPax += totalRoomPax;
+        }
+      });
+      // Average per person
+      const avgPerPerson = hotelTotalPax > 0 ? convertToPKR(hotelTotalCostOrig + hotelTotalSvcOrig, 'USD') / hotelTotalPax : 0;
+      let perPersonText = `Avg: PKR ${fmt(avgPerPerson)} x ${hotelTotalPax}`;
+      let desc = `All rooms combined<br>Total Pax: ${hotelTotalPax}`;
+      if (hotelTotalCostOrig + hotelTotalSvcOrig > 0) {
+        addDetailedRow(`Hotel`, 'All Rooms', desc, 'USD', hotelTotalCostOrig, hotelTotalSvcOrig, perPersonText, false);
+        calcSummaryBody.innerHTML += `<tr style=\"background:#f5faff;\"><td colspan=\"9\"><b>Hotel Average Breakdown:</b> PKR ${fmt(avgPerPerson)} x ${hotelTotalPax}</td></tr>`;
       }
     }
-  };
-
-  // Make collection functions available
-  window.collection = collection;
-  window.doc = doc;
-  window.deleteDoc = deleteDoc;
-  window.updateDoc = updateDoc;
-</script>
-
-<style>
-  :root{--accent:#0b76d1;--muted:#666;--success-bg:#d4edda;--success-text:#155724;--error-bg:#f8d7da;--error-text:#721c24}
-  body{font-family:Arial,Helvetica,sans-serif;background:#f3f6fb;margin:10px;color:#111}
-  .wrap{max-width:1150px;margin:0 auto;background:#fff;padding:14px;border-radius:8px;box-shadow:0 8px 24px rgba(12,20,40,0.06)}
-  h1{margin:0 0 6px;font-size:20px}
-  label{display:block;font-size:13px;color:#222;margin-top:8px}
-  input,select,textarea,button{font-family:inherit}
-input[type="text"], input[type="number"], input[type="date"], input[type="password"], select, textarea{
-  width:100%;padding:10px 12px;border:1px solid #d6dbe2;border-radius:6px;font-size:16px;background:#fff;
-  box-sizing:border-box;transition:border-color 0.3s ease, box-shadow 0.3s ease;
-}
-input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus, input[type="password"]:focus, select:focus, textarea:focus{
-  border-color:var(--accent);box-shadow:0 0 0 3px rgba(11, 118, 209, 0.1);outline:none;
-}
-  textarea{min-height:70px;resize:vertical}
-  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
-  .full{grid-column:1/-1}
-  .section{border:1px solid #e6eef8;padding:12px;border-radius:8px;margin-top:12px;background:#fbfdff}
-  .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
-  button{background:var(--accent);color:#fff;border:0;padding:8px 8px;border-radius:6px;cursor:pointer;transition:background-color 0.2s}
-  button.ghost{background:#eef5fb;color:var(--accent);border:1px solid #d6e8fb}
-  button:hover{background-color: #085ea3;}
-  button.ghost:hover{background-color: #d6e8fb;}
-  .small{font-size:12px;color:var(--muted)}
-  header{display:flex;align-items:center;justify-content:space-between;gap:12px}
-  header img{height:56px}
-  table{width:100%;border-collapse:collapse;margin-top:8px}
-  th,td{padding:6px;border-bottom:1px solid #eee;font-size:13px;text-align:left}
-  .saved-list{max-height:220px;overflow:auto;border:1px solid #eee;padding:8px;border-radius:6px}
-  .no-print{display:block}
-  .center{text-align:center}
-  pre{background:#ffffff;padding:8px;border-radius:6px;border:1px solid #eee;white-space:pre-wrap}
-  
-  .input-error { border: 2px solid red !important; }
-  .flight-header, .hotel-header, .transfer-header, .visa-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-  .flight-header h3, .hotel-header h3, .transfer-header h3, .visa-header h3 { margin: 0; }
-  .add-btn { background: #4CAF50; color: #fff; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 14px; }
-  .add-btn:hover { background: #45a049; }
-  .remove-btn { background: #e74c3c; color: #fff; border: none; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 8px; }
-  .remove-btn:hover { background: #c0392b; }
-
-  /* Currency Selector */
-  .currency-selector {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    margin-bottom: 10px;
-  }
-  
-  .currency-selector select {
     width: 120px;
     padding: 8px;
     border: 1px solid #ddd;
@@ -2334,6 +2336,7 @@ async function createHotelSection(index){
     return;
   }
 
+
   const container = document.getElementById("hotelContainer");
   const roomOptions = Object.keys(roomConfig).map(rt=>`<option>${rt}</option>`).join("");
 
@@ -2361,17 +2364,43 @@ async function createHotelSection(index){
                max="${formatDate(clientData.dateToObj)}">
       </div>
       <div><label>Total Nights</label><input id="hotelNights_${index}" type="number" value="0" min="0" readonly></div>
-      <div><label>Room Type</label><select id="hotelRoomType_${index}">${roomOptions}</select></div>
-      <div><label>Room Name (Optional)</label><input id="hotelRoomName_${index}" type="text" placeholder="e.g. Deluxe Suite"></div>
-      <div><label>Rooms count</label><input id="hotelRooms_${index}" type="number" value="1" min="1"></div>
-      <div><label>Service Type</label><select id="hotelService_${index}"><option>Room Only</option><option>With Breakfast</option><option>Half Board</option><option>Full Board</option></select></div>
-      <div><label>Cost per night</label><input id="hotelCostNight_${index}" type="number" value="0" min="0"></div>
-      <div><label>Hotel Currency</label><select id="hotelCurrency_${index}"><option value="USD">USD</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="PKR">PKR</option></select></div>
-      <div><label>Service per night</label><input id="hotelSvcNight_${index}" type="number" value="0" min="0"></div>
+    </div>
+    <div class="section" id="hotelRoomTypesWrap_${index}" style="margin-top:16px;background:#f8fbff;">
+      <h5 style="margin:0 0 8px;">Room Types</h5>
+      <div id="hotelRoomTypes_${index}"></div>
+      <button type="button" class="add-btn" onclick="addRoomTypeRow(${index})">+ Add Room Type</button>
     </div>
   `;
   container.appendChild(hotelDiv);
   hotels.push(index);
+
+
+  // Add first room type row by default
+  setTimeout(() => addRoomTypeRow(index), 0);
+
+  // --- Room Type Row Logic ---
+  window.addRoomTypeRow = function(hotelIdx) {
+    const wrap = document.getElementById(`hotelRoomTypes_${hotelIdx}`);
+    if (!wrap) return;
+    const roomIdx = Date.now() + Math.floor(Math.random()*10000); // unique id
+    const roomOptions = Object.keys(roomConfig).map(rt=>`<option>${rt}</option>`).join("");
+    const html = `<div class="grid" id="hotelRoomTypeRow_${hotelIdx}_${roomIdx}" style="border:1px solid #e6eef8;padding:8px;border-radius:6px;margin-bottom:8px;background:#fff;">
+      <div><label>Room Type</label><select class="hotelRoomTypeSel" name="hotelRoomTypeSel_${hotelIdx}" data-hotel="${hotelIdx}" data-room="${roomIdx}">${roomOptions}</select></div>
+      <div><label>Room Name (Optional)</label><input type="text" class="hotelRoomNameInp" name="hotelRoomNameInp_${hotelIdx}" placeholder="e.g. Deluxe Suite"></div>
+      <div><label>Rooms count</label><input type="number" class="hotelRoomsInp" name="hotelRoomsInp_${hotelIdx}" value="1" min="1"></div>
+      <div><label>Service Type</label><select class="hotelServiceSel" name="hotelServiceSel_${hotelIdx}"><option>Room Only</option><option>With Breakfast</option><option>Half Board</option><option>Full Board</option></select></div>
+      <div><label>Cost per night</label><input type="number" class="hotelCostNightInp" name="hotelCostNightInp_${hotelIdx}" value="0" min="0"></div>
+      <div><label>Hotel Currency</label><select class="hotelCurrencySel" name="hotelCurrencySel_${hotelIdx}"><option value="USD">USD</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="PKR">PKR</option></select></div>
+      <div><label>Service per night</label><input type="number" class="hotelSvcNightInp" name="hotelSvcNightInp_${hotelIdx}" value="0" min="0"></div>
+      <div style="display:flex;align-items:end;justify-content:end"><button type="button" class="remove-btn" onclick="removeRoomTypeRow(${hotelIdx},${roomIdx})">❌ Remove</button></div>
+    </div>`;
+    wrap.insertAdjacentHTML('beforeend', html);
+  };
+
+  window.removeRoomTypeRow = function(hotelIdx, roomIdx) {
+    const row = document.getElementById(`hotelRoomTypeRow_${hotelIdx}_${roomIdx}`);
+    if (row) row.remove();
+  };
 
   const chkIn = document.getElementById(`hotelCheckIn_${index}`);
   const chkOut = document.getElementById(`hotelCheckOut_${index}`);
