@@ -801,6 +801,13 @@
     }
 
     function showHotelPriceModeDialog() {
+      // Only show if >1 and different room types in any hotel
+      if (!hasMultipleRoomTypesInAnyHotel()) {
+        // Always use average mode, no popup
+        const radio = document.getElementById('hotelPriceModeAverage');
+        if (radio) radio.checked = true;
+        return Promise.resolve('average');
+      }
       return new Promise(resolve => {
         const currentMode = typeof getHotelPriceMode === 'function' ? getHotelPriceMode() : 'actual';
         modalTitle.textContent = 'Hotel Pricing Mode';
@@ -3928,7 +3935,8 @@ function updateHotelPriceModeVisibility() {
   const section = document.getElementById('hotelPriceModeSection');
   if (!section) return;
   const hasHotels = document.querySelectorAll("[id^='hotelBlock_']").length > 0;
-  section.style.display = hasHotels && hasMultipleRoomTypesInAnyHotel() ? 'block' : 'none';
+  // Remove the toggle section entirely from UI
+  if (section) section.style.display = 'none';
 }
 
 // Replace the entire performCalculation function with this corrected version
@@ -4273,13 +4281,16 @@ async function performCalculation() {
 
   let packagePricingText = [];
   if (hotelPriceMode === 'actual' && hotelRoomBreakdown.length > 0) {
-    const hotelPayingPaxP = numAdult + numChildBed;
-    const totalHotelPKR_p = hotelRooms.reduce((sum, r) => r.rooms > 0 && r.nights > 0 ? sum + convertToPKR((r.costNight + r.svcNight) * r.nights * r.rooms, r.currency) : sum, 0);
-    const avgHotelPerAdult_p = hotelPayingPaxP > 0 ? totalHotelPKR_p / hotelPayingPaxP : 0;
-    const basePerAdult_p = perAdult - avgHotelPerAdult_p;
+    // Group by room type, sum total pax and total cost per type
+    const roomTypeMap = {};
     hotelRoomBreakdown.forEach(rb => {
-      const perPersonInRoom = basePerAdult_p + rb.perPerson;
-      packagePricingText.push(`Adult x${rb.totalRoomPax} (${rb.roomType} Sharing): PKR ${fmt(perPersonInRoom)}`);
+      if (!roomTypeMap[rb.roomType]) roomTypeMap[rb.roomType] = { totalPax: 0, totalCost: 0, label: rb.roomType };
+      roomTypeMap[rb.roomType].totalPax += rb.totalRoomPax;
+      roomTypeMap[rb.roomType].totalCost += rb.perPerson * rb.totalRoomPax;
+    });
+    Object.values(roomTypeMap).forEach(rt => {
+      const perPerson = rt.totalPax > 0 ? rt.totalCost / rt.totalPax : 0;
+      packagePricingText.push(`Adult x${rt.totalPax} (${rt.label} Sharing): PKR ${fmt(perPerson)}`);
     });
     if (numChildBed > 0) packagePricingText.push(`Child (bed) x${numChildBed}: PKR ${fmt(perChildBed)}`);
     if (numChildNoBed > 0) packagePricingText.push(`Child (no bed) x${numChildNoBed}: PKR ${fmt(perChildNoBed)}`);
