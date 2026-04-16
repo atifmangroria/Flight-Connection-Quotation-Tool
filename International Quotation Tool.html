@@ -4137,6 +4137,19 @@ async function performCalculation() {
     }, 0);
     const avgPerPerson = hotelTotalPax > 0 ? totalHotelPKR / hotelTotalPax : 0;
     let perPersonText = `Avg: PKR ${fmt(avgPerPerson)} x ${hotelTotalPax}`;
+<<<<<<< HEAD
+    // Combine all hotel details into single description
+    let allHotelsDesc = '';
+    hotelRooms.forEach((room) => {
+      if (room.rooms > 0 && room.nights > 0 && room.costNight > 0) {
+        if (allHotelsDesc) allHotelsDesc += '<br><br>';
+        allHotelsDesc += `${room.name} (${room.city})<br>Check-in: ${formatDateToDMY(room.checkIn)}, Check-out: ${formatDateToDMY(room.checkOut)}<br>${room.nights} nights, ${room.roomType} × ${room.rooms} rooms<br>Service: ${room.serviceType}<br>Rate: ${room.currency} ${fmt(room.costNight)}/night`;
+      }
+    });
+    if (hotelTotalCostOrig + hotelTotalSvcOrig > 0) {
+      addDetailedRow(`Hotel`, 'All Hotels', allHotelsDesc, 'USD', hotelTotalCostOrig, hotelTotalSvcOrig, perPersonText, false);
+    }
+=======
     // Show detailed info for each room type, but with average per-person cost
     hotelRooms.forEach((room) => {
       if (room.rooms > 0 && room.nights > 0 && room.costNight > 0) {
@@ -4146,6 +4159,7 @@ async function performCalculation() {
         addDetailedRow(`Hotel ${room.idx}`, room.name, desc, room.currency, totalCost, totalSvc, perPersonText, false);
       }
     });
+>>>>>>> e667a5944d9054476b4edd831ae61e6958578f3b
   }
 
   // --- TRANSFERS ---
