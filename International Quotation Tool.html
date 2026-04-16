@@ -5219,12 +5219,12 @@ async function printQuotation() {
 `;
     });
   } else {
-    hotelGroups.forEach((hotel) => {
-      const totalHotel = hotel.roomTypes.reduce((sum, room) => sum + convertToPKR((room.costNight + room.svcNight) * hotel.nights * room.rooms, room.currency), 0);
+    hotelEntries.forEach((room) => {
+      const totalHotel = convertToPKR((room.costNight + room.svcNight) * room.nights * room.rooms, room.currency);
       const perPersonCost = hotelPayingPax > 0 ? totalHotel / hotelPayingPax : 0;
       quotationHTML += `
   <div style="margin:2px 0;padding:4px 8px;background:#fff;border-left:3px solid #0b76d1;border-radius:3px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
-    <span><b>🏨 ${sanitizeInput(hotel.city)} Hotel ${hotel.idx}</b> &mdash; ${sanitizeInput(hotel.name)} &bull; ${hotel.nights}N &nbsp; <span style="color:#555;font-size:11px;">Avg Per Paying Pax: PKR ${fmt(perPersonCost)}</span></span>
+    <span><b>🏨 ${sanitizeInput(room.city)} Hotel ${room.idx}</b> &mdash; ${sanitizeInput(room.name)} &bull; ${sanitizeInput(room.roomType)}${room.roomName ? ` (${sanitizeInput(room.roomName)})` : ''} &times;${room.rooms} &bull; ${room.nights}N &bull; ${sanitizeInput(room.serviceType)} &nbsp; <span style="color:#555;font-size:11px;">Avg Per Paying Pax: PKR ${fmt(perPersonCost)}</span></span>
     <b style="color:#0b76d1;white-space:nowrap;">PKR ${fmt(totalHotel)}</b>
   </div>
 `;
