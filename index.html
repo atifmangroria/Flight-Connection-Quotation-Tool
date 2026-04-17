@@ -2586,8 +2586,7 @@ function addRoomTypeToHotel(hotelIndex, city) {
   if (!container) return;
   
   const roomTypeOptions = ['Single', 'Double', 'Triple', 'Quad', 'Family'];
-  const serviceOptions = ['Room Only', 'With Breakfast', 'Half Board', 'Full Board'];
-  const currencyOptions = ['USD', 'EUR', 'GBP', 'PKR', 'SAR'];
+  const serviceOptions = ['Without Breakfast', 'With Breakfast'];
   
   const roomDiv = document.createElement('div');
   roomDiv.className = 'section-entry';
@@ -2595,7 +2594,7 @@ function addRoomTypeToHotel(hotelIndex, city) {
   
   roomDiv.innerHTML = `
     <h4>Room Type Entry ${roomIdx}
-      <button type="button" onclick="removeRoomType('${city}', ${hotelIndex}, ${roomIdx})" class="remove-btn">❌ Remove</button>
+      <button type="button" onclick="removeRoomType(${hotelIndex}, ${roomIdx}, '${city}')" class="remove-btn">❌ Remove</button>
     </h4>
     <div class="grid">
       <div>
@@ -2603,10 +2602,6 @@ function addRoomTypeToHotel(hotelIndex, city) {
         <select id="rType_${city}_${hotelIndex}_${roomIdx}">
           ${roomTypeOptions.map(rt => `<option>${rt}</option>`).join('')}
         </select>
-      </div>
-      <div>
-        <label>Room Name (Optional)</label>
-        <input id="rName_${city}_${hotelIndex}_${roomIdx}" type="text" placeholder="e.g. Deluxe Suite">
       </div>
       <div>
         <label>Rooms count</label>
@@ -2619,29 +2614,12 @@ function addRoomTypeToHotel(hotelIndex, city) {
         </select>
       </div>
       <div>
-        <label>Cost per night</label>
+        <label>Cost per night (SAR)</label>
         <input id="rCost_${city}_${hotelIndex}_${roomIdx}" type="number" min="0" value="0">
       </div>
       <div>
-        <label>Hotel Currency</label>
-        <select id="rCurrency_${city}_${hotelIndex}_${roomIdx}">
-          ${currencyOptions.map(cu => `<option value="${cu}">${cu}</option>`).join('')}
-        </select>
-      </div>
-      <div>
-        <label>Service per night</label>
-        <input id="rService_${city}_${hotelIndex}_${roomIdx}" type="number" min="0" value="0">
-      </div>
-    </div>
-  `;
-  
-  container.appendChild(roomDiv);
-  
-  // Add event listeners for validation
-  const roomTypeSelect = roomDiv.querySelector(`#rType_${city}_${hotelIndex}_${roomIdx}`);
-  const roomCountInput = roomDiv.querySelector(`#rCount_${city}_${hotelIndex}_${roomIdx}`);
-  
-  if (roomTypeSelect) roomTypeSelect.addEventListener('change', () => validateHotelCapacity(hotelIndex, city));
+        <label>Service per night (SAR)</label>
+        <input id="rSvcypeSelect.addEventListener('change', () => validateHotelCapacity(hotelIndex, city));
   if (roomCountInput) roomCountInput.addEventListener('input', () => validateHotelCapacity(hotelIndex, city));
   
   // Store entry info
@@ -2650,7 +2628,7 @@ function addRoomTypeToHotel(hotelIndex, city) {
   validateHotelCapacity(hotelIndex, city);
 }
 
-function removeRoomType(city, hotelIndex, roomIdx) {
+function removeRoomType(hotelIndex, roomIdx, city) {
   const roomDiv = document.getElementById(`roomTypeEntry_${city}_${hotelIndex}_${roomIdx}`);
   if (roomDiv) roomDiv.remove();
   
@@ -2661,7 +2639,7 @@ function removeRoomType(city, hotelIndex, roomIdx) {
   
   validateHotelCapacity(hotelIndex, city);
 }
-
+hotelIndex, roomIdx, city
 // ===== STAGE 2: CAPACITY VALIDATION =====
 function validateHotelCapacity(hotelIndex, city) {
   const clientData = getClientData();
