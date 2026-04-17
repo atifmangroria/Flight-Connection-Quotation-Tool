@@ -5621,10 +5621,19 @@ const hotelGroupsList = getHotelGroups();
 if (hotelGroupsList.length > 0) {
   const breakfastSet = new Set();
   hotelGroupsList.forEach(hotel => {
-    hotel.roomTypes.forEach(room => {
-      if ((room.rooms || 0) > 0) {
-        inclusionsList.push(`${hotel.nights} nights, ${room.rooms} ${room.roomType} ${(room.serviceType || 'Room Only').toLowerCase()} Accommodation in ${sanitizeInput(hotel.name)}, ${sanitizeInput(hotel.city)}`);
-        if ((room.serviceType || '').includes('Breakfast')) {
+    // Combine all room types for this hotel into one line
+    if (hotel.roomTypes && hotel.roomTypes.length > 0) {
+      const validRooms = hotel.roomTypes.filter(room => (room.rooms || 0) > 0);
+      if (validRooms.length > 0) {
+        const roomDetails = validRooms.map(room => 
+          `${room.rooms} ${room.roomType} with ${(room.serviceType || 'Room Only').toLowerCase()}`
+        ).join(' & ');
+        
+        inclusionsList.push(`${hotel.nights} nights, ${roomDetails} Accommodation in ${sanitizeInput(hotel.name)}, ${sanitizeInput(hotel.city)}`);
+        
+        // Add breakfast if applicable (once per hotel)
+        const hasBreakfast = validRooms.some(room => (room.serviceType || '').includes('Breakfast'));
+        if (hasBreakfast) {
           const key = `Breakfast in ${sanitizeInput(hotel.name)}`;
           if (!breakfastSet.has(key)) {
             inclusionsList.push(key);
@@ -5632,7 +5641,7 @@ if (hotelGroupsList.length > 0) {
           }
         }
       }
-    });
+    }
   });
 }
 
