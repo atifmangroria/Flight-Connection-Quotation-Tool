@@ -4109,10 +4109,16 @@ async function performCalculation() {
           city: room.city
         });
 
-        // Output row for each room type
+        // Output row for each room type - show breakdown by Adult/Child
         let desc = `${room.name} (${room.city})<br>Check-in: ${formatDateToDMY(room.checkIn)}, Check-out: ${formatDateToDMY(room.checkOut)}<br>${room.nights} nights, ${room.roomType} × ${room.rooms} rooms<br>Service: ${room.serviceType}<br>Rate: ${room.currency} ${fmt(room.costNight)}/night`;
-        let perPersonText = `${room.roomType}: PKR ${fmt(perPerson)} x ${totalRoomPax}`;
-        addDetailedRow(`Hotel ${room.idx}`, room.name, desc, room.currency, totalCost, totalSvc, perPersonText, false);
+        
+        // Build per person text showing breakdown by pax type for this room type
+        let perPersonTextRoom = '';
+        if (room.capacity >= 1) {
+          perPersonTextRoom += `${room.roomType} (${room.rooms} room${room.rooms > 1 ? 's' : ''}): PKR ${fmt(perPerson)} x ${totalRoomPax}`;
+        }
+        
+        addDetailedRow(`Hotel ${room.idx}`, room.name, desc, room.currency, totalCost, totalSvc, perPersonTextRoom, false);
         hotelBreakdownText.push(`${room.roomType} (${room.count} room${room.count > 1 ? 's' : ''}): PKR ${fmt(perPerson)} x ${totalRoomPax}`);
       }
     });
@@ -4136,7 +4142,22 @@ async function performCalculation() {
       return sum;
     }, 0);
     const avgPerPerson = hotelTotalPax > 0 ? totalHotelPKR / hotelTotalPax : 0;
-    let perPersonText = `Avg: PKR ${fmt(avgPerPerson)} x ${hotelTotalPax}`;
+    
+    // Calculate hotel cost per paying pax type
+    const hotelPayingPaxCount = numAdult + numChildBed;
+    const hotelCostPerPerson = hotelPayingPaxCount > 0 ? avgPerPerson : 0;
+    
+    // Build per-person text showing breakdown by pax type
+    let perPersonText = '';
+    if (numAdult > 0) perPersonText += `Adult x${numAdult}: PKR ${fmt(hotelCostPerPerson)}`;
+    if (numChildBed > 0) {
+      if (perPersonText) perPersonText += ', ';
+      perPersonText += `Child (bed) x${numChildBed}: PKR ${fmt(hotelCostPerPerson)}`;
+    }
+    if (numChildNoBed > 0) {
+      if (perPersonText) perPersonText += ', ';
+      perPersonText += `Child (no bed) x${numChildNoBed}: PKR 0`;
+    }
     
     // Group rooms by hotel and show one row per hotel
     const hotelGroups = {};
