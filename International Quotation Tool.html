@@ -4106,21 +4106,56 @@ async function performCalculation() {
           perPerson,
           totalRoomPax,
           name: room.name,
-          city: room.city
+          city: room.city,
+          idx: room.idx,
+          checkIn: room.checkIn,
+          checkOut: room.checkOut,
+          serviceType: room.serviceType,
+          costNight: room.costNight,
+          svcNight: room.svcNight,
+          currency: room.currency,
+          nights: room.nights
         });
-
-        // Output row for each room type - show breakdown by Adult/Child
-        let desc = `${room.name} (${room.city})<br>Check-in: ${formatDateToDMY(room.checkIn)}, Check-out: ${formatDateToDMY(room.checkOut)}<br>${room.nights} nights, ${room.roomType} × ${room.rooms} rooms<br>Service: ${room.serviceType}<br>Rate: ${room.currency} ${fmt(room.costNight)}/night`;
-        
-        // Build per person text showing breakdown by pax type for this room type
-        let perPersonTextRoom = '';
-        if (room.capacity >= 1) {
-          perPersonTextRoom += `${room.roomType} (${room.rooms} room${room.rooms > 1 ? 's' : ''}): PKR ${fmt(perPerson)} x ${totalRoomPax}`;
-        }
-        
-        addDetailedRow(`Hotel ${room.idx}`, room.name, desc, room.currency, totalCost, totalSvc, perPersonTextRoom, false);
-        hotelBreakdownText.push(`${room.roomType} (${room.count} room${room.count > 1 ? 's' : ''}): PKR ${fmt(perPerson)} x ${totalRoomPax}`);
       }
+    });
+    
+    // Group hotel room breakdown by hotel and show one row per hotel
+    const hotelGroupActual = {};
+    hotelRoomBreakdown.forEach((rb) => {
+      if (!hotelGroupActual[rb.idx]) {
+        hotelGroupActual[rb.idx] = {
+          name: rb.name,
+          city: rb.city,
+          currency: rb.currency,
+          rooms: [],
+          totalCost: 0,
+          totalSvc: 0,
+          checkIn: rb.checkIn,
+          checkOut: rb.checkOut,
+          serviceType: rb.serviceType,
+          nights: rb.nights
+        };
+      }
+      hotelGroupActual[rb.idx].rooms.push(rb);
+      hotelGroupActual[rb.idx].totalCost += rb.count * rb.costNight * rb.nights;
+      hotelGroupActual[rb.idx].totalSvc += rb.count * rb.svcNight * rb.nights;
+    });
+    
+    // Add one row per hotel with all room types combined for actual mode
+    Object.values(hotelGroupActual).forEach((hotel) => {
+      const nights = hotel.nights;
+      let roomDetails = hotel.rooms.map(r => 
+        `${r.count} ${r.roomType} with ${r.serviceType}`
+      ).join(' & ');
+      
+      let desc = `${nights} nights, ${roomDetails} Accommodation in ${hotel.name}, ${hotel.city}`;
+      
+      // Build per person text showing breakdown by room type
+      let perPersonTextHotel = hotel.rooms.map(rb => 
+        `${rb.roomType} (${rb.count} room${rb.count > 1 ? 's' : ''}): PKR ${fmt(rb.perPerson)} x ${rb.totalRoomPax}`
+      ).join(', ');
+      
+      addDetailedRow(`Hotel`, hotel.name, desc, hotel.currency, hotel.totalCost, hotel.totalSvc, perPersonTextHotel, false);
     });
   } else {
     // Average mode: sum all hotel costs and divide by total paying pax
