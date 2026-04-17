@@ -4137,14 +4137,32 @@ async function performCalculation() {
     }, 0);
     const avgPerPerson = hotelTotalPax > 0 ? totalHotelPKR / hotelTotalPax : 0;
     let perPersonText = `Avg: PKR ${fmt(avgPerPerson)} x ${hotelTotalPax}`;
-    // Show detailed info for each room type, but with average per-person cost
+    
+    // Group rooms by hotel and show one row per hotel
+    const hotelGroups = {};
     hotelRooms.forEach((room) => {
       if (room.rooms > 0 && room.nights > 0 && room.costNight > 0) {
-        let desc = `${room.name} (${room.city}) | ${room.nights} nights, ${room.roomType} × ${room.rooms} rooms | Rate: ${room.currency} ${fmt(room.costNight)}/night`;
-        const totalCost = room.costNight * room.nights * room.rooms;
-        const totalSvc = room.svcNight * room.nights * room.rooms;
-        addDetailedRow(`Hotel ${room.idx}`, room.name, desc, room.currency, totalCost, totalSvc, perPersonText, false);
+        if (!hotelGroups[room.idx]) {
+          hotelGroups[room.idx] = {
+            name: room.name,
+            city: room.city,
+            currency: room.currency,
+            rooms: [],
+            totalCost: 0,
+            totalSvc: 0
+          };
+        }
+        hotelGroups[room.idx].rooms.push(room);
+        hotelGroups[room.idx].totalCost += room.costNight * room.nights * room.rooms;
+        hotelGroups[room.idx].totalSvc += room.svcNight * room.nights * room.rooms;
       }
+    });
+    
+    // Add one row per hotel with all room types combined
+    Object.values(hotelGroups).forEach((hotel) => {
+      let roomDetails = hotel.rooms.map(r => `${r.roomType} × ${r.rooms} rooms`).join(' + ');
+      let desc = `${hotel.name} (${hotel.city}) | ${roomDetails}`;
+      addDetailedRow(`Hotel`, hotel.name, desc, hotel.currency, hotel.totalCost, hotel.totalSvc, perPersonText, false);
     });
   }
 
