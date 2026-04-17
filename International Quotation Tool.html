@@ -4160,8 +4160,12 @@ async function performCalculation() {
     
     // Add one row per hotel with all room types combined
     Object.values(hotelGroups).forEach((hotel) => {
-      let roomDetails = hotel.rooms.map(r => `${r.roomType} × ${r.rooms} rooms`).join(' + ');
-      let desc = `${hotel.name} (${hotel.city}) | ${roomDetails}`;
+      // Build full description with details for all room types in this hotel
+      let roomDetails = hotel.rooms.map(r => 
+        `${r.roomType} × ${r.rooms} rooms - ${r.nights} nights - Rate: ${r.currency} ${fmt(r.costNight)}/night`
+      ).join('<br>');
+      
+      let desc = `${hotel.name} (${hotel.city})<br>Check-in: ${formatDateToDMY(hotel.rooms[0].checkIn)}, Check-out: ${formatDateToDMY(hotel.rooms[0].checkOut)}<br>${roomDetails}<br>Service: ${hotel.rooms[0].serviceType}`;
       addDetailedRow(`Hotel`, hotel.name, desc, hotel.currency, hotel.totalCost, hotel.totalSvc, perPersonText, false);
     });
   }
