@@ -4308,9 +4308,31 @@ async function performCalculation() {
 
   let packagePricingText = [];
   if (hotelPriceMode === 'actual' && hotelRoomBreakdown.length > 0) {
-    // In actual mode, use the full per-person costs from calculatePerPersonCosts (includes all services)
-    // This ensures flights, transfers, tours, visa, and agent service are included
-    if (numAdult > 0) packagePricingText.push(`Adult x${numAdult}: PKR ${fmt(perAdult)}`);
+    // In actual mode, break down by room type with complete pricing (flights + hotel per room type + transfers + tours + visa + agent service)
+    // Calculate non-hotel services cost per paying pax
+    const totalHotelCostPKR_calc = hotelRooms.reduce((sum, room) => {
+      if (room.rooms > 0 && room.nights > 0 && room.costNight > 0) {
+        return sum + convertToPKR((room.costNight + room.svcNight) * room.nights * room.rooms, room.currency);
+      }
+      return sum;
+    }, 0);
+    const hotelPayingPaxCount = numAdult + numChildBed;
+    const nonHotelServicesCostPerPax = hotelPayingPaxCount > 0 ? (perAdult - (totalHotelCostPKR_calc / hotelPayingPaxCount)) : 0;
+    
+    // Group hotel breakdown by room type with complete pricing
+    const roomTypeMap_summary = {};
+    hotelRoomBreakdown.forEach(rb => {
+      if (!roomTypeMap_summary[rb.roomType]) {
+        roomTypeMap_summary[rb.roomType] = { totalPax: 0, label: rb.roomType, hotelPerPerson: rb.perPerson };
+      }
+      roomTypeMap_summary[rb.roomType].totalPax += rb.totalRoomPax;
+    });
+    
+    Object.values(roomTypeMap_summary).forEach(rt => {
+      const totalCostPerPerson = rt.hotelPerPerson + nonHotelServicesCostPerPax;
+      packagePricingText.push(`Adult x${rt.totalPax} (${rt.label} Sharing): PKR ${fmt(totalCostPerPerson)}`);
+    });
+    
     if (numChildBed > 0) packagePricingText.push(`Child (bed) x${numChildBed}: PKR ${fmt(perChildBed)}`);
     if (numChildNoBed > 0) packagePricingText.push(`Child (no bed) x${numChildNoBed}: PKR ${fmt(perChildNoBed)}`);
     if (numInfant > 0) packagePricingText.push(`Infant x${numInfant}: PKR ${fmt(perInfant)}`);
@@ -5089,19 +5111,32 @@ async function printQuotation() {
   const totalPackageAmount = finalTotalSellPKR > 0 ? finalTotalSellPKR : computedPackageAmount;
 
   // Per-room-type per-adult pricing for Package Price section
-  // Use the full per-person costs that include all services (flights, hotels, transfers, tours, visa, etc.)
+  // Show breakdown by room type with complete pricing (flights + hotel per room type + transfers + tours + visa + agent service)
   const validHotelEntries_q = hotelEntries.filter(r => r.rooms > 0 && r.nights > 0);
   let perAdultLines_q;
   if (hotelPriceMode === 'actual' && validHotelEntries_q.length > 0) {
-    // In actual mode, show the room types but use the full per-adult cost that includes all services
+    // Calculate non-hotel services cost per paying pax
+    const totalHotelCostPKR = validHotelEntries_q.reduce((sum, r) => {
+      return sum + convertToPKR((r.costNight + r.svcNight) * r.nights * r.rooms, r.currency);
+    }, 0);
+    const hotelPayingPaxCount = numAdult + numChildBed;
+    const nonHotelServicesCostPerPax = hotelPayingPaxCount > 0 ? (perAdultCost - (totalHotelCostPKR / hotelPayingPaxCount)) : 0;
+    
+    // Group by room type with complete pricing breakdown
     const roomTypeMap = {};
     validHotelEntries_q.forEach(r => {
       const key = r.roomType;
-      if (!roomTypeMap[key]) roomTypeMap[key] = { totalPax: 0, label: key };
+      if (!roomTypeMap[key]) {
+        roomTypeMap[key] = { totalPax: 0, hotelCostTotal: 0, label: key };
+      }
       roomTypeMap[key].totalPax += (r.rooms * (r.capacity || 1));
+      roomTypeMap[key].hotelCostTotal += convertToPKR((r.costNight + r.svcNight) * r.nights * r.rooms, r.currency);
     });
+    
     perAdultLines_q = Object.values(roomTypeMap).map(rt => {
-      return `<li>Per Adult (${sanitizeInput(rt.label)} Sharing): <strong>PKR ${fmt(perAdultCost)}</strong></li>`;
+      const hotelCostPerPerson = rt.totalPax > 0 ? rt.hotelCostTotal / rt.totalPax : 0;
+      const totalCostPerPerson = hotelCostPerPerson + nonHotelServicesCostPerPax;
+      return `<li>Adult x${rt.totalPax} (${sanitizeInput(rt.label)} Sharing): <strong>PKR ${fmt(totalCostPerPerson)}</strong></li>`;
     });
   } else {
     perAdultLines_q = [`<li>Per Adult: <strong>PKR ${fmt(perAdultCost)}</strong></li>`];
