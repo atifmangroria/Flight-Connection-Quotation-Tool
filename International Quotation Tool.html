@@ -4181,12 +4181,14 @@ async function performCalculation() {
     
     // Add one row per hotel with all room types combined
     Object.values(hotelGroups).forEach((hotel) => {
-      // Build full description with details for all room types in this hotel
+      // Build description with all room types on single line with & separator
+      const nights = hotel.rooms[0].nights;
+      const serviceType = hotel.rooms[0].serviceType;
       let roomDetails = hotel.rooms.map(r => 
-        `${r.roomType} × ${r.rooms} rooms - ${r.nights} nights - Rate: ${r.currency} ${fmt(r.costNight)}/night`
-      ).join('<br>');
+        `${r.rooms} ${r.roomType} with ${r.serviceType}`
+      ).join(' & ');
       
-      let desc = `${hotel.name} (${hotel.city})<br>Check-in: ${formatDateToDMY(hotel.rooms[0].checkIn)}, Check-out: ${formatDateToDMY(hotel.rooms[0].checkOut)}<br>${roomDetails}<br>Service: ${hotel.rooms[0].serviceType}`;
+      let desc = `${nights} nights, ${roomDetails} Accommodation in ${hotel.name}, ${hotel.city}`;
       addDetailedRow(`Hotel`, hotel.name, desc, hotel.currency, hotel.totalCost, hotel.totalSvc, perPersonText, false);
     });
   }
