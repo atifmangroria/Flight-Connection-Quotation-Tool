@@ -2435,7 +2435,7 @@ async function createHotelSection(index){
   const minDate = formatDate(clientData.dateFromObj);
   const maxDate = formatDate(clientData.dateToObj);
 
-  hotelDiv.innerHTML = `
+  const html = `
     <h4>
       Hotel ${index}
       <button type="button" onclick="removeHotel(${index})" class="remove-btn">❌ Remove</button>
@@ -2462,6 +2462,7 @@ async function createHotelSection(index){
     <div id="capDisplay_${index}" style="margin-top: 10px; padding: 10px; background: #f0f0f0; border-radius: 4px;"></div>
     <div id="roomTypeContainer_${index}" style="margin-top: 15px;"></div>
   `;
+  hotelDiv.innerHTML = html;
   container.appendChild(hotelDiv);
   hotels.push(index);
 
