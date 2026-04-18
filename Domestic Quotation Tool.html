@@ -1235,6 +1235,20 @@ document.addEventListener('DOMContentLoaded', function() {
     return `${day}/${month}/${year}`;
   }
 
+  // Format date for input fields (YYYY-MM-DD)
+  function formatDate(d){
+    if(!isValidDate(d)) return "";
+    const yyyy = d.getFullYear();
+    let mm = d.getMonth()+1; if(mm<10) mm="0"+mm;
+    let dd = d.getDate(); if(dd<10) dd="0"+dd;
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  // Validate date object
+  function isValidDate(d){
+    return d instanceof Date && !isNaN(d.getTime());
+  }
+
   // Sanitize input to prevent XSS
   function sanitizeInput(input) {
     const div = document.createElement('div');
@@ -2076,20 +2090,6 @@ const roomConfig = {
   "Family": { adults: 2, childNoBed: 2 }
 };
 
-// Validate date object
-function isValidDate(d){
-  return d instanceof Date && !isNaN(d.getTime());
-}
-
-// Format date for input fields
-function formatDate(d){
-  if(!isValidDate(d)) return "";
-  const yyyy = d.getFullYear();
-  let mm = d.getMonth()+1; if(mm<10) mm="0"+mm;
-  let dd = d.getDate(); if(dd<10) dd="0"+dd;
-  return `${yyyy}-${mm}-${dd}`;
-}
-
 // Check if hotel dates overlap with existing hotels
 function checkHotelDateOverlap(checkIn, checkOut, excludeIndex = null) {
   const newCheckIn = new Date(checkIn);
@@ -2601,10 +2601,6 @@ let nextTransferNumber = 0;
 let transfers = [];
 
 // Helper: check valid date
-function isValidDate(d){
-  return d instanceof Date && !isNaN(d.getTime());
-}
-
 // Helper: get saved Client data (dates & pax)
 // Pax total (excluding infants)
 function getTotalPax() {
