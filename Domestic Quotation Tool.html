@@ -1715,7 +1715,7 @@ document.addEventListener('DOMContentLoaded', function() {
         tourDestination: sanitizeInput(tourDestination.value.trim()),
       };
 
-      saveToLocalStorage("savedClientData_international", clientData);
+      saveToLocalStorage("savedClientData_domestic", clientData);
       showNotification("Client & Pax data saved successfully!", 'success');
       isClientDataSaved = true;
 
@@ -2063,7 +2063,7 @@ const roomConfig = {
 
 // Get Client & Pax data
 function getClientData() {
-  const data = JSON.parse(localStorage.getItem("savedClientData_international")) || {};
+  const data = JSON.parse(localStorage.getItem("savedClientData_domestic")) || {};
   data.adults = parseInt(data.adults) || 0;
   data.childBed = parseInt(data.childBed) || 0;
   data.childNoBed = parseInt(data.childNoBed) || 0;
@@ -2606,15 +2606,6 @@ function isValidDate(d){
 }
 
 // Helper: get saved Client data (dates & pax)
-function getClientData() {
-  const saved = localStorage.getItem("savedClientData_international");
-  if(!saved) return null;
-  const data = JSON.parse(saved);
-  data.dateFromObj = new Date(data.dateFrom);
-  data.dateToObj = new Date(data.dateTo);
-  return data;
-}
-
 // Pax total (excluding infants)
 function getTotalPax() {
   const adults = parseInt(document.getElementById("numAdult")?.value || 0);
@@ -4949,9 +4940,7 @@ async function printQuotation() {
   }
 }
   
-  const clientData = JSON.parse(localStorage.getItem("savedClientData_international")) || {};
-  const agentData = getCurrentAgent();
-  
+  const clientData = JSON.parse(localStorage.getItem("savedClientData_domestic")) || {};
   if (!currentQuotationId) {
     currentQuotationId = 'DOM-' + Date.now().toString().slice(-6);
   }
@@ -5745,7 +5734,7 @@ btnExportExcel.addEventListener('click', () => {
     XLSX.utils.book_append_sheet(wb, ws, "Package Calculation");
     
     // Get client data
-    const clientData = JSON.parse(localStorage.getItem("savedClientData_international")) || {};
+    const clientData = JSON.parse(localStorage.getItem("savedClientData_domestic")) || {};
     
     // Create a client info worksheet
     const clientDataArray = [
@@ -6090,7 +6079,7 @@ function saveQuotation() {
     });
     
     // Get client data from localStorage
-    const savedClientData = JSON.parse(localStorage.getItem('savedClientData_international')) || {};
+    const savedClientData = JSON.parse(localStorage.getItem('savedClientData_domestic')) || {};
     
     // Calculate total amounts
     let totalCostPKR = 0;
@@ -6282,7 +6271,7 @@ function loadQuotation(quotationId) {
     // Load client data
     if (quotation.clientData) {
       // Save client data to localStorage
-      localStorage.setItem("savedClientData_international", JSON.stringify(quotation.clientData));
+      localStorage.setItem("savedClientData_domestic", JSON.stringify(quotation.clientData));
       
       // Populate client form fields
       if (document.getElementById("clientName")) document.getElementById("clientName").value = quotation.clientData.name || "";
