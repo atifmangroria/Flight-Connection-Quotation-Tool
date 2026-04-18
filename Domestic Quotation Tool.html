@@ -2425,12 +2425,15 @@ async function createHotelSection(index){
   }
 
   const container = document.getElementById("hotelContainer");
-  const roomOptions = Object.keys(roomConfig).map(rt=>`<option>${rt}</option>`).join("");
+  const roomOptions = Object.keys(roomConfig).map(rt => `<option>${rt}</option>`).join("");
 
   const hotelDiv = document.createElement("div");
   hotelDiv.className = "section";
   hotelDiv.id = "hotelBlock_" + index;
   hotelDiv.style.marginTop = "10px";
+
+  const minDate = formatDate(clientData.dateFromObj);
+  const maxDate = formatDate(clientData.dateToObj);
 
   hotelDiv.innerHTML = `
     <h4>
@@ -2442,14 +2445,10 @@ async function createHotelSection(index){
       <div><label>Hotel Name</label><input id="hotelName_${index}" type="text"></div>
       <div><label>City</label><input id="hotelCity_${index}" type="text"></div>
       <div><label>Check-in</label>
-        <input id="hotelCheckIn_${index}" type="date"
-               min="${formatDate(clientData.dateFromObj)}"
-               max="${formatDate(clientData.dateToObj)}">
+        <input id="hotelCheckIn_${index}" type="date" min="${minDate}" max="${maxDate}">
       </div>
       <div><label>Check-out</label>
-        <input id="hotelCheckOut_${index}" type="date"
-               min="${formatDate(clientData.dateFromObj)}"
-               max="${formatDate(clientData.dateToObj)}">
+        <input id="hotelCheckOut_${index}" type="date" min="${minDate}" max="${maxDate}">
       </div>
       <div><label>Total Nights</label><input id="hotelNights_${index}" type="number" value="0" min="0" readonly></div>
       <div><label>Room Type</label><select id="hotelRoomType_${index}">${roomOptions}</select></div>
@@ -2487,7 +2486,7 @@ async function createHotelSection(index){
   }
 
   // Add date validation
-  chkIn.addEventListener("change", () => {
+  chkIn.addEventListener("change", function() {
     // Check if date is within travel dates
     if (chkIn.value < clientData.dateFrom || chkIn.value > clientData.dateTo) {
       chkIn.classList.add("input-error");
@@ -2509,7 +2508,7 @@ async function createHotelSection(index){
     updateNights();
   });
 
-  chkOut.addEventListener("change", () => {
+  chkOut.addEventListener("change", function() {
     // Check if date is within travel dates
     if (chkOut.value < clientData.dateFrom || chkOut.value > clientData.dateTo) {
       chkOut.classList.add("input-error");
@@ -2558,7 +2557,7 @@ function updateHotelDates() {
   });
 }
 
-document.getElementById("btnAddHotel").addEventListener("click", async ()=>{
+document.getElementById("btnAddHotel").addEventListener("click", async function(){
     if(!isClientDataSaved) {
       await showAlert("Please save the Client & Pax data before adding hotels.");
       return;
