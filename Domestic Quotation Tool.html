@@ -1806,6 +1806,21 @@ document.addEventListener('DOMContentLoaded', function() {
       lastSavedDates = newDates;
     }
   }
+
+  // Get Client & Pax data
+  function getClientData() {
+    const data = JSON.parse(localStorage.getItem("savedClientData_domestic")) || {};
+    data.adults = parseInt(data.adults) || 0;
+    data.childBed = parseInt(data.childBed) || 0;
+    data.childNoBed = parseInt(data.childNoBed) || 0;
+    data.infants = parseInt(data.infants) || 0;
+    data.totalPax = data.adults + data.childBed;
+    data.totalChildNoBed = data.childNoBed;
+    // parse dates safely
+    data.dateFromObj = data.dateFrom && data.dateFrom.trim() !== "" ? new Date(data.dateFrom) : null;
+    data.dateToObj = data.dateTo && data.dateTo.trim() !== "" ? new Date(data.dateTo) : null;
+    return data;
+  }
 </script>
 
 <!-- FLIGHT -->
@@ -2060,21 +2075,6 @@ const roomConfig = {
   "Quad": { adults: 4, childNoBed: 1 },
   "Family": { adults: 2, childNoBed: 2 }
 };
-
-// Get Client & Pax data
-function getClientData() {
-  const data = JSON.parse(localStorage.getItem("savedClientData_domestic")) || {};
-  data.adults = parseInt(data.adults) || 0;
-  data.childBed = parseInt(data.childBed) || 0;
-  data.childNoBed = parseInt(data.childNoBed) || 0;
-  data.infants = parseInt(data.infants) || 0;
-  data.totalPax = data.adults + data.childBed;
-  data.totalChildNoBed = data.childNoBed;
-  // parse dates safely
-  data.dateFromObj = data.dateFrom && data.dateFrom.trim() !== "" ? new Date(data.dateFrom) : null;
-  data.dateToObj = data.dateTo && data.dateTo.trim() !== "" ? new Date(data.dateTo) : null;
-  return data;
-}
 
 // Validate date object
 function isValidDate(d){
