@@ -4283,8 +4283,7 @@ async function performCalculation() {
 
     const nonHotelCostAdult = perAdult - avgHotelCostPerPerson;
     const nonHotelCostChildBed = perChildBed - avgHotelCostPerPerson;
-    const adultHotelTotals = Array.from({ length: numAdult }, () => 0);
-    const childHotelTotals = Array.from({ length: numChildBed }, () => 0);
+    const actualPricingAllocations = [];
 
     const groupedByHotel = {};
     hotelRoomBreakdown.forEach((rb) => {
@@ -4293,47 +4292,54 @@ async function performCalculation() {
     });
 
     Object.values(groupedByHotel).forEach((roomsForHotel) => {
-      let adultPtr = 0;
-      let childPtr = 0;
+      let remainingAdults = numAdult;
+      let remainingChildBeds = numChildBed;
       const sortedRooms = [...roomsForHotel].sort((a, b) => a.totalRoomPax - b.totalRoomPax);
 
       sortedRooms.forEach((rb) => {
-        const availablePax = Math.max((numAdult - adultPtr) + (numChildBed - childPtr), 0);
+        const availablePax = Math.max(remainingAdults + remainingChildBeds, 0);
         const occupiedPax = Math.min(rb.totalRoomPax, availablePax);
         if (occupiedPax <= 0) return;
 
         const actualHotelPerPerson = rb.totalRoomCostPKR / occupiedPax;
-        const adultsInRoom = Math.min(numAdult - adultPtr, occupiedPax);
-        const childrenInRoom = Math.min(numChildBed - childPtr, Math.max(occupiedPax - adultsInRoom, 0));
+        const adultsInRoom = Math.min(remainingAdults, occupiedPax);
+        const childrenInRoom = Math.min(remainingChildBeds, Math.max(occupiedPax - adultsInRoom, 0));
+        const sharingLabel = `${rb.roomType} Sharing`;
 
-        for (let i = 0; i < adultsInRoom; i++) {
-          adultHotelTotals[adultPtr + i] += actualHotelPerPerson;
+        if (adultsInRoom > 0) {
+          actualPricingAllocations.push({
+            paxType: 'Adult',
+            count: adultsInRoom,
+            label: sharingLabel,
+            price: actualHotelPerPerson + nonHotelCostAdult
+          });
         }
-        for (let i = 0; i < childrenInRoom; i++) {
-          childHotelTotals[childPtr + i] += actualHotelPerPerson;
+        if (childrenInRoom > 0) {
+          actualPricingAllocations.push({
+            paxType: 'Child (bed)',
+            count: childrenInRoom,
+            label: sharingLabel,
+            price: actualHotelPerPerson + nonHotelCostChildBed
+          });
         }
 
-        adultPtr += adultsInRoom;
-        childPtr += childrenInRoom;
+        remainingAdults -= adultsInRoom;
+        remainingChildBeds -= childrenInRoom;
       });
     });
 
-    const groupedAdultTotals = adultHotelTotals.reduce((acc, value) => {
-      const key = Math.round(value);
-      acc[key] = (acc[key] || 0) + 1;
-      return acc;
-    }, {});
-    const groupedChildTotals = childHotelTotals.reduce((acc, value) => {
-      const key = Math.round(value);
-      acc[key] = (acc[key] || 0) + 1;
-      return acc;
-    }, {});
-
-    Object.entries(groupedAdultTotals).forEach(([hotelShare, count]) => {
-      packagePricingText.push(`Adult x${count}: PKR ${fmt(Number(hotelShare) + nonHotelCostAdult)}`);
+    const groupedAllocations = {};
+    actualPricingAllocations.forEach((item) => {
+      const roundedPrice = Math.round(item.price);
+      const key = `${item.paxType}|${item.label}|${roundedPrice}`;
+      if (!groupedAllocations[key]) {
+        groupedAllocations[key] = { ...item, count: 0, price: roundedPrice };
+      }
+      groupedAllocations[key].count += item.count;
     });
-    Object.entries(groupedChildTotals).forEach(([hotelShare, count]) => {
-      packagePricingText.push(`Child (bed) x${count}: PKR ${fmt(Number(hotelShare) + nonHotelCostChildBed)}`);
+
+    Object.values(groupedAllocations).forEach((item) => {
+      packagePricingText.push(`${item.paxType} x${item.count} (${item.label}): PKR ${fmt(item.price)}`);
     });
 
     if (numChildNoBed > 0) packagePricingText.push(`Child (no bed) x${numChildNoBed}: PKR ${fmt(perChildNoBed)}`);
