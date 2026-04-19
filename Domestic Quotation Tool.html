@@ -3876,6 +3876,9 @@ function performCalculation() {
       showNotification("⚠️ Please add Pax details before calculation!", "warning");
       return;
     }
+    if (hasHotels && !validateAllHotels(true)) {
+      return;
+    }
     if (!(hasFlights || hasHotels || hasTransfers || hasTours || hasExtras || visaCost > 0)) {
       showNotification("⚠️ Please add at least one service before calculating!", "warning");
       return;
@@ -4752,6 +4755,10 @@ function showQuotationModal() {
   const modalTitle = document.getElementById('quotationModalTitle');
   const modalContent = document.getElementById('quotationModalContent');
   const modalButtons = document.getElementById('quotationModalButtons');
+
+  if (document.querySelectorAll("[id^='hotelBlock_']").length > 0 && !validateAllHotels(true)) {
+    return;
+  }
 
 function getQuotationPreviewClone() {
   const modalContent = document.getElementById("quotationModalContent");
