@@ -2343,57 +2343,92 @@ function validateHotelCapacity(hotelIndex) {
 // ===== STAGE 3: HOTEL PRICING MODE DIALOG =====
 let hotelPricingMode = localStorage.getItem('hotelPricingMode') || 'average';
 
-function showHotelPricingModeDialog() {
+function getHotelGroups() {
+  const groups = {};
+  getDomesticHotelRoomEntries().forEach((room) => {
+    const key = String(room.idx);
+    if (!groups[key]) {
+      groups[key] = {
+        idx: room.idx,
+        name: room.name,
+        city: room.city,
+        checkIn: room.checkIn,
+        checkOut: room.checkOut,
+        nights: room.nights,
+        roomTypes: []
+      };
+    }
+    groups[key].roomTypes.push({
+      roomType: room.roomType,
+      roomName: room.roomName || '',
+      rooms: room.rooms,
+      serviceType: room.serviceType,
+      costNight: room.costNight,
+      svcNight: room.svcNight,
+      currency: room.currency,
+      capacity: room.capacity
+    });
+  });
+  return Object.values(groups);
+}
+
+function getHotelPriceMode() {
+  return hotelPricingMode === 'actual' ? 'actual' : 'average';
+}
+
+function updateHotelPriceModeVisibility() {
+  const section = document.getElementById('hotelPriceModeSection');
+  if (section) section.style.display = 'none';
+}
+
+function showHotelPriceModeDialog() {
   return new Promise((resolve) => {
-    const hasMultipleRoomTypes = checkHasMultipleRoomTypes();
-    
-    if (!hasMultipleRoomTypes) {
-      resolve(hotelPricingMode);
+    if (!hasMultipleRoomTypesInAnyHotel()) {
+      hotelPricingMode = 'average';
+      localStorage.setItem('hotelPricingMode', 'average');
+      resolve('average');
       return;
     }
-    
-    const dialogHTML = `
-      <div style="padding: 20px; text-align: center;">
+
+    const existing = document.getElementById('hotelPriceModePrompt');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'hotelPriceModePrompt';
+    overlay.className = 'modal-overlay visible no-print';
+    overlay.innerHTML = `
+      <div class="modal-content" style="max-width: 520px;">
         <h3>Hotel Pricing Mode</h3>
-        <p>You have multiple room types in your hotel. How would you like to display per-person pricing?</p>
-        <div style="margin: 20px 0;">
-          <button id="actualModeBtn" style="padding: 10px 20px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Per Room Type (Actual)</button>
-          <button id="averageModeBtn" style="padding: 10px 20px; margin: 5px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">≈ Average Per Person</button>
+        <p>You have multiple room types in this hotel. How would you like to show per-person pricing?</p>
+        <div class="modal-buttons">
+          <button type="button" id="actualModeBtn" class="blue-btn">Per Room Type (Actual)</button>
+          <button type="button" id="averageModeBtn" class="green-btn">Average Per Person</button>
         </div>
       </div>
     `;
-    
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = dialogHTML;
-    
-    document.getElementById('actualModeBtn').addEventListener('click', () => {
-      hotelPricingMode = 'actual';
-      localStorage.setItem('hotelPricingMode', 'actual');
-      tempDiv.remove();
-      resolve('actual');
-    });
-    
-    document.getElementById('averageModeBtn').addEventListener('click', () => {
-      hotelPricingMode = 'average';
-      localStorage.setItem('hotelPricingMode', 'average');
-      tempDiv.remove();
-      resolve('average');
-    });
-    
-    document.body.appendChild(tempDiv);
+    document.body.appendChild(overlay);
+
+    const closeWith = (mode) => {
+      hotelPricingMode = mode;
+      localStorage.setItem('hotelPricingMode', mode);
+      overlay.remove();
+      resolve(mode);
+    };
+
+    overlay.querySelector('#actualModeBtn')?.addEventListener('click', () => closeWith('actual'));
+    overlay.querySelector('#averageModeBtn')?.addEventListener('click', () => closeWith('average'));
   });
 }
 
+function showHotelPricingModeDialog() {
+  return showHotelPriceModeDialog();
+}
+
 function checkHasMultipleRoomTypes() {
-  let totalRoomTypes = 0;
-  
-  hotels.forEach(index => {
-    const key = getRoomTypeKey(index);
-    const count = (hotelRoomEntries[key] || []).length;
-    totalRoomTypes += count;
+  return getHotelGroups().some((hotel) => {
+    const types = hotel.roomTypes.filter((r) => (r.rooms || 0) > 0).map((r) => r.roomType);
+    return new Set(types).size > 1;
   });
-  
-  return totalRoomTypes > 1;
 }
 
 function hasMultipleRoomTypesInAnyHotel() {
@@ -3802,6 +3837,7 @@ function getDomesticHotelRoomEntries() {
     if (groupedRooms.length > 0) {
       groupedRooms.forEach(({ roomIdx }) => {
         const roomType = document.getElementById(`rType_${index}_${roomIdx}`)?.value || document.getElementById(`hotelRoomType_${index}`)?.value || "Not specified";
+        const roomName = document.getElementById(`rName_${index}_${roomIdx}`)?.value || document.getElementById(`hotelRoomName_${index}`)?.value || "";
         const rooms = parseFloat(document.getElementById(`rCount_${index}_${roomIdx}`)?.value || document.getElementById(`hotelRooms_${index}`)?.value || 0);
         const serviceType = document.getElementById(`rService_${index}_${roomIdx}`)?.value || document.getElementById(`hotelService_${index}`)?.value || "Room Only";
         const costNight = parseFloat(document.getElementById(`rCost_${index}_${roomIdx}`)?.value || document.getElementById(`hotelCostNight_${index}`)?.value || 0);
@@ -3810,13 +3846,14 @@ function getDomesticHotelRoomEntries() {
         const capacity = getRoomCapacityForCalculation(roomType);
 
         if (rooms > 0) {
-          entries.push({ idx: `H_${index}`, name, city, checkIn, checkOut, nights, roomType, rooms, serviceType, costNight, svcNight, currency, capacity });
+          entries.push({ idx: `H_${index}`, name, city, checkIn, checkOut, nights, roomType, roomName, rooms, serviceType, costNight, svcNight, currency, capacity });
         }
       });
       return;
     }
 
     const roomType = document.getElementById(`hotelRoomType_${index}`)?.value || "Not specified";
+    const roomName = document.getElementById(`hotelRoomName_${index}`)?.value || "";
     const rooms = parseFloat(document.getElementById(`hotelRooms_${index}`)?.value || 0);
     const serviceType = document.getElementById(`hotelService_${index}`)?.value || "Room Only";
     const costNight = parseFloat(document.getElementById(`hotelCostNight_${index}`)?.value || 0);
@@ -3824,7 +3861,7 @@ function getDomesticHotelRoomEntries() {
     const capacity = getRoomCapacityForCalculation(roomType);
 
     if (rooms > 0) {
-      entries.push({ idx: `H_${index}`, name, city, checkIn, checkOut, nights, roomType, rooms, serviceType, costNight, svcNight, currency: 'PKR', capacity });
+      entries.push({ idx: `H_${index}`, name, city, checkIn, checkOut, nights, roomType, roomName, rooms, serviceType, costNight, svcNight, currency: 'PKR', capacity });
     }
   });
 
@@ -3847,7 +3884,7 @@ function getHotelRoomEntriesBoth() {
 }
 
 // Replace the entire performCalculation function with this corrected version
-function performCalculation() {
+async function performCalculation() {
   // Check if the calculation was triggered by a button click
   const isButtonClick = document.activeElement === btnCalculate || document.activeElement === btnRecalculate;
 
@@ -3865,6 +3902,8 @@ function performCalculation() {
   const hasExtras = document.querySelectorAll("[id^='dfAddon_']").length > 0 ||
     document.querySelectorAll("[id^='mealAddon_']").length > 0 ||
     document.querySelectorAll("[id^='tourAddon_']").length > 0;
+
+  updateHotelPriceModeVisibility();
     
   // --- CORE VALIDATION LOGIC (Runs only on explicit button click) ---
   if (isButtonClick) {
@@ -3876,12 +3915,15 @@ function performCalculation() {
       showNotification("⚠️ Please add Pax details before calculation!", "warning");
       return;
     }
-    if (hasHotels && !validateAllHotels(true)) {
-      return;
-    }
     if (!(hasFlights || hasHotels || hasTransfers || hasTours || hasExtras || visaCost > 0)) {
       showNotification("⚠️ Please add at least one service before calculating!", "warning");
       return;
+    }
+    if (hasHotels && !validateAllHotels(true)) {
+      return;
+    }
+    if (hasHotels && hasMultipleRoomTypesInAnyHotel()) {
+      await showHotelPriceModeDialog();
     }
     
     showNotification("✅ All details verified. Generating quotation...", "success");
@@ -3978,89 +4020,99 @@ function performCalculation() {
     }
   });
 
-  // --- HOTELS (STAGES 4-12: Extended hotelRoomBreakdown with intelligent pax distribution) ---
+  // --- HOTELS ---
+  const hotelPriceMode = getHotelPriceMode();
   const hotelRooms = getHotelRoomEntriesBoth();
   const hotelRoomBreakdown = [];
-  
-  hotelRooms.forEach(room => {
-    const totalRoomPax = room.rooms * room.capacity;
-    const totalCost = room.costNight * room.nights * room.rooms;
-    const totalSvc = room.svcNight * room.nights * room.rooms;
-    
-    // Stage 12: Extended hotelRoomBreakdown with metadata
-    const perPerson = totalRoomPax > 0 ? convertToPKR(((room.costNight + room.svcNight) * room.nights) / room.capacity, room.currency) : 0;
-    hotelRoomBreakdown.push({
-      roomType: room.roomType,
-      count: room.rooms,
-      perPerson,
-      totalRoomPax,
-      name: room.name,
-      city: room.city,
-      idx: room.idx,
-      checkIn: room.checkIn,
-      checkOut: room.checkOut,
-      serviceType: room.serviceType,
-      costNight: room.costNight,
-      svcNight: room.svcNight,
-      currency: room.currency,
-      nights: room.nights
+
+  if (hotelPriceMode === 'actual') {
+    const hotelGroupActual = {};
+
+    hotelRooms.forEach((room) => {
+      if (room.rooms > 0 && room.nights > 0 && (room.costNight > 0 || room.svcNight > 0)) {
+        const totalRoomPax = room.rooms * room.capacity;
+        const perPerson = totalRoomPax > 0 ? convertToPKR(((room.costNight + room.svcNight) * room.nights) / room.capacity, room.currency) : 0;
+        hotelRoomBreakdown.push({
+          roomType: room.roomType,
+          count: room.rooms,
+          perPerson,
+          totalRoomPax,
+          name: room.name,
+          city: room.city,
+          idx: room.idx,
+          checkIn: room.checkIn,
+          checkOut: room.checkOut,
+          serviceType: room.serviceType,
+          costNight: room.costNight,
+          svcNight: room.svcNight,
+          currency: room.currency,
+          nights: room.nights,
+          label: room.roomName || room.roomType
+        });
+      }
     });
-  });
-  
-  // Stage 6: Create hotelGroupActual - group room types by hotel
-  const hotelGroupActual = {};
-  hotelRoomBreakdown.forEach((rb) => {
-    if (!hotelGroupActual[rb.idx]) {
-      hotelGroupActual[rb.idx] = {
-        name: rb.name,
-        city: rb.city,
-        currency: rb.currency,
-        rooms: [],
-        totalCost: 0,
-        totalSvc: 0,
-        checkIn: rb.checkIn,
-        checkOut: rb.checkOut,
-        serviceType: rb.serviceType,
-        nights: rb.nights
-      };
-    }
-    hotelGroupActual[rb.idx].rooms.push(rb);
-    hotelGroupActual[rb.idx].totalCost += rb.count * rb.costNight * rb.nights;
-    hotelGroupActual[rb.idx].totalSvc += rb.count * rb.svcNight * rb.nights;
-  });
-  
-  // Stage 7: Display single row per hotel with all room types combined
-  Object.values(hotelGroupActual).forEach((hotel) => {
-    const nights = hotel.nights;
-    // Stage 7: Single-line format with "&" separator
-    let roomDetails = hotel.rooms.map(r => 
-      `${r.count} ${r.roomType} with ${r.serviceType.toLowerCase()}`
-    ).join(' & ');
-    
-    let desc = `${nights} nights, ${roomDetails} Accommodation in ${hotel.name}, ${hotel.city}`;
-    
-    // Stage 9: Per-person text showing breakdown by room type
-    const payingPax = numAdult + numChildBed;
-    let perPersonTextHotel = '';
-    if (hotel.rooms.length > 1) {
-      // Multiple room types: show each room type's pricing
-      perPersonTextHotel = hotel.rooms.map(rb => 
-        `${rb.roomType} (${rb.count} room${rb.count > 1 ? 's' : ''}): PKR ${fmt(rb.perPerson)} x ${rb.totalRoomPax}`
-      ).join(', ');
-    } else if (payingPax > 0) {
-      // Single room type: show per-person breakdown by pax type
-      const perPersonCost = payingPax > 0 ? convertToPKR((hotel.totalCost + hotel.totalSvc) / payingPax, hotel.currency) : 0;
+
+    hotelRoomBreakdown.forEach((rb) => {
+      if (!hotelGroupActual[rb.idx]) {
+        hotelGroupActual[rb.idx] = {
+          name: rb.name,
+          city: rb.city,
+          currency: rb.currency,
+          rooms: [],
+          totalCost: 0,
+          totalSvc: 0,
+          checkIn: rb.checkIn,
+          checkOut: rb.checkOut,
+          nights: rb.nights
+        };
+      }
+      hotelGroupActual[rb.idx].rooms.push(rb);
+      hotelGroupActual[rb.idx].totalCost += rb.count * rb.costNight * rb.nights;
+      hotelGroupActual[rb.idx].totalSvc += rb.count * rb.svcNight * rb.nights;
+    });
+
+    Object.values(hotelGroupActual).forEach((hotel) => {
+      const roomDetails = hotel.rooms.map((r) => `${r.count} ${r.roomType} with ${r.serviceType}`).join(' & ');
+      const desc = `${hotel.nights} nights, ${roomDetails} Accommodation in ${hotel.name}, ${hotel.city}`;
+      const perPersonTextHotel = hotel.rooms.map((rb) => `${rb.roomType} (${rb.count} room${rb.count > 1 ? 's' : ''}): PKR ${fmt(rb.perPerson)} x ${rb.totalRoomPax}`).join(', ');
+      addDetailedRow(`Hotel`, hotel.name, desc, hotel.currency, hotel.totalCost, hotel.totalSvc, perPersonTextHotel, false);
+    });
+  } else {
+    const hotelPayingPaxCount = numAdult + numChildBed;
+    const hotelGroups = {};
+
+    hotelRooms.forEach((room) => {
+      if (room.rooms > 0 && room.nights > 0 && (room.costNight > 0 || room.svcNight > 0)) {
+        if (!hotelGroups[room.idx]) {
+          hotelGroups[room.idx] = {
+            name: room.name,
+            city: room.city,
+            currency: room.currency,
+            rooms: [],
+            totalCost: 0,
+            totalSvc: 0,
+            nights: room.nights
+          };
+        }
+        hotelGroups[room.idx].rooms.push(room);
+        hotelGroups[room.idx].totalCost += room.costNight * room.nights * room.rooms;
+        hotelGroups[room.idx].totalSvc += room.svcNight * room.nights * room.rooms;
+      }
+    });
+
+    Object.values(hotelGroups).forEach((hotel) => {
+      const roomDetails = hotel.rooms.map((r) => `${r.rooms} ${r.roomType} with ${r.serviceType}`).join(' & ');
+      const desc = `${hotel.nights} nights, ${roomDetails} Accommodation in ${hotel.name}, ${hotel.city}`;
+      const perPersonCost = hotelPayingPaxCount > 0 ? convertToPKR(hotel.totalCost + hotel.totalSvc, hotel.currency) / hotelPayingPaxCount : 0;
+      let perPersonTextHotel = '';
       if (numAdult > 0) perPersonTextHotel += `Adult x${numAdult}: PKR ${fmt(perPersonCost)}`;
       if (numChildBed > 0) {
         if (perPersonTextHotel) perPersonTextHotel += ', ';
         perPersonTextHotel += `Child (bed) x${numChildBed}: PKR ${fmt(perPersonCost)}`;
       }
-    }
-    
-    if (hotel.totalCost > 0 || hotel.totalSvc > 0) {
       addDetailedRow(`Hotel`, hotel.name, desc, hotel.currency, hotel.totalCost, hotel.totalSvc, perPersonTextHotel, false);
-    }
-  });
+    });
+  }
 
   // --- TRANSFERS ---
   document.querySelectorAll("[id^='transferBlock_']").forEach((el) => {
@@ -4199,11 +4251,52 @@ function performCalculation() {
   const { perAdult, perChildBed, perChildNoBed, perInfant } = perPersonCosts;
 
   let packagePricingText = [];
-  if (numAdult > 0) packagePricingText.push(`Adult x${numAdult}: PKR ${fmt(perAdult)}`);
-  if (numChildBed > 0) packagePricingText.push(`Child (bed) x${numChildBed}: PKR ${fmt(perChildBed)}`);
-  if (numChildNoBed > 0) packagePricingText.push(`Child (no bed) x${numChildNoBed}: PKR ${fmt(perChildNoBed)}`);
-  if (numInfant > 0) packagePricingText.push(`Infant x${numInfant}: PKR ${fmt(perInfant)}`);
+  if (hotelPriceMode === 'actual' && hotelRoomBreakdown.length > 0) {
+    const totalHotelCostPKRCalc = hotelRooms.reduce((sum, room) => {
+      if (room.rooms > 0 && room.nights > 0 && (room.costNight > 0 || room.svcNight > 0)) {
+        return sum + convertToPKR((room.costNight + room.svcNight) * room.nights * room.rooms, room.currency);
+      }
+      return sum;
+    }, 0);
+    const hotelPayingPaxCount = numAdult + numChildBed;
+    const avgHotelCostPerPerson = hotelPayingPaxCount > 0 ? (totalHotelCostPKRCalc / hotelPayingPaxCount) : 0;
+
+    const nonHotelCostAdult = perAdult - avgHotelCostPerPerson;
+    const nonHotelCostChildBed = perChildBed - avgHotelCostPerPerson;
+
+    let remainingAdults = numAdult;
+    let remainingChildBed = numChildBed;
+    const sortedRoomBreakdown = [...hotelRoomBreakdown].sort((a, b) => a.totalRoomPax - b.totalRoomPax);
+
+    sortedRoomBreakdown.forEach((rb) => {
+      const totalCapacity = rb.totalRoomPax;
+      const adultsInRoom = Math.min(remainingAdults, totalCapacity);
+      const childrenInRoom = Math.min(remainingChildBed, Math.max(totalCapacity - adultsInRoom, 0));
+
+      remainingAdults -= adultsInRoom;
+      remainingChildBed -= childrenInRoom;
+
+      if (adultsInRoom > 0) {
+        packagePricingText.push(`Adult x${adultsInRoom} (${rb.label} Sharing): PKR ${fmt(rb.perPerson + nonHotelCostAdult)}`);
+      }
+      if (childrenInRoom > 0) {
+        packagePricingText.push(`Child (bed) x${childrenInRoom} (${rb.label} Sharing): PKR ${fmt(rb.perPerson + nonHotelCostChildBed)}`);
+      }
+    });
+
+    if (remainingAdults > 0) packagePricingText.push(`Adult x${remainingAdults}: PKR ${fmt(perAdult)}`);
+    if (remainingChildBed > 0) packagePricingText.push(`Child (bed) x${remainingChildBed}: PKR ${fmt(perChildBed)}`);
+    if (numChildNoBed > 0) packagePricingText.push(`Child (no bed) x${numChildNoBed}: PKR ${fmt(perChildNoBed)}`);
+    if (numInfant > 0) packagePricingText.push(`Infant x${numInfant}: PKR ${fmt(perInfant)}`);
+  } else {
+    if (numAdult > 0) packagePricingText.push(`Adult x${numAdult}: PKR ${fmt(perAdult)}`);
+    if (numChildBed > 0) packagePricingText.push(`Child (bed) x${numChildBed}: PKR ${fmt(perChildBed)}`);
+    if (numChildNoBed > 0) packagePricingText.push(`Child (no bed) x${numChildNoBed}: PKR ${fmt(perChildNoBed)}`);
+    if (numInfant > 0) packagePricingText.push(`Infant x${numInfant}: PKR ${fmt(perInfant)}`);
+  }
   packagePricingText = packagePricingText.join(', ');
+  window.lastPackagePricingText = packagePricingText;
+  window.lastHotelPricingMode = hotelPriceMode;
 
   calcSummaryBody.innerHTML += `
     <tr style="font-weight: bold; background-color: #e3f2fd;">
@@ -4935,6 +5028,9 @@ async function printQuotation() {
 }
   
   const clientData = JSON.parse(localStorage.getItem("savedClientData_domestic")) || {};
+  const agentData = getCurrentAgent();
+  const hotelPriceMode = typeof getHotelPriceMode === 'function' ? getHotelPriceMode() : 'average';
+  const packagePricingSummary = window.lastPackagePricingText || '';
   if (!currentQuotationId) {
     currentQuotationId = 'DOM-' + Date.now().toString().slice(-6);
   }
@@ -5023,10 +5119,14 @@ async function printQuotation() {
     <div style="margin-bottom: 10px; border: 1px solid #eee; padding: 8px 12px; border-radius: 6px;">
       <h3 style="margin-top: 0; color: #0b76d1; border-bottom: 2px solid #0b76d1; padding-bottom: 3px; margin-bottom: 6px;">Package Price</h3>
       <ul style="list-style: disc; padding-left: 18px; margin: 0; line-height: 1.8;">
-        <li>Per Adult: <strong>PKR ${fmt(perAdultCost)}</strong></li>
-        ${numChildBed > 0 ? `<li>Per Child (with bed): <strong>PKR ${fmt(perChildBedCost)}</strong></li>` : ''}
-        ${numChildNoBed > 0 ? `<li>Per Child (without bed): <strong>PKR ${fmt(perChildNoBedCost)}</strong></li>` : ''}
-        ${numInfant > 0 ? `<li>Per Infant: <strong>PKR ${fmt(perInfantCost)}</strong></li>` : ''}
+        ${packagePricingSummary
+          ? packagePricingSummary.split(',').map(item => `<li>${sanitizeInput(item.trim())}</li>`).join('')
+          : `
+            <li>Per Adult: <strong>PKR ${fmt(perAdultCost)}</strong></li>
+            ${numChildBed > 0 ? `<li>Per Child (with bed): <strong>PKR ${fmt(perChildBedCost)}</strong></li>` : ''}
+            ${numChildNoBed > 0 ? `<li>Per Child (without bed): <strong>PKR ${fmt(perChildNoBedCost)}</strong></li>` : ''}
+            ${numInfant > 0 ? `<li>Per Infant: <strong>PKR ${fmt(perInfantCost)}</strong></li>` : ''}
+          `}
       </ul>
       <div style="margin-top: 5px; padding-top: 5px; border-top: 1px solid #ddd; font-weight: bold; color: #0b76d1;">Total Package Amount: PKR ${fmt(totalPackageAmount)}</div>
     </div>
@@ -5105,33 +5205,32 @@ async function printQuotation() {
   });
   
   // Add hotel details
-  document.querySelectorAll("[id^='hotelBlock_']").forEach((el) => {
-    const idx = el.id.split("_")[1];
-    const name = document.getElementById(`hotelName_${idx}`)?.value || "Not specified";
-    const city = document.getElementById(`hotelCity_${idx}`)?.value || "Not specified";
-    const nights = parseFloat(document.getElementById(`hotelNights_${idx}`)?.value || 0);
-    const roomType = document.getElementById(`hotelRoomType_${idx}`)?.value || "Not specified";
-    const rooms = parseFloat(document.getElementById(`hotelRooms_${idx}`)?.value || 0);
-    const serviceType = document.getElementById(`hotelService_${idx}`)?.value || "Not specified";
-    const costNight = parseFloat(document.getElementById(`hotelCostNight_${idx}`)?.value || 0);
-    const svcNight = parseFloat(document.getElementById(`hotelSvcNight_${idx}`)?.value || 0);
-    const currency = document.getElementById(`hotelCurrency_${idx}`)?.value || "USD";
-    
-    // Only Adults and Children with bed pay for hotels
-    const payingPax = numAdult + numChildBed;
-    const totalHotel = convertToPKR((costNight + svcNight) * nights * rooms, currency);
-    
-    // Calculate per person cost by dividing by total paying passengers
-    const perPersonCost = payingPax > 0 ? totalHotel / payingPax : 0;
-    
-    const costPerAdult = numAdult > 0 ? perPersonCost : 0;
-    const costPerChildBed = numChildBed > 0 ? perPersonCost : 0;
-    const costPerChildNoBed = 0; // Children without bed don't pay for hotels
-    const costPerInfant = 0; // Infants don't pay for hotels
-    
+  getHotelGroups().forEach((hotel, index) => {
+    const totalHotel = hotel.roomTypes.reduce((sum, room) => {
+      return sum + convertToPKR((room.costNight + room.svcNight) * hotel.nights * room.rooms, room.currency);
+    }, 0);
+
+    let perPersonText = '';
+    if (hotelPriceMode === 'actual') {
+      perPersonText = hotel.roomTypes.map((room) => {
+        const perRoomPax = room.rooms * room.capacity;
+        const perCost = perRoomPax > 0 ? convertToPKR(((room.costNight + room.svcNight) * hotel.nights) / room.capacity, room.currency) : 0;
+        return `${room.roomType} (${room.rooms} room${room.rooms > 1 ? 's' : ''}): PKR ${fmt(perCost)}`;
+      }).join(' • ');
+    } else {
+      const payingPax = numAdult + numChildBed;
+      const avgCost = payingPax > 0 ? totalHotel / payingPax : 0;
+      const parts = [];
+      if (numAdult > 0) parts.push(`Adult: PKR ${fmt(avgCost)}`);
+      if (numChildBed > 0) parts.push(`Child(bed): PKR ${fmt(avgCost)}`);
+      perPersonText = parts.join(' • ');
+    }
+
+    const roomSummary = hotel.roomTypes.map((room) => `${room.rooms} ${room.roomType}${room.roomName ? ` (${room.roomName})` : ''} ${room.serviceType}`).join(' & ');
+
     quotationHTML += `
   <div style="margin:2px 0;padding:4px 8px;background:#fff;border-left:3px solid #0b76d1;border-radius:3px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
-    <span><b>🏨 ${city} Hotel ${idx}</b> &mdash; ${sanitizeInput(name)} &bull; ${sanitizeInput(roomType)} &times;${rooms} &bull; ${nights}N &bull; ${sanitizeInput(serviceType)} &nbsp; <span style="color:#555;font-size:11px;">${numAdult>0?`Adult: PKR ${fmt(costPerAdult)}`:''}${numChildBed>0?` &bull; Child(bed): PKR ${fmt(costPerChildBed)}`:''}</span></span>
+    <span><b>🏨 ${hotel.city} Hotel ${index + 1}</b> &mdash; ${sanitizeInput(hotel.name)} &bull; ${sanitizeInput(roomSummary)} &bull; ${hotel.nights}N &nbsp; <span style="color:#555;font-size:11px;">${perPersonText}</span></span>
     <b style="color:#0b76d1;white-space:nowrap;">PKR ${fmt(totalHotel)}</b>
   </div>
 `;
@@ -5616,25 +5715,24 @@ function getFlightDetails() {
 }
 
 function getHotelDetails() {
-  const hotels = [];
-  document.querySelectorAll("[id^='hotelBlock_']").forEach((el) => {
-    const idx = el.id.split("_")[1];
-    const name = document.getElementById(`hotelName_${idx}`)?.value || "Not specified";
-    const city = document.getElementById(`hotelCity_${idx}`)?.value || "Not specified";
-    const nights = parseFloat(document.getElementById(`hotelNights_${idx}`)?.value || 0);
-    const roomType = document.getElementById(`hotelRoomType_${idx}`)?.value || "Not specified";
-    const roomName = document.getElementById(`hotelRoomName_${idx}`)?.value || "";
-    const rooms = parseFloat(document.getElementById(`hotelRooms_${idx}`)?.value || 0);
-    const serviceType = document.getElementById(`hotelService_${idx}`)?.value || "Room Only";
-    const checkIn = document.getElementById(`hotelCheckIn_${idx}`)?.value || new Date().toISOString().split('T')[0];
-    const checkOut = document.getElementById(`hotelCheckOut_${idx}`)?.value || new Date().toISOString().split('T')[0];
-    
-    hotels.push({
-      name, city, nights, roomType, roomName, rooms, serviceType, checkIn, checkOut
-    });
+  return getHotelGroups().map((hotel) => {
+    const roomType = hotel.roomTypes.map((room) => room.roomType).join(' + ');
+    const roomName = hotel.roomTypes.map((room) => room.roomName).filter(Boolean).join(' + ');
+    const rooms = hotel.roomTypes.reduce((sum, room) => sum + (parseFloat(room.rooms) || 0), 0);
+    const serviceType = hotel.roomTypes.map((room) => room.serviceType).filter(Boolean).join(' / ');
+
+    return {
+      name: hotel.name,
+      city: hotel.city,
+      nights: hotel.nights,
+      roomType,
+      roomName,
+      rooms,
+      serviceType,
+      checkIn: hotel.checkIn,
+      checkOut: hotel.checkOut
+    };
   });
-  
-  return hotels;
 }
 
 function getVisaDetails() {
