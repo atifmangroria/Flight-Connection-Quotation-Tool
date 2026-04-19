@@ -4031,12 +4031,14 @@ async function performCalculation() {
     hotelRooms.forEach((room) => {
       if (room.rooms > 0 && room.nights > 0 && (room.costNight > 0 || room.svcNight > 0)) {
         const totalRoomPax = room.rooms * room.capacity;
-        const perPerson = totalRoomPax > 0 ? convertToPKR(((room.costNight + room.svcNight) * room.nights) / room.capacity, room.currency) : 0;
+        const totalRoomCostPKR = convertToPKR((room.costNight + room.svcNight) * room.nights * room.rooms, room.currency);
+        const perPerson = totalRoomPax > 0 ? totalRoomCostPKR / totalRoomPax : 0;
         hotelRoomBreakdown.push({
           roomType: room.roomType,
           count: room.rooms,
           perPerson,
           totalRoomPax,
+          totalRoomCostPKR,
           name: room.name,
           city: room.city,
           idx: room.idx,
@@ -4074,7 +4076,17 @@ async function performCalculation() {
     Object.values(hotelGroupActual).forEach((hotel) => {
       const roomDetails = hotel.rooms.map((r) => `${r.count} ${r.roomType} with ${r.serviceType}`).join(' & ');
       const desc = `${hotel.nights} nights, ${roomDetails} Accommodation in ${hotel.name}, ${hotel.city}`;
-      const perPersonTextHotel = hotel.rooms.map((rb) => `${rb.roomType} (${rb.count} room${rb.count > 1 ? 's' : ''}): PKR ${fmt(rb.perPerson)} x ${rb.totalRoomPax}`).join(', ');
+      let remainingAdultsHotel = numAdult;
+      let remainingChildBedHotel = numChildBed;
+      const perPersonTextHotel = hotel.rooms.map((rb) => {
+        const occupiedPax = Math.min(rb.totalRoomPax, remainingAdultsHotel + remainingChildBedHotel);
+        const adultsInRoom = Math.min(remainingAdultsHotel, occupiedPax);
+        const childrenInRoom = Math.min(remainingChildBedHotel, Math.max(occupiedPax - adultsInRoom, 0));
+        remainingAdultsHotel -= adultsInRoom;
+        remainingChildBedHotel -= childrenInRoom;
+        const actualPerPerson = occupiedPax > 0 ? rb.totalRoomCostPKR / occupiedPax : rb.perPerson;
+        return `${rb.roomType} (${rb.count} room${rb.count > 1 ? 's' : ''}): PKR ${fmt(actualPerPerson)} x ${occupiedPax}`;
+      }).join(', ');
       addDetailedRow(`Hotel`, hotel.name, desc, hotel.currency, hotel.totalCost, hotel.totalSvc, perPersonTextHotel, false);
     });
   } else {
@@ -4263,29 +4275,59 @@ async function performCalculation() {
 
     const nonHotelCostAdult = perAdult - avgHotelCostPerPerson;
     const nonHotelCostChildBed = perChildBed - avgHotelCostPerPerson;
+    const adultHotelTotals = Array.from({ length: numAdult }, () => 0);
+    const childHotelTotals = Array.from({ length: numChildBed }, () => 0);
 
-    let remainingAdults = numAdult;
-    let remainingChildBed = numChildBed;
-    const sortedRoomBreakdown = [...hotelRoomBreakdown].sort((a, b) => a.totalRoomPax - b.totalRoomPax);
-
-    sortedRoomBreakdown.forEach((rb) => {
-      const totalCapacity = rb.totalRoomPax;
-      const adultsInRoom = Math.min(remainingAdults, totalCapacity);
-      const childrenInRoom = Math.min(remainingChildBed, Math.max(totalCapacity - adultsInRoom, 0));
-
-      remainingAdults -= adultsInRoom;
-      remainingChildBed -= childrenInRoom;
-
-      if (adultsInRoom > 0) {
-        packagePricingText.push(`Adult x${adultsInRoom} (${rb.label} Sharing): PKR ${fmt(rb.perPerson + nonHotelCostAdult)}`);
-      }
-      if (childrenInRoom > 0) {
-        packagePricingText.push(`Child (bed) x${childrenInRoom} (${rb.label} Sharing): PKR ${fmt(rb.perPerson + nonHotelCostChildBed)}`);
-      }
+    const groupedByHotel = {};
+    hotelRoomBreakdown.forEach((rb) => {
+      if (!groupedByHotel[rb.idx]) groupedByHotel[rb.idx] = [];
+      groupedByHotel[rb.idx].push(rb);
     });
 
-    if (remainingAdults > 0) packagePricingText.push(`Adult x${remainingAdults}: PKR ${fmt(perAdult)}`);
-    if (remainingChildBed > 0) packagePricingText.push(`Child (bed) x${remainingChildBed}: PKR ${fmt(perChildBed)}`);
+    Object.values(groupedByHotel).forEach((roomsForHotel) => {
+      let adultPtr = 0;
+      let childPtr = 0;
+      const sortedRooms = [...roomsForHotel].sort((a, b) => a.totalRoomPax - b.totalRoomPax);
+
+      sortedRooms.forEach((rb) => {
+        const availablePax = Math.max((numAdult - adultPtr) + (numChildBed - childPtr), 0);
+        const occupiedPax = Math.min(rb.totalRoomPax, availablePax);
+        if (occupiedPax <= 0) return;
+
+        const actualHotelPerPerson = rb.totalRoomCostPKR / occupiedPax;
+        const adultsInRoom = Math.min(numAdult - adultPtr, occupiedPax);
+        const childrenInRoom = Math.min(numChildBed - childPtr, Math.max(occupiedPax - adultsInRoom, 0));
+
+        for (let i = 0; i < adultsInRoom; i++) {
+          adultHotelTotals[adultPtr + i] += actualHotelPerPerson;
+        }
+        for (let i = 0; i < childrenInRoom; i++) {
+          childHotelTotals[childPtr + i] += actualHotelPerPerson;
+        }
+
+        adultPtr += adultsInRoom;
+        childPtr += childrenInRoom;
+      });
+    });
+
+    const groupedAdultTotals = adultHotelTotals.reduce((acc, value) => {
+      const key = Math.round(value);
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+    const groupedChildTotals = childHotelTotals.reduce((acc, value) => {
+      const key = Math.round(value);
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+
+    Object.entries(groupedAdultTotals).forEach(([hotelShare, count]) => {
+      packagePricingText.push(`Adult x${count}: PKR ${fmt(Number(hotelShare) + nonHotelCostAdult)}`);
+    });
+    Object.entries(groupedChildTotals).forEach(([hotelShare, count]) => {
+      packagePricingText.push(`Child (bed) x${count}: PKR ${fmt(Number(hotelShare) + nonHotelCostChildBed)}`);
+    });
+
     if (numChildNoBed > 0) packagePricingText.push(`Child (no bed) x${numChildNoBed}: PKR ${fmt(perChildNoBed)}`);
     if (numInfant > 0) packagePricingText.push(`Infant x${numInfant}: PKR ${fmt(perInfant)}`);
   } else {
@@ -4535,26 +4577,22 @@ function calculatePerPersonCosts(packageCostPKR, packageServicePKR, paxData) {
     }
   });
   
-  // Calculate Hotel costs per person (only for adults and children with bed)
+  // Calculate Hotel costs per person using all room rows
   const hotelPayingPax = numAdult + numChildBed;
-  
-  document.querySelectorAll("[id^='hotelBlock_']").forEach((el) => {
-    const idx = el.id.split("_")[1];
-    const nights = parseFloat(document.getElementById(`hotelNights_${idx}`)?.value || 0);
-    const rooms = parseFloat(document.getElementById(`hotelRooms_${idx}`)?.value || 0);
-    const costNight = parseFloat(document.getElementById(`hotelCostNight_${idx}`)?.value || 0);
-    const svcNight = parseFloat(document.getElementById(`hotelSvcNight_${idx}`)?.value || 0);
-    const currency = document.getElementById(`hotelCurrency_${idx}`)?.value || "USD";
-    
-    if (hotelPayingPax > 0) {
-      const totalCost = (costNight + svcNight) * nights * rooms;
-      const totalCostPKR = convertToPKR(totalCost, currency);
-      const perPersonCost = totalCostPKR / hotelPayingPax;
-      
-      if (numAdult > 0) perAdultCost += perPersonCost;
-      if (numChildBed > 0) perChildBedCost += perPersonCost;
-    }
-  });
+  const hotelRooms = typeof getDomesticHotelRoomEntries === 'function' ? getDomesticHotelRoomEntries() : [];
+
+  if (hotelPayingPax > 0 && hotelRooms.length > 0) {
+    const totalHotelCostPKR = hotelRooms.reduce((sum, room) => {
+      if ((room.rooms || 0) > 0 && (room.nights || 0) > 0) {
+        return sum + convertToPKR((room.costNight + room.svcNight) * room.nights * room.rooms, room.currency || 'PKR');
+      }
+      return sum;
+    }, 0);
+
+    const avgHotelCostPerPerson = totalHotelCostPKR / hotelPayingPax;
+    if (numAdult > 0) perAdultCost += avgHotelCostPerPerson;
+    if (numChildBed > 0) perChildBedCost += avgHotelCostPerPerson;
+  }
   
   // Calculate Visa costs per person
   if (document.getElementById('visaBlock')) {
