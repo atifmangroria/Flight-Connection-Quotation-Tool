@@ -6014,24 +6014,33 @@ function saveQuotation() {
     });
     
     // Collect hotel data
-    const hotelsData = [];
-    document.querySelectorAll("[id^='hotelBlock_']").forEach((el) => {
-      const idx = el.id.split("_")[1];
-      const hotelData = {
-        name: document.getElementById(`hotelName_${idx}`)?.value || "",
-        city: document.getElementById(`hotelCity_${idx}`)?.value || "",
-        checkIn: document.getElementById(`hotelCheckIn_${idx}`)?.value || "",
-        checkOut: document.getElementById(`hotelCheckOut_${idx}`)?.value || "",
-        nights: parseInt(document.getElementById(`hotelNights_${idx}`)?.value || 0),
-        roomType: document.getElementById(`hotelRoomType_${idx}`)?.value || "",
-        roomName: document.getElementById(`hotelRoomName_${idx}`)?.value || "",
-        rooms: parseInt(document.getElementById(`hotelRooms_${idx}`)?.value || 1),
-        serviceType: document.getElementById(`hotelService_${idx}`)?.value || "",
-        costNight: parseFloat(document.getElementById(`hotelCostNight_${idx}`)?.value || 0),
-        currency: document.getElementById(`hotelCurrency_${idx}`)?.value || "USD",
-        svcNight: parseFloat(document.getElementById(`hotelSvcNight_${idx}`)?.value || 0)
+    const hotelsData = getHotelGroups().map((hotel) => {
+      const roomTypes = (hotel.roomTypes || []).map((room) => ({
+        roomType: room.roomType || '',
+        roomName: room.roomName || '',
+        rooms: parseInt(room.rooms || 1),
+        serviceType: room.serviceType || '',
+        costNight: parseFloat(room.costNight || 0),
+        currency: room.currency || 'PKR',
+        svcNight: parseFloat(room.svcNight || 0)
+      }));
+
+      const firstRoom = roomTypes[0] || {};
+      return {
+        name: hotel.name || "",
+        city: hotel.city || "",
+        checkIn: hotel.checkIn || "",
+        checkOut: hotel.checkOut || "",
+        nights: parseInt(hotel.nights || 0),
+        roomType: firstRoom.roomType || "",
+        roomName: firstRoom.roomName || "",
+        rooms: parseInt(firstRoom.rooms || 1),
+        serviceType: firstRoom.serviceType || "",
+        costNight: parseFloat(firstRoom.costNight || 0),
+        currency: firstRoom.currency || "PKR",
+        svcNight: parseFloat(firstRoom.svcNight || 0),
+        roomTypes
       };
-      hotelsData.push(hotelData);
     });
     
     // Collect transfer data
@@ -6234,7 +6243,8 @@ const customSectionsData = {
         svcOption: selectedSvcOption,
         svcPerAdult: parseFloat(document.getElementById('svcPerAdult')?.value || 0),
         svcPerChild: parseFloat(document.getElementById('svcPerChild')?.value || 0),
-        svcPerInfant: parseFloat(document.getElementById('svcPerInfant')?.value || 0)
+        svcPerInfant: parseFloat(document.getElementById('svcPerInfant')?.value || 0),
+        hotelPricingMode: getHotelPriceMode()
       },
       totalAmount: finalTotalSellPKR,
       flights: flightsData,
@@ -6439,6 +6449,10 @@ function loadQuotation(quotationId) {
     if (document.getElementById('svcPerAdult')) document.getElementById('svcPerAdult').value = parseFloat(pricing.svcPerAdult || 0);
     if (document.getElementById('svcPerChild')) document.getElementById('svcPerChild').value = parseFloat(pricing.svcPerChild || 0);
     if (document.getElementById('svcPerInfant')) document.getElementById('svcPerInfant').value = parseFloat(pricing.svcPerInfant || 0);
+    if (pricing.hotelPricingMode) {
+      hotelPricingMode = pricing.hotelPricingMode;
+      localStorage.setItem('hotelPricingMode', pricing.hotelPricingMode);
+    }
     toggleServiceOption(svcOptionToSet);
     if (document.getElementById('quotationStatus')) {
       document.getElementById('quotationStatus').value = quotation.status || 'pending';
@@ -6463,6 +6477,7 @@ function loadQuotation(quotationId) {
     flights = [];
     nextHotelNumber = 0;
     hotels = [];
+    Object.keys(hotelRoomEntries).forEach(key => delete hotelRoomEntries[key]);
     nextTransferNumber = 0;
     transfers = [];
     nextTourNumber = 0;
@@ -6522,14 +6537,11 @@ function loadQuotation(quotationId) {
     if (quotation.hotels && Array.isArray(quotation.hotels)) {
       quotation.hotels.forEach((hotelData, hotelIndex) => {
         setTimeout(() => {
-          // Trigger the addHotel function
           document.getElementById("btnAddHotel").click();
           
-          // Wait a moment for the hotel to be added
           setTimeout(() => {
             const idx = nextHotelNumber;
-            
-            // Fill hotel data
+
             if (document.getElementById(`hotelName_${idx}`)) 
               document.getElementById(`hotelName_${idx}`).value = hotelData.name || "";
             if (document.getElementById(`hotelCity_${idx}`)) 
@@ -6540,20 +6552,53 @@ function loadQuotation(quotationId) {
               document.getElementById(`hotelCheckOut_${idx}`).value = hotelData.checkOut || "";
             if (document.getElementById(`hotelNights_${idx}`)) 
               document.getElementById(`hotelNights_${idx}`).value = hotelData.nights || 0;
+
+            const savedRoomTypes = Array.isArray(hotelData.roomTypes) && hotelData.roomTypes.length
+              ? hotelData.roomTypes
+              : [{
+                  roomType: hotelData.roomType || '',
+                  roomName: hotelData.roomName || '',
+                  rooms: hotelData.rooms || 1,
+                  serviceType: hotelData.serviceType || '',
+                  costNight: hotelData.costNight || 0,
+                  currency: hotelData.currency || 'PKR',
+                  svcNight: hotelData.svcNight || 0
+                }];
+
+            const firstRoom = savedRoomTypes[0] || {};
             if (document.getElementById(`hotelRoomType_${idx}`)) 
-              document.getElementById(`hotelRoomType_${idx}`).value = hotelData.roomType || "";
+              document.getElementById(`hotelRoomType_${idx}`).value = firstRoom.roomType || "";
             if (document.getElementById(`hotelRoomName_${idx}`)) 
-              document.getElementById(`hotelRoomName_${idx}`).value = hotelData.roomName || "";
+              document.getElementById(`hotelRoomName_${idx}`).value = firstRoom.roomName || "";
             if (document.getElementById(`hotelRooms_${idx}`)) 
-              document.getElementById(`hotelRooms_${idx}`).value = hotelData.rooms || 1;
+              document.getElementById(`hotelRooms_${idx}`).value = firstRoom.rooms || 1;
             if (document.getElementById(`hotelService_${idx}`)) 
-              document.getElementById(`hotelService_${idx}`).value = hotelData.serviceType || "";
+              document.getElementById(`hotelService_${idx}`).value = firstRoom.serviceType || "";
             if (document.getElementById(`hotelCostNight_${idx}`)) 
-              document.getElementById(`hotelCostNight_${idx}`).value = hotelData.costNight || 0;
+              document.getElementById(`hotelCostNight_${idx}`).value = firstRoom.costNight || 0;
             if (document.getElementById(`hotelCurrency_${idx}`)) 
-              document.getElementById(`hotelCurrency_${idx}`).value = hotelData.currency || "USD";
+              document.getElementById(`hotelCurrency_${idx}`).value = firstRoom.currency || "PKR";
             if (document.getElementById(`hotelSvcNight_${idx}`)) 
-              document.getElementById(`hotelSvcNight_${idx}`).value = hotelData.svcNight || 0;
+              document.getElementById(`hotelSvcNight_${idx}`).value = firstRoom.svcNight || 0;
+
+            for (let roomIndex = 1; roomIndex < savedRoomTypes.length; roomIndex++) {
+              addRoomTypeToHotel(idx);
+              const addedEntries = hotelRoomEntries[getRoomTypeKey(idx)] || [];
+              const addedRoomIdx = addedEntries[addedEntries.length - 1]?.roomIdx;
+              const room = savedRoomTypes[roomIndex];
+
+              if (addedRoomIdx) {
+                if (document.getElementById(`rType_${idx}_${addedRoomIdx}`)) document.getElementById(`rType_${idx}_${addedRoomIdx}`).value = room.roomType || "";
+                if (document.getElementById(`rName_${idx}_${addedRoomIdx}`)) document.getElementById(`rName_${idx}_${addedRoomIdx}`).value = room.roomName || "";
+                if (document.getElementById(`rCount_${idx}_${addedRoomIdx}`)) document.getElementById(`rCount_${idx}_${addedRoomIdx}`).value = room.rooms || 1;
+                if (document.getElementById(`rService_${idx}_${addedRoomIdx}`)) document.getElementById(`rService_${idx}_${addedRoomIdx}`).value = room.serviceType || "";
+                if (document.getElementById(`rCost_${idx}_${addedRoomIdx}`)) document.getElementById(`rCost_${idx}_${addedRoomIdx}`).value = room.costNight || 0;
+                if (document.getElementById(`rCurrency_${idx}_${addedRoomIdx}`)) document.getElementById(`rCurrency_${idx}_${addedRoomIdx}`).value = room.currency || "PKR";
+                if (document.getElementById(`rSvcNight_${idx}_${addedRoomIdx}`)) document.getElementById(`rSvcNight_${idx}_${addedRoomIdx}`).value = room.svcNight || 0;
+              }
+            }
+
+            validateAllHotels(false);
           }, 100);
         }, 200 * hotelIndex);
       });
