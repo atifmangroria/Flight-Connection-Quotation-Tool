@@ -2174,56 +2174,45 @@ function calculateTotalHotelCapacity() {
     let totalCapacity = 0;
     let totalChildNoBedCapacity = 0;
 
-    hotels.forEach(index => {
-        const roomTypeSelect = document.getElementById(`hotelRoomType_${index}`);
-        const roomsCountInput = document.getElementById(`hotelRooms_${index}`);
-        
-        if (roomTypeSelect && roomsCountInput) {
-            const roomType = roomTypeSelect.value;
-            const numRooms = parseInt(roomsCountInput.value) || 0;
-            const roomCapacity = roomConfig[roomType];
-            
-            if (roomCapacity) {
-                totalCapacity += roomCapacity.adults * numRooms;
-                totalChildNoBedCapacity += roomCapacity.childNoBed * numRooms;
-            }
-        }
+    getDomesticHotelRoomEntries().forEach((room) => {
+      const cfg = roomConfig[room.roomType] || { adults: room.capacity || 0, childNoBed: 0 };
+      const numRooms = parseInt(room.rooms || 0);
+      totalCapacity += (cfg.adults || 0) * numRooms;
+      totalChildNoBedCapacity += (cfg.childNoBed || 0) * numRooms;
     });
 
     return { totalCapacity, totalChildNoBedCapacity };
 }
 
 // Function to validate ALL hotel configurations
-function validateAllHotels() {
+function validateAllHotels(showErrors = true) {
     const clientData = getClientData();
     if (!clientData) return false;
     
-    const totalPax = clientData.totalPax;
-    const totalChildNoBed = clientData.totalChildNoBed;
+    const totalPax = (parseInt(clientData.adults) || 0) + (parseInt(clientData.childBed) || 0);
+    const totalChildNoBed = parseInt(clientData.childNoBed) || 0;
     const { totalCapacity, totalChildNoBedCapacity } = calculateTotalHotelCapacity();
 
     let isValid = true;
     let errorMessage = '';
 
-    // Check if total rooms are enough for total pax
     if (totalPax > totalCapacity) {
         errorMessage += `Total rooms booked can only accommodate ${totalCapacity} people, but your group has ${totalPax}.\n`;
         isValid = false;
     }
 
-    // Check if total rooms are enough for children without bed
     if (totalChildNoBed > totalChildNoBedCapacity) {
         errorMessage += `Total rooms booked can only accommodate ${totalChildNoBedCapacity} children without a bed. Your group has ${totalChildNoBed}.\n`;
         isValid = false;
     }
     
-    // Only show error message if there's an actual validation error
+    const allRoomsInputs = document.querySelectorAll('.hotelRoomsInp, [id^="hotelRooms_"], [id^="rCount_"]');
     if (!isValid) {
-        const allRoomsInputs = document.querySelectorAll('[id^="hotelRooms_"]');
         allRoomsInputs.forEach(input => input.classList.add("input-error"));
-        showAlert(errorMessage, "Room Configuration Error");
+        if (showErrors) {
+          showAlert(errorMessage + "\nPlease adjust room type or room count.", "Room Configuration Error");
+        }
     } else {
-        const allRoomsInputs = document.querySelectorAll('[id^="hotelRooms_"]');
         allRoomsInputs.forEach(input => input.classList.remove("input-error"));
     }
 
@@ -2252,66 +2241,85 @@ function addRoomTypeToHotel(hotelIndex) {
   
   const roomTypeOptions = ['Single', 'Double', 'Triple', 'Quad', 'Family'];
   const serviceOptions = ['Room Only', 'With Breakfast', 'Half Board', 'Full Board'];
-  const currencyOptions = ['USD', 'EUR', 'GBP', 'PKR'];
+  const isPrimaryRow = roomIdx === 1;
+  const roomTypeId = isPrimaryRow ? `hotelRoomType_${hotelIndex}` : `rType_${hotelIndex}_${roomIdx}`;
+  const roomNameId = isPrimaryRow ? `hotelRoomName_${hotelIndex}` : `rName_${hotelIndex}_${roomIdx}`;
+  const roomCountId = isPrimaryRow ? `hotelRooms_${hotelIndex}` : `rCount_${hotelIndex}_${roomIdx}`;
+  const serviceId = isPrimaryRow ? `hotelService_${hotelIndex}` : `rService_${hotelIndex}_${roomIdx}`;
+  const costId = isPrimaryRow ? `hotelCostNight_${hotelIndex}` : `rCost_${hotelIndex}_${roomIdx}`;
+  const currencyId = isPrimaryRow ? `hotelCurrency_${hotelIndex}` : `rCurrency_${hotelIndex}_${roomIdx}`;
+  const svcId = isPrimaryRow ? `hotelSvcNight_${hotelIndex}` : `rSvcNight_${hotelIndex}_${roomIdx}`;
   
   const roomDiv = document.createElement('div');
   roomDiv.className = 'section-entry';
   roomDiv.id = `roomTypeEntry_${hotelIndex}_${roomIdx}`;
+  roomDiv.style.border = '1px solid #e6eef8';
+  roomDiv.style.padding = '8px';
+  roomDiv.style.borderRadius = '6px';
+  roomDiv.style.marginBottom = '8px';
+  roomDiv.style.background = '#fff';
   
   roomDiv.innerHTML = `
-    <h4>Room Type Entry ${roomIdx}
-      <button type="button" onclick="removeRoomType(${hotelIndex}, ${roomIdx})" class="remove-btn">❌ Remove</button>
-    </h4>
     <div class="grid">
       <div>
         <label>Room Type</label>
-        <select id="rType_${hotelIndex}_${roomIdx}">
+        <select class="hotelRoomTypeSel" id="${roomTypeId}">
           ${roomTypeOptions.map(rt => `<option>${rt}</option>`).join('')}
         </select>
       </div>
       <div>
         <label>Room Name (Optional)</label>
-        <input id="rName_${hotelIndex}_${roomIdx}" type="text" placeholder="e.g. Deluxe Suite">
+        <input class="hotelRoomNameInp" id="${roomNameId}" type="text" placeholder="e.g. Deluxe Suite">
       </div>
       <div>
         <label>Rooms count</label>
-        <input id="rCount_${hotelIndex}_${roomIdx}" type="number" min="1" value="1">
+        <input class="hotelRoomsInp" id="${roomCountId}" type="number" min="1" value="1">
       </div>
       <div>
         <label>Service Type</label>
-        <select id="rService_${hotelIndex}_${roomIdx}">
+        <select class="hotelServiceSel" id="${serviceId}">
           ${serviceOptions.map(st => `<option>${st}</option>`).join('')}
         </select>
       </div>
       <div>
         <label>Cost per night</label>
-        <input id="rCost_${hotelIndex}_${roomIdx}" type="number" min="0" value="0">
+        <input class="hotelCostNightInp" id="${costId}" type="number" min="0" value="0">
       </div>
       <div>
         <label>Hotel Currency</label>
-        <select id="rCurrency_${hotelIndex}_${roomIdx}">
-          ${currencyOptions.map(cu => `<option value="${cu}">${cu}</option>`).join('')}
+        <select class="hotelCurrencySel" id="${currencyId}">
+          <option value="PKR" selected>PKR</option>
         </select>
       </div>
       <div>
         <label>Service per night</label>
-        <input id="rSvcNight_${hotelIndex}_${roomIdx}" type="number" min="0" value="0">
+        <input class="hotelSvcNightInp" id="${svcId}" type="number" min="0" value="0">
+      </div>
+      <div style="display:flex;align-items:end;justify-content:end">
+        <button type="button" onclick="removeRoomType(${hotelIndex}, ${roomIdx})" class="remove-btn">❌ Remove</button>
       </div>
     </div>
   `;
   
   container.appendChild(roomDiv);
+
+  const roomTypeSelect = roomDiv.querySelector('.hotelRoomTypeSel');
+  if (roomTypeSelect && isPrimaryRow) {
+    roomTypeSelect.value = getRecommendedRoomType();
+  }
+
+  roomDiv.querySelectorAll('select,input').forEach((field) => {
+    field.addEventListener('change', () => {
+      validateHotelCapacity(hotelIndex);
+      if (typeof updateHotelPriceModeVisibility === 'function') updateHotelPriceModeVisibility();
+    });
+    field.addEventListener('input', () => {
+      validateHotelCapacity(hotelIndex);
+      if (typeof updateHotelPriceModeVisibility === 'function') updateHotelPriceModeVisibility();
+    });
+  });
   
-  // Add event listeners for validation
-  const roomTypeSelect = roomDiv.querySelector(`#rType_${hotelIndex}_${roomIdx}`);
-  const roomCountInput = roomDiv.querySelector(`#rCount_${hotelIndex}_${roomIdx}`);
-  
-  if (roomTypeSelect) roomTypeSelect.addEventListener('change', () => validateHotelCapacity(hotelIndex));
-  if (roomCountInput) roomCountInput.addEventListener('input', () => validateHotelCapacity(hotelIndex));
-  
-  // Store entry info
   hotelRoomEntries[key].push({ roomIdx, roomTypeDiv: roomDiv });
-  
   validateHotelCapacity(hotelIndex);
 }
 
@@ -2329,38 +2337,7 @@ function removeRoomType(hotelIndex, roomIdx) {
 
 // ===== STAGE 2: CAPACITY VALIDATION =====
 function validateHotelCapacity(hotelIndex) {
-  const clientData = getClientData();
-  if (!clientData) return;
-  
-  const totalPax = clientData.totalPax || 0;
-  const key = getRoomTypeKey(hotelIndex);
-  const roomEntries = hotelRoomEntries[key] || [];
-  
-  let totalCapacity = 0;
-  const roomTypeMap = {
-    'Single': 1,
-    'Double': 2,
-    'Triple': 3,
-    'Quad': 4,
-    'Family': 4
-  };
-  
-  roomEntries.forEach(entry => {
-    const roomType = document.getElementById(`rType_${hotelIndex}_${entry.roomIdx}`)?.value || 'Double';
-    const roomCount = parseInt(document.getElementById(`rCount_${hotelIndex}_${entry.roomIdx}`)?.value || 0);
-    const capacity = (roomTypeMap[roomType] || 2) * roomCount;
-    totalCapacity += capacity;
-  });
-  
-  const capacityDisplay = document.getElementById(`capDisplay_${hotelIndex}`);
-  if (capacityDisplay) {
-    if (totalCapacity >= totalPax) {
-      capacityDisplay.innerHTML = `<span style="color: green; font-weight: bold;">Room Capacity: ${totalCapacity} pax | Required: ${totalPax} pax ✓</span>`;
-    } else {
-      capacityDisplay.innerHTML = `<span style="color: red; font-weight: bold;">Room Capacity: ${totalCapacity} pax | Required: ${totalPax} pax ❌ INSUFFICIENT</span>`;
-      showNotification(`⚠️ Hotel capacity mismatch:\nRoom configuration allows ${totalCapacity} people\nYour group has ${totalPax} total pax\nPlease adjust rooms or pax`, 'warning', 5000);
-    }
-  }
+  validateAllHotels(false);
 }
 
 // ===== STAGE 3: HOTEL PRICING MODE DIALOG =====
@@ -2427,28 +2404,24 @@ function hasMultipleRoomTypesInAnyHotel() {
 async function createHotelSection(index){
   const clientData = getClientData();
 
-  // Validate travel dates again
   if(!isValidDate(clientData.dateFromObj) || !isValidDate(clientData.dateToObj)){
     await showAlert("Cannot create hotel form. Please provide valid From/To dates in Client & Pax data.");
     return;
   }
 
   const container = document.getElementById("hotelContainer");
-  const roomOptions = Object.keys(roomConfig).map(rt => `<option>${rt}</option>`).join("");
+  const minDate = formatDate(clientData.dateFromObj);
+  const maxDate = formatDate(clientData.dateToObj);
 
   const hotelDiv = document.createElement("div");
   hotelDiv.className = "section";
   hotelDiv.id = "hotelBlock_" + index;
   hotelDiv.style.marginTop = "10px";
 
-  const minDate = formatDate(clientData.dateFromObj);
-  const maxDate = formatDate(clientData.dateToObj);
-
-  const html = `
+  hotelDiv.innerHTML = `
     <h4>
       Hotel ${index}
       <button type="button" onclick="removeHotel(${index})" class="remove-btn">❌ Remove</button>
-      <button type="button" onclick="addRoomTypeToHotel(${index})" class="add-btn">+ Add Room Type</button>
     </h4>
     <div class="grid">
       <div><label>Hotel Name</label><input id="hotelName_${index}" type="text"></div>
@@ -2460,31 +2433,21 @@ async function createHotelSection(index){
         <input id="hotelCheckOut_${index}" type="date" min="${minDate}" max="${maxDate}">
       </div>
       <div><label>Total Nights</label><input id="hotelNights_${index}" type="number" value="0" min="0" readonly></div>
-      <div><label>Room Type</label><select id="hotelRoomType_${index}">${roomOptions}</select></div>
-      <div><label>Room Name (Optional)</label><input id="hotelRoomName_${index}" type="text" placeholder="e.g. Deluxe Suite"></div>
-      <div><label>Rooms count</label><input id="hotelRooms_${index}" type="number" value="1" min="1"></div>
-      <div><label>Service Type</label><select id="hotelService_${index}"><option>Room Only</option><option>With Breakfast</option><option>Half Board</option><option>Full Board</option></select></div>
-      <div><label>Cost per night</label><input id="hotelCostNight_${index}" type="number" value="0" min="0"></div>
-      <div><label>Hotel Currency</label><select id="hotelCurrency_${index}"><option value="USD">USD</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="PKR">PKR</option></select></div>
-      <div><label>Service per night</label><input id="hotelSvcNight_${index}" type="number" value="0" min="0"></div>
     </div>
-    <div id="capDisplay_${index}" style="margin-top: 10px; padding: 10px; background: #f0f0f0; border-radius: 4px;"></div>
-    <div id="roomTypeContainer_${index}" style="margin-top: 15px;"></div>
+    <div class="section" id="hotelRoomTypesWrap_${index}" style="margin-top:16px;background:#f8fbff;">
+      <h5 style="margin:0 0 8px;">Room Types</h5>
+      <div id="roomTypeContainer_${index}"></div>
+      <button type="button" class="add-btn" onclick="addRoomTypeToHotel(${index})">+ Add Room Type</button>
+    </div>
   `;
-  hotelDiv.innerHTML = html;
   container.appendChild(hotelDiv);
   hotels.push(index);
+
+  setTimeout(() => addRoomTypeToHotel(index), 0);
 
   const chkIn = document.getElementById(`hotelCheckIn_${index}`);
   const chkOut = document.getElementById(`hotelCheckOut_${index}`);
   const nights = document.getElementById(`hotelNights_${index}`);
-  const roomTypeSelect = document.getElementById(`hotelRoomType_${index}`);
-  const roomsCountInput = document.getElementById(`hotelRooms_${index}`);
-
-  // Set the default room type based on pax
-  if (roomTypeSelect) {
-    roomTypeSelect.value = getRecommendedRoomType();
-  }
 
   function updateNights(){
     if(chkIn.value && chkOut.value){
@@ -2495,9 +2458,7 @@ async function createHotelSection(index){
     }
   }
 
-  // Add date validation
   chkIn.addEventListener("change", function() {
-    // Check if date is within travel dates
     if (chkIn.value < clientData.dateFrom || chkIn.value > clientData.dateTo) {
       chkIn.classList.add("input-error");
       showAlert("Check-in date must be within travel dates.");
@@ -2505,7 +2466,6 @@ async function createHotelSection(index){
       chkIn.classList.remove("input-error");
     }
     
-    // Check for overlapping dates
     if (checkHotelDateOverlap(chkIn.value, chkOut.value, index)) {
       chkIn.classList.add("input-error");
       chkOut.classList.add("input-error");
@@ -2516,10 +2476,10 @@ async function createHotelSection(index){
     }
     
     updateNights();
+    validateAllHotels(false);
   });
 
   chkOut.addEventListener("change", function() {
-    // Check if date is within travel dates
     if (chkOut.value < clientData.dateFrom || chkOut.value > clientData.dateTo) {
       chkOut.classList.add("input-error");
       showAlert("Check-out date must be within travel dates.");
@@ -2527,7 +2487,6 @@ async function createHotelSection(index){
       chkOut.classList.remove("input-error");
     }
     
-    // Check for overlapping dates
     if (checkHotelDateOverlap(chkIn.value, chkOut.value, index)) {
       chkIn.classList.add("input-error");
       chkOut.classList.add("input-error");
@@ -2538,11 +2497,12 @@ async function createHotelSection(index){
     }
     
     updateNights();
+    validateAllHotels(false);
   });
 
-  // Add event listeners for room validation
-  if (roomTypeSelect) roomTypeSelect.addEventListener('change', validateAllHotels);
-  if (roomsCountInput) roomsCountInput.addEventListener('input', validateAllHotels);
+  if (typeof updateHotelPriceModeVisibility === 'function') {
+    updateHotelPriceModeVisibility();
+  }
 }
 
 // Remove hotel
@@ -2553,7 +2513,10 @@ function removeHotel(index){
   if (hotels.length === 0) {
       nextHotelNumber = 0;
   }
-  validateAllHotels();
+  validateAllHotels(false);
+  if (typeof updateHotelPriceModeVisibility === 'function') {
+    updateHotelPriceModeVisibility();
+  }
 }
 
 // Update all hotel date ranges
@@ -3833,21 +3796,20 @@ function getDomesticHotelRoomEntries() {
     const checkIn = document.getElementById(`hotelCheckIn_${index}`)?.value || "";
     const checkOut = document.getElementById(`hotelCheckOut_${index}`)?.value || "";
     const nights = parseFloat(document.getElementById(`hotelNights_${index}`)?.value || 0);
-    const defaultCurrency = document.getElementById(`hotelCurrency_${index}`)?.value || "USD";
     const roomKey = typeof getRoomTypeKey === 'function' ? getRoomTypeKey(index) : `hotel_${index}`;
     const groupedRooms = typeof hotelRoomEntries !== 'undefined' ? (hotelRoomEntries[roomKey] || []) : [];
 
     if (groupedRooms.length > 0) {
       groupedRooms.forEach(({ roomIdx }) => {
-        const roomType = document.getElementById(`rType_${index}_${roomIdx}`)?.value || "Not specified";
-        const rooms = parseFloat(document.getElementById(`rCount_${index}_${roomIdx}`)?.value || 0);
-        const serviceType = document.getElementById(`rService_${index}_${roomIdx}`)?.value || "Room Only";
-        const costNight = parseFloat(document.getElementById(`rCost_${index}_${roomIdx}`)?.value || 0);
-        const svcNight = parseFloat(document.getElementById(`rSvcNight_${index}_${roomIdx}`)?.value || 0);
-        const currency = document.getElementById(`rCurrency_${index}_${roomIdx}`)?.value || defaultCurrency;
+        const roomType = document.getElementById(`rType_${index}_${roomIdx}`)?.value || document.getElementById(`hotelRoomType_${index}`)?.value || "Not specified";
+        const rooms = parseFloat(document.getElementById(`rCount_${index}_${roomIdx}`)?.value || document.getElementById(`hotelRooms_${index}`)?.value || 0);
+        const serviceType = document.getElementById(`rService_${index}_${roomIdx}`)?.value || document.getElementById(`hotelService_${index}`)?.value || "Room Only";
+        const costNight = parseFloat(document.getElementById(`rCost_${index}_${roomIdx}`)?.value || document.getElementById(`hotelCostNight_${index}`)?.value || 0);
+        const svcNight = parseFloat(document.getElementById(`rSvcNight_${index}_${roomIdx}`)?.value || document.getElementById(`hotelSvcNight_${index}`)?.value || 0);
+        const currency = document.getElementById(`rCurrency_${index}_${roomIdx}`)?.value || document.getElementById(`hotelCurrency_${index}`)?.value || "PKR";
         const capacity = getRoomCapacityForCalculation(roomType);
 
-        if (rooms > 0 && nights > 0 && (costNight > 0 || svcNight > 0)) {
+        if (rooms > 0) {
           entries.push({ idx: `H_${index}`, name, city, checkIn, checkOut, nights, roomType, rooms, serviceType, costNight, svcNight, currency, capacity });
         }
       });
@@ -3861,8 +3823,8 @@ function getDomesticHotelRoomEntries() {
     const svcNight = parseFloat(document.getElementById(`hotelSvcNight_${index}`)?.value || 0);
     const capacity = getRoomCapacityForCalculation(roomType);
 
-    if (rooms > 0 && nights > 0 && (costNight > 0 || svcNight > 0)) {
-      entries.push({ idx: `H_${index}`, name, city, checkIn, checkOut, nights, roomType, rooms, serviceType, costNight, svcNight, currency: defaultCurrency, capacity });
+    if (rooms > 0) {
+      entries.push({ idx: `H_${index}`, name, city, checkIn, checkOut, nights, roomType, rooms, serviceType, costNight, svcNight, currency: 'PKR', capacity });
     }
   });
 
