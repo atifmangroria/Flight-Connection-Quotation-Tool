@@ -5195,8 +5195,13 @@ async function printQuotation() {
   ${document.querySelectorAll("[id^='hotelBlock_']").length > 0 ? 
     getHotelDetails().map((hotel, index) => `
   <div style="margin-bottom: 5px; padding: 4px 6px; background:#f0f7ff; border-left:3px solid #0b76d1; border-radius:3px;">
-    <strong>🏨 ${hotel.city} Hotel</strong> &mdash; ${hotel.name} &bull; ${hotel.nights} nights &bull; ${hotel.roomType}${hotel.roomName ? ` (${hotel.roomName})` : ''} (${hotel.rooms} rooms) &bull; ${hotel.serviceType}<br>
+    <strong>🏨 ${sanitizeInput(hotel.city)} Hotel</strong> &mdash; ${sanitizeInput(hotel.name)} &bull; ${hotel.nights} nights<br>
     <span style="font-size:11px;color:#555;">Check-in: ${formatDateToDMY(hotel.checkIn)} &bull; Check-out: ${formatDateToDMY(hotel.checkOut)}</span>
+    ${hotel.roomDetails?.length ? `
+      <div style="margin-top:4px; font-size:11px; color:#444; line-height:1.5;">
+        ${hotel.roomDetails.map(room => `<div>${sanitizeInput(room.roomType)}${room.roomName ? ` (${sanitizeInput(room.roomName)})` : ''} x${room.rooms} &bull; ${sanitizeInput(room.serviceType)}</div>`).join('')}
+      </div>
+    ` : ''}
   </div>
     `).join('') : ''}
   ${document.getElementById('visaBlock') ? `
@@ -5769,19 +5774,22 @@ function getFlightDetails() {
 
 function getHotelDetails() {
   return getHotelGroups().map((hotel) => {
-    const roomType = hotel.roomTypes.map((room) => room.roomType).join(' + ');
-    const roomName = hotel.roomTypes.map((room) => room.roomName).filter(Boolean).join(' + ');
-    const rooms = hotel.roomTypes.reduce((sum, room) => sum + (parseFloat(room.rooms) || 0), 0);
-    const serviceType = hotel.roomTypes.map((room) => room.serviceType).filter(Boolean).join(' / ');
+    const roomDetails = (hotel.roomTypes || [])
+      .filter((room) => {
+        return (parseFloat(room.rooms) || 0) > 0 || room.roomType || room.roomName || room.serviceType;
+      })
+      .map((room) => ({
+        roomType: room.roomType || 'Room',
+        roomName: room.roomName || '',
+        rooms: parseFloat(room.rooms) || 1,
+        serviceType: room.serviceType || 'Room Only'
+      }));
 
     return {
       name: hotel.name,
       city: hotel.city,
       nights: hotel.nights,
-      roomType,
-      roomName,
-      rooms,
-      serviceType,
+      roomDetails,
       checkIn: hotel.checkIn,
       checkOut: hotel.checkOut
     };
