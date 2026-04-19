@@ -4344,6 +4344,7 @@ async function performCalculation() {
     if (numChildNoBed > 0) packagePricingText.push(`Child (no bed) x${numChildNoBed}: PKR ${fmt(perChildNoBed)}`);
     if (numInfant > 0) packagePricingText.push(`Infant x${numInfant}: PKR ${fmt(perInfant)}`);
   }
+  window.lastPackagePricingItems = [...packagePricingText];
   packagePricingText = packagePricingText.join(', ');
   window.lastPackagePricingText = packagePricingText;
   window.lastHotelPricingMode = hotelPriceMode;
@@ -5076,7 +5077,7 @@ async function printQuotation() {
   const clientData = JSON.parse(localStorage.getItem("savedClientData_domestic")) || {};
   const agentData = getCurrentAgent();
   const hotelPriceMode = typeof getHotelPriceMode === 'function' ? getHotelPriceMode() : 'average';
-  const packagePricingSummary = window.lastPackagePricingText || '';
+  const packagePricingItems = Array.isArray(window.lastPackagePricingItems) ? window.lastPackagePricingItems : [];
   if (!currentQuotationId) {
     currentQuotationId = 'DOM-' + Date.now().toString().slice(-6);
   }
@@ -5165,8 +5166,8 @@ async function printQuotation() {
     <div style="margin-bottom: 10px; border: 1px solid #eee; padding: 8px 12px; border-radius: 6px;">
       <h3 style="margin-top: 0; color: #0b76d1; border-bottom: 2px solid #0b76d1; padding-bottom: 3px; margin-bottom: 6px;">Package Price</h3>
       <ul style="list-style: disc; padding-left: 18px; margin: 0; line-height: 1.8;">
-        ${packagePricingSummary
-          ? packagePricingSummary.split(',').map(item => `<li>${sanitizeInput(item.trim())}</li>`).join('')
+        ${packagePricingItems.length
+          ? packagePricingItems.map(item => `<li>${sanitizeInput(item)}</li>`).join('')
           : `
             <li>Per Adult: <strong>PKR ${fmt(perAdultCost)}</strong></li>
             ${numChildBed > 0 ? `<li>Per Child (with bed): <strong>PKR ${fmt(perChildBedCost)}</strong></li>` : ''}
