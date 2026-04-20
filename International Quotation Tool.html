@@ -2078,6 +2078,15 @@ function updateFlightsPaxFields() {
     const flightBlock = document.getElementById(`flightBlock_${index}`);
     if(!flightBlock) return;
 
+    // Store current input values before updating
+    const currentValues = {};
+    const inputs = flightBlock.querySelectorAll('input, select, textarea');
+    inputs.forEach(input => {
+      if (input.id && !input.id.includes('flightCost') && !input.id.includes('flightSvc')) {
+        currentValues[input.id] = input.value;
+      }
+    });
+
     // Get the HTML content excluding the PAX fields part
     const paxFieldsStart = `<!-- PAX-FIELDS-START -->`;
     const paxFieldsEnd = `<!-- PAX-FIELDS-END -->`;
@@ -2088,6 +2097,14 @@ function updateFlightsPaxFields() {
 
     const newPaxFields = generatePaxFields(index);
     flightBlock.innerHTML = beforePax + paxFieldsStart + newPaxFields + paxFieldsEnd + afterPax;
+
+    // Restore the input values
+    Object.keys(currentValues).forEach(id => {
+      const element = document.getElementById(id);
+      if (element) {
+        element.value = currentValues[id];
+      }
+    });
   });
 }
 
@@ -3340,19 +3357,34 @@ function updateDirectFlightAddonsPaxFields() {
     const pax = getCurrentPaxData();
     const addons = document.querySelectorAll('[id^="dfAddon_"]');
     addons.forEach(addon => {
+        // Store current input values before updating
+        const currentValues = {};
+        const inputs = addon.querySelectorAll('input, select, textarea');
+        inputs.forEach(input => {
+            currentValues[input.id || input.name] = input.value;
+        });
+
         const existingHtml = addon.innerHTML;
         const paxFieldsStart = `<!-- PAX-FIELDS-START -->`;
         const paxFieldsEnd = `<!-- PAX-FIELDS-END -->`;
-        
+
         // Split the HTML content to isolate the PAX fields section
         const beforePax = existingHtml.split(paxFieldsStart)[0];
         const afterPax = existingHtml.split(paxFieldsEnd)[1];
-        
+
         // Generate the new HTML for pax fields
         const newPaxHtml = generateAddonPaxFieldsHTML(pax);
-        
+
         // Reconstruct the full HTML
         addon.innerHTML = `${beforePax}${paxFieldsStart}${newPaxHtml}${paxFieldsEnd}${afterPax}`;
+
+        // Restore the input values
+        Object.keys(currentValues).forEach(id => {
+            const element = document.getElementById(id) || addon.querySelector(`[name="${id}"]`);
+            if (element) {
+                element.value = currentValues[id];
+            }
+        });
     });
 }
 
