@@ -1787,9 +1787,11 @@ document.addEventListener('DOMContentLoaded', function() {
     if (newPax.infants !== lastSavedPax.infants) changes.push(`Infants from ${lastSavedPax.infants} to ${newPax.infants}`);
 
     if (changes.length > 0) {
-      const changeMsg = "Client & Pax data has been modified:\n" + changes.join("\n") + "\nUpdating sections accordingly.";
+      const changeMsg = "Client & Pax data has been modified:\n" + changes.join("\n") + "\nUpdating rate columns only. Flight details will remain.";
       showNotification(changeMsg, 'info', 5000);
+      // Only update rate columns for flights, do not reset or clear flight details
       updateFlightsPaxFields();
+      // If you want to update hotel room types or direct flight addons, keep these lines
       updateHotelRoomTypes();
       updateDirectFlightAddonsPaxFields();
       lastSavedPax = newPax;
