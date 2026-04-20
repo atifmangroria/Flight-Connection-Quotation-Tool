@@ -5490,20 +5490,25 @@ if (flightElements && flightElements.length > 0) {
 // Check for hotels
 const hotelElements = document.querySelectorAll("[id^='hotelBlock_']");
 if (hotelElements && hotelElements.length > 0) {
-  hotelElements.forEach((el) => {
-    if (el && el.id) {
-      const idx = el.id.split("_")[1];
-      const hotelName = document.getElementById(`hotelName_${idx}`)?.value || "Hotel";
-      const city = document.getElementById(`hotelCity_${idx}`)?.value || "City";
-      const nights = document.getElementById(`hotelNights_${idx}`)?.value || 0;
-      const serviceType = document.getElementById(`hotelService_${idx}`)?.value || "Room Only";
-      const roomType = document.getElementById(`hotelRoomType_${idx}`)?.value || "Room Type";
-      const rooms = document.getElementById(`hotelRooms_${idx}`)?.value || 0;
-      
-      inclusionsList.push(`${nights} nights, ${rooms} ${roomType} ${serviceType.toLowerCase()} Accommodation in ${sanitizeInput(hotelName)}, ${sanitizeInput(city)}`);
-      if (serviceType === "With Breakfast") {
-        inclusionsList.push(`Breakfast in ${sanitizeInput(hotelName)}`);
-      }
+  getHotelGroups().forEach((hotel) => {
+    const hotelName = hotel.name || "Hotel";
+    const city = hotel.city || "City";
+    const nights = hotel.nights || 0;
+
+    const roomSummary = (hotel.roomTypes || [])
+      .filter((room) => (parseFloat(room.rooms) || 0) > 0)
+      .map((room) => {
+        const rooms = parseFloat(room.rooms) || 0;
+        const roomType = room.roomType || "Room";
+        const serviceType = (room.serviceType || "Room Only").toLowerCase();
+        return `${rooms} ${sanitizeInput(roomType)} ${sanitizeInput(serviceType)}`;
+      })
+      .join(' & ');
+
+    if (roomSummary) {
+      inclusionsList.push(`${nights} nights, ${roomSummary} Accommodation in ${sanitizeInput(hotelName)}, ${sanitizeInput(city)}`);
+    } else {
+      inclusionsList.push(`${nights} nights Accommodation in ${sanitizeInput(hotelName)}, ${sanitizeInput(city)}`);
     }
   });
 }
