@@ -1964,6 +1964,12 @@ function updateFlightsPaxFields() {
     const flightBlock = document.getElementById(`flightBlock_${index}`);
     if(!flightBlock) return;
 
+    // Save current flight details values
+    const flightItinerary = document.getElementById(`flightItinerary_${index}`)?.value || '';
+    const airline = document.getElementById(`airline_${index}`)?.value || '';
+    const flightDirect = document.getElementById(`flightDirect_${index}`)?.value || '';
+    const flightCurrency = document.getElementById(`flightCurrency_${index}`)?.value || 'USD';
+
     // Get the HTML content excluding the PAX fields part
     const paxFieldsStart = `<!-- PAX-FIELDS-START -->`;
     const paxFieldsEnd = `<!-- PAX-FIELDS-END -->`;
@@ -1974,6 +1980,17 @@ function updateFlightsPaxFields() {
 
     const newPaxFields = generatePaxFields(index);
     flightBlock.innerHTML = beforePax + paxFieldsStart + newPaxFields + paxFieldsEnd + afterPax;
+
+    // Restore the saved values
+    const itineraryEl = document.getElementById(`flightItinerary_${index}`);
+    const airlineEl = document.getElementById(`airline_${index}`);
+    const flightDirectEl = document.getElementById(`flightDirect_${index}`);
+    const flightCurrencyEl = document.getElementById(`flightCurrency_${index}`);
+
+    if (itineraryEl) itineraryEl.value = flightItinerary;
+    if (airlineEl) airlineEl.value = airline;
+    if (flightDirectEl) flightDirectEl.value = flightDirect;
+    if (flightCurrencyEl) flightCurrencyEl.value = flightCurrency;
   });
 }
 
@@ -3339,6 +3356,15 @@ function updateDirectFlightAddonsPaxFields() {
     const pax = getCurrentPaxData();
     const addons = document.querySelectorAll('[id^="dfAddon_"]');
     addons.forEach(addon => {
+        // Save current values
+        const textarea = addon.querySelector('textarea');
+        const input = addon.querySelector('input[list="airlist"]');
+        const select = addon.querySelector('select');
+
+        const savedTextarea = textarea ? textarea.value : '';
+        const savedInput = input ? input.value : '';
+        const savedSelect = select ? select.value : 'USD';
+
         const existingHtml = addon.innerHTML;
         const paxFieldsStart = `<!-- PAX-FIELDS-START -->`;
         const paxFieldsEnd = `<!-- PAX-FIELDS-END -->`;
@@ -3352,6 +3378,15 @@ function updateDirectFlightAddonsPaxFields() {
         
         // Reconstruct the full HTML
         addon.innerHTML = `${beforePax}${paxFieldsStart}${newPaxHtml}${paxFieldsEnd}${afterPax}`;
+
+        // Restore saved values
+        const newTextarea = addon.querySelector('textarea');
+        const newInput = addon.querySelector('input[list="airlist"]');
+        const newSelect = addon.querySelector('select');
+
+        if (newTextarea) newTextarea.value = savedTextarea;
+        if (newInput) newInput.value = savedInput;
+        if (newSelect) newSelect.value = savedSelect;
     });
 }
 
