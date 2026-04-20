@@ -2078,11 +2078,11 @@ function updateFlightsPaxFields() {
     const flightBlock = document.getElementById(`flightBlock_${index}`);
     if(!flightBlock) return;
 
-    // Store current input values before updating
+    // Store ALL current input values before updating (including cost fields)
     const currentValues = {};
     const inputs = flightBlock.querySelectorAll('input, select, textarea');
     inputs.forEach(input => {
-      if (input.id && !input.id.includes('flightCost') && !input.id.includes('flightSvc')) {
+      if (input.id) {
         currentValues[input.id] = input.value;
       }
     });
@@ -2097,6 +2097,16 @@ function updateFlightsPaxFields() {
 
     const newPaxFields = generatePaxFields(index);
     flightBlock.innerHTML = beforePax + paxFieldsStart + newPaxFields + paxFieldsEnd + afterPax;
+
+    // Restore ALL the input values (including cost fields)
+    Object.keys(currentValues).forEach(id => {
+      const element = document.getElementById(id);
+      if (element) {
+        element.value = currentValues[id];
+      }
+    });
+  });
+}
 
     // Restore the input values
     Object.keys(currentValues).forEach(id => {
@@ -3326,7 +3336,7 @@ function generateAddonPaxFieldsHTML(pax) {
 }
 
 // Generate upgrade flight cost fields (not difference)
-function generateUpgradeFlightPaxFieldsHTML(pax) {
+function generateUpgradeFlightPaxFieldsHTML(pax, dfIndex) {
   const fields = [];
   function addField(id, label) {
     fields.push(`<div class="inline-input"><label>${label}</label><input id="${id}" type="number" value="0" min="0"></div>`);
@@ -3357,6 +3367,9 @@ function updateDirectFlightAddonsPaxFields() {
     const pax = getCurrentPaxData();
     const addons = document.querySelectorAll('[id^="dfAddon_"]');
     addons.forEach(addon => {
+        // Extract the addon index from the ID
+        const dfIndex = addon.id.split('_')[1];
+        
         // Store current input values before updating
         const currentValues = {};
         const inputs = addon.querySelectorAll('input, select, textarea');
@@ -3373,7 +3386,7 @@ function updateDirectFlightAddonsPaxFields() {
         const afterPax = existingHtml.split(paxFieldsEnd)[1];
 
         // Generate the new HTML for pax fields
-        const newPaxHtml = generateAddonPaxFieldsHTML(pax);
+        const newPaxHtml = generateUpgradeFlightPaxFieldsHTML(pax, dfIndex);
 
         // Reconstruct the full HTML
         addon.innerHTML = `${beforePax}${paxFieldsStart}${newPaxHtml}${paxFieldsEnd}${afterPax}`;
@@ -3417,7 +3430,7 @@ async function addDirectFlightAddon(){
 <!-- PAX-FIELDS-START -->
 <div class="upgrade-flight-costs">
   <h5 style="margin-bottom: 10px; color: #007bff;">Enter Upgrade Flight Costs (System will calculate difference)</h5>
-  ${generateUpgradeFlightPaxFieldsHTML(pax)}
+  ${generateUpgradeFlightPaxFieldsHTML(pax, dfIndex)}
 </div>
 <!-- PAX-FIELDS-END -->
       <div class="small">Enter the difference in cost between base and upgraded flight.</div>
