@@ -5847,6 +5847,24 @@ quotationHTML += `
 // Build inclusions list
 let inclusionsList = [];
 
+function formatHotelRoomInclusion(room) {
+  const roomCount = parseInt(room?.rooms || 0);
+  const roomType = sanitizeInput(room?.roomType || 'Room');
+  const serviceType = (room?.serviceType || '').trim();
+  const roomLabel = `${roomCount} ${roomType}`;
+
+  if (!serviceType || serviceType === 'Not specified') {
+    return roomLabel;
+  }
+
+  const normalizedService = serviceType.toLowerCase();
+  if (normalizedService.startsWith('with ') || normalizedService.startsWith('without ')) {
+    return `${roomLabel} ${normalizedService}`;
+  }
+
+  return `${roomLabel} with ${normalizedService}`;
+}
+
 // Check for flights
 const flightElements = document.querySelectorAll("[id^='flightBlock_']");
 if (flightElements && flightElements.length > 0) {
@@ -5863,14 +5881,12 @@ if (flightElements && flightElements.length > 0) {
 // Check for hotels
 [getMakkahHotelDetails(), getMadinaHotelDetails()].forEach((hotelList) => {
   hotelList.forEach((hotel) => {
-    const roomSummary = (hotel.roomEntries || []).map(room => `${room.rooms} ${room.roomType} ${room.serviceType.toLowerCase()}`).join(' and ');
-    inclusionsList.push(`${hotel.nights} nights, ${roomSummary} accommodation in ${sanitizeInput(hotel.name)}`);
+    const roomSummary = (hotel.roomEntries || []).map(formatHotelRoomInclusion).join(' & ');
+    const stayText = roomSummary
+      ? `${hotel.nights} nights, ${roomSummary} Accommodation in ${sanitizeInput(hotel.name)}`
+      : `${hotel.nights} nights Accommodation in ${sanitizeInput(hotel.name)}`;
 
-    (hotel.roomEntries || []).forEach((room) => {
-      if (room.serviceType === 'With Breakfast' || room.serviceType === 'Half Board' || room.serviceType === 'Full Board') {
-        inclusionsList.push(`${room.serviceType} in ${sanitizeInput(hotel.name)}`);
-      }
-    });
+    inclusionsList.push(stayText);
   });
 });
 
