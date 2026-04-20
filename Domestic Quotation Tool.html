@@ -5264,34 +5264,39 @@ async function printQuotation() {
   
   // Add hotel details
   getHotelGroups().forEach((hotel, index) => {
-    const totalHotel = hotel.roomTypes.reduce((sum, room) => {
+    const validRooms = (hotel.roomTypes || []).filter((room) => (parseFloat(room.rooms) || 0) > 0);
+    const totalHotel = validRooms.reduce((sum, room) => {
       return sum + convertToPKR((room.costNight + room.svcNight) * hotel.nights * room.rooms, room.currency);
     }, 0);
 
-    let perPersonText = '';
-    if (hotelPriceMode === 'actual') {
-      perPersonText = hotel.roomTypes.map((room) => {
-        const perRoomPax = room.rooms * room.capacity;
-        const perCost = perRoomPax > 0 ? convertToPKR(((room.costNight + room.svcNight) * hotel.nights) / room.capacity, room.currency) : 0;
-        return `${room.roomType} (${room.rooms} room${room.rooms > 1 ? 's' : ''}): PKR ${fmt(perCost)}`;
-      }).join(' • ');
-    } else {
+    if (!validRooms.length) {
       const payingPax = numAdult + numChildBed;
       const avgCost = payingPax > 0 ? totalHotel / payingPax : 0;
-      const parts = [];
-      if (numAdult > 0) parts.push(`Adult: PKR ${fmt(avgCost)}`);
-      if (numChildBed > 0) parts.push(`Child(bed): PKR ${fmt(avgCost)}`);
-      perPersonText = parts.join(' • ');
-    }
-
-    const roomSummary = hotel.roomTypes.map((room) => `${room.rooms} ${room.roomType}${room.roomName ? ` (${room.roomName})` : ''} ${room.serviceType}`).join(' & ');
-
-    quotationHTML += `
+      quotationHTML += `
   <div style="margin:2px 0;padding:4px 8px;background:#fff;border-left:3px solid #0b76d1;border-radius:3px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
-    <span><b>🏨 ${hotel.city} Hotel ${index + 1}</b> &mdash; ${sanitizeInput(hotel.name)} &bull; ${sanitizeInput(roomSummary)} &bull; ${hotel.nights}N &nbsp; <span style="color:#555;font-size:11px;">${perPersonText}</span></span>
+    <span><b>🏨 ${sanitizeInput(hotel.city)} Hotel ${index + 1}</b> &mdash; ${sanitizeInput(hotel.name)} &bull; ${hotel.nights}N &nbsp; <span style="color:#555;font-size:11px;">Per Person: PKR ${fmt(avgCost)}</span></span>
     <b style="color:#0b76d1;white-space:nowrap;">PKR ${fmt(totalHotel)}</b>
   </div>
 `;
+      return;
+    }
+
+    validRooms.forEach((room) => {
+      const roomCount = parseFloat(room.rooms) || 0;
+      const roomCapacity = Math.max(1, parseFloat(room.capacity) || getRoomCapacityForCalculation(room.roomType));
+      const roomTotal = convertToPKR((room.costNight + room.svcNight) * hotel.nights * roomCount, room.currency);
+      const roomPerPerson = hotelPriceMode === 'actual'
+        ? (roomCapacity > 0 ? roomTotal / (roomCount * roomCapacity) : 0)
+        : ((numAdult + numChildBed) > 0 ? totalHotel / (numAdult + numChildBed) : 0);
+      const roomLabel = `${sanitizeInput(room.roomType || 'Room')}${room.roomName ? ` (${sanitizeInput(room.roomName)})` : ''} &times;${roomCount}`;
+
+      quotationHTML += `
+  <div style="margin:2px 0;padding:4px 8px;background:#fff;border-left:3px solid #0b76d1;border-radius:3px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
+    <span><b>🏨 ${sanitizeInput(hotel.city)} Hotel ${index + 1}</b> &mdash; ${sanitizeInput(hotel.name)} &bull; ${roomLabel} &bull; ${hotel.nights}N &bull; ${sanitizeInput(room.serviceType || 'Room Only')} &nbsp; <span style="color:#555;font-size:11px;">Per Person: PKR ${fmt(roomPerPerson)}</span></span>
+    <b style="color:#0b76d1;white-space:nowrap;">PKR ${fmt(roomTotal)}</b>
+  </div>
+`;
+    });
   });
   
   // Add transfer details
