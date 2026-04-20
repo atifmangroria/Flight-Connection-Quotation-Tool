@@ -6568,6 +6568,10 @@ function loadQuotation(quotationId) {
       // Save client data to localStorage
       localStorage.setItem("savedClientData_international", JSON.stringify(quotation.clientData));
       
+      // Temporarily disable change detection to prevent triggering updates before flights are loaded
+      const wasClientDataSaved = isClientDataSaved;
+      isClientDataSaved = false;
+      
       // Populate client form fields
       if (document.getElementById("clientName")) document.getElementById("clientName").value = quotation.clientData.name || "";
       if (document.getElementById("reference")) document.getElementById("reference").value = quotation.clientData.reference || "";
@@ -6585,7 +6589,7 @@ function loadQuotation(quotationId) {
       // Update date summary
       updateDateSummary();
       
-      // Mark client data as saved
+      // Mark client data as saved and synchronize last saved values
       isClientDataSaved = true;
       
       // Update last saved data
