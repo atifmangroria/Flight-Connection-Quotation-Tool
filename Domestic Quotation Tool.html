@@ -1970,6 +1970,19 @@ function updateFlightsPaxFields() {
     const flightDirect = document.getElementById(`flightDirect_${index}`)?.value || '';
     const flightCurrency = document.getElementById(`flightCurrency_${index}`)?.value || 'USD';
 
+    // Save current pax rate values
+    const savedPaxRates = {};
+    const paxFieldIds = [
+      `flightCostAdult_${index}`, `flightSvcAdult_${index}`,
+      `flightCostChildBed_${index}`, `flightSvcChildBed_${index}`,
+      `flightCostChildNoBed_${index}`, `flightSvcChildNoBed_${index}`,
+      `flightCostInf_${index}`, `flightSvcInf_${index}`
+    ];
+    paxFieldIds.forEach(id => {
+      const el = document.getElementById(id);
+      savedPaxRates[id] = el ? el.value : '0';
+    });
+
     // Get the HTML content excluding the PAX fields part
     const paxFieldsStart = `<!-- PAX-FIELDS-START -->`;
     const paxFieldsEnd = `<!-- PAX-FIELDS-END -->`;
@@ -1991,6 +2004,12 @@ function updateFlightsPaxFields() {
     if (airlineEl) airlineEl.value = airline;
     if (flightDirectEl) flightDirectEl.value = flightDirect;
     if (flightCurrencyEl) flightCurrencyEl.value = flightCurrency;
+
+    // Restore pax rate values
+    Object.keys(savedPaxRates).forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = savedPaxRates[id];
+    });
   });
 }
 
