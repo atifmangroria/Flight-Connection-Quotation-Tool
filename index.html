@@ -2169,11 +2169,12 @@ function calculateUpgradeDifference(upgradeIndex) {
 }
 
 // Generate pax input fields for a flight
-function generatePaxFields(index) {
+function generatePaxFields(index, existingValues = {}) {
   const pax = getCurrentPaxData();
   const fields = [];
   function addField(id, label) {
-    fields.push(`<div><label>${label}</label><input id="${id}" type="number" value="0" min="0"></div>`);
+    const value = Number.isFinite(Number(existingValues[id])) ? Number(existingValues[id]) : 0;
+    fields.push(`<div><label>${label}</label><input id="${id}" type="number" value="${value}" min="0"></div>`);
   }
 
   if(pax.adults > 0){
@@ -2196,13 +2197,33 @@ function generatePaxFields(index) {
   return fields.join("");
 }
 
+function getExistingFlightPaxValues(index) {
+  const ids = [
+    `flightCostAdult_${index}`,
+    `flightSvcAdult_${index}`,
+    `flightCostChildBed_${index}`,
+    `flightSvcChildBed_${index}`,
+    `flightCostChildNoBed_${index}`,
+    `flightSvcChildNoBed_${index}`,
+    `flightCostInf_${index}`,
+    `flightSvcInf_${index}`
+  ];
+
+  const values = {};
+  ids.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) values[id] = el.value;
+  });
+  return values;
+}
+
 // Update existing flights when pax changes
 function updateFlightsPaxFields() {
   flights.forEach(index => {
     const flightBlock = document.getElementById(`flightBlock_${index}`);
     if(!flightBlock) return;
 
-    // Get the HTML content excluding the PAX fields part
+    const existingValues = getExistingFlightPaxValues(index);
     const paxFieldsStart = `<!-- PAX-FIELDS-START -->`;
     const paxFieldsEnd = `<!-- PAX-FIELDS-END -->`;
     const existingHtml = flightBlock.innerHTML;
@@ -2210,7 +2231,7 @@ function updateFlightsPaxFields() {
     const beforePax = existingHtml.split(paxFieldsStart)[0];
     const afterPax = existingHtml.split(paxFieldsEnd)[1];
 
-    const newPaxFields = generatePaxFields(index);
+    const newPaxFields = generatePaxFields(index, existingValues);
     flightBlock.innerHTML = beforePax + paxFieldsStart + newPaxFields + paxFieldsEnd + afterPax;
   });
 }
@@ -3533,27 +3554,28 @@ function generateAddonPaxFieldsHTML(pax) {
 }
 
 // Generate upgrade flight cost fields (not difference)
-function generateUpgradeFlightPaxFieldsHTML(pax) {
+function generateUpgradeFlightPaxFieldsHTML(pax, addonIndex = dfIndex, existingValues = {}) {
   const fields = [];
   function addField(id, label) {
-    fields.push(`<div class="inline-input"><label>${label}</label><input id="${id}" type="number" value="0" min="0"></div>`);
+    const value = Number.isFinite(Number(existingValues[id])) ? Number(existingValues[id]) : 0;
+    fields.push(`<div class="inline-input"><label>${label}</label><input id="${id}" type="number" value="${value}" min="0"></div>`);
   }
 
   if(pax.adults > 0){
-    addField(`upgradeFlightCostAdult_${dfIndex}`, "Adult Cost (PKR)");
-    addField(`upgradeFlightSvcAdult_${dfIndex}`, "Adult Service (PKR)");
+    addField(`upgradeFlightCostAdult_${addonIndex}`, "Adult Cost (PKR)");
+    addField(`upgradeFlightSvcAdult_${addonIndex}`, "Adult Service (PKR)");
   }
   if(pax.childBed > 0){
-    addField(`upgradeFlightCostChildBed_${dfIndex}`, "Child (with bed) Cost (PKR)");
-    addField(`upgradeFlightSvcChildBed_${dfIndex}`, "Child (with bed) Service (PKR)");
+    addField(`upgradeFlightCostChildBed_${addonIndex}`, "Child (with bed) Cost (PKR)");
+    addField(`upgradeFlightSvcChildBed_${addonIndex}`, "Child (with bed) Service (PKR)");
   }
   if(pax.childNoBed > 0){
-    addField(`upgradeFlightCostChildNoBed_${dfIndex}`, "Child (no bed) Cost (PKR)");
-    addField(`upgradeFlightSvcChildNoBed_${dfIndex}`, "Child (no bed) Service (PKR)");
+    addField(`upgradeFlightCostChildNoBed_${addonIndex}`, "Child (no bed) Cost (PKR)");
+    addField(`upgradeFlightSvcChildNoBed_${addonIndex}`, "Child (no bed) Service (PKR)");
   }
   if(pax.infants > 0){
-    addField(`upgradeFlightCostInf_${dfIndex}`, "Infant Cost (PKR)");
-    addField(`upgradeFlightSvcInf_${dfIndex}`, "Infant Service (PKR)");
+    addField(`upgradeFlightCostInf_${addonIndex}`, "Infant Cost (PKR)");
+    addField(`upgradeFlightSvcInf_${addonIndex}`, "Infant Service (PKR)");
   }
 
   return fields.join("");
@@ -3564,18 +3586,33 @@ function updateDirectFlightAddonsPaxFields() {
     const pax = getCurrentPaxData();
     const addons = document.querySelectorAll('[id^="dfAddon_"]');
     addons.forEach(addon => {
+        const addonIndex = addon.id.split('_')[1];
+        const existingValues = {};
+        [
+          `upgradeFlightCostAdult_${addonIndex}`,
+          `upgradeFlightSvcAdult_${addonIndex}`,
+          `upgradeFlightCostChildBed_${addonIndex}`,
+          `upgradeFlightSvcChildBed_${addonIndex}`,
+          `upgradeFlightCostChildNoBed_${addonIndex}`,
+          `upgradeFlightSvcChildNoBed_${addonIndex}`,
+          `upgradeFlightCostInf_${addonIndex}`,
+          `upgradeFlightSvcInf_${addonIndex}`
+        ].forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) existingValues[id] = el.value;
+        });
+
         const existingHtml = addon.innerHTML;
         const paxFieldsStart = `<!-- PAX-FIELDS-START -->`;
         const paxFieldsEnd = `<!-- PAX-FIELDS-END -->`;
-        
-        // Split the HTML content to isolate the PAX fields section
         const beforePax = existingHtml.split(paxFieldsStart)[0];
         const afterPax = existingHtml.split(paxFieldsEnd)[1];
-        
-        // Generate the new HTML for pax fields
-        const newPaxHtml = generateAddonPaxFieldsHTML(pax);
-        
-        // Reconstruct the full HTML
+        const newPaxHtml = `
+<div class="upgrade-flight-costs">
+  <h5 style="margin-bottom: 10px; color: #0b76d1;">Enter Upgrade Flight Costs (System will calculate difference)</h5>
+  ${generateUpgradeFlightPaxFieldsHTML(pax, addonIndex, existingValues)}
+</div>`;
+
         addon.innerHTML = `${beforePax}${paxFieldsStart}${newPaxHtml}${paxFieldsEnd}${afterPax}`;
     });
 }
