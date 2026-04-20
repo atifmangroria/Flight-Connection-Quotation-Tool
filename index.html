@@ -4451,17 +4451,20 @@ async function performCalculation() {
   // Stage 7: Display single row per hotel with all room types combined
   Object.values(hotelGroupActual).forEach((hotel) => {
     const nights = hotel.nights;
-    const roomDetails = hotel.rooms.map(r =>
-      `${r.count} ${r.roomType} (${r.serviceType})`
-    ).join(' & ');
+    const roomLines = hotel.rooms.map(r => {
+      const costNightPKR = (r.costNight || 0) * roe;
+      const svcNightPKR = (r.svcNight || 0) * roe;
+      return `${r.count} ${r.roomType} with ${r.serviceType} • PKR ${fmt(costNightPKR)} cost/night + PKR ${fmt(svcNightPKR)} service/night • ${r.nights} nights • PKR ${fmt(r.perPerson)} per pax`;
+    }).join('<br>');
 
-    const desc = `${nights} nights, ${roomDetails} accommodation in ${hotel.name}, ${hotel.city}`;
+    const hotelHeading = `${hotel.name}, ${hotel.city}`;
+    const hotelDetails = `Stay: ${nights} nights<br>${roomLines}`;
 
     const payingPax = numAdult + numChildBed;
     let perPersonTextHotel = '';
     if (hotel.rooms.length > 1 && getHotelPriceMode() === 'actual') {
       perPersonTextHotel = hotel.rooms.map(rb =>
-        `${rb.roomType} (${rb.count} room${rb.count > 1 ? 's' : ''}): PKR ${fmt(rb.perPerson)}`
+        `${rb.roomType} (${rb.count} room${rb.count > 1 ? 's' : ''}): PKR ${fmt(rb.perPerson)} x ${rb.totalRoomPax}`
       ).join(', ');
     } else if (payingPax > 0) {
       const perPersonCost = (hotel.totalCost + hotel.totalSvc) / payingPax;
@@ -4472,7 +4475,7 @@ async function performCalculation() {
     }
 
     if (hotel.totalCost > 0 || hotel.totalSvc > 0) {
-      addDetailedRow(`Hotel`, hotel.name, desc, hotel.totalCost, hotel.totalSvc, hotel.totalCost + hotel.totalSvc, perPersonTextHotel, false);
+      addDetailedRow(`Hotel`, hotelHeading, hotelDetails, hotel.totalCost, hotel.totalSvc, hotel.totalCost + hotel.totalSvc, perPersonTextHotel, false);
     }
   });
 
