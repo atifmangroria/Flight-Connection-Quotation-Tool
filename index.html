@@ -5199,8 +5199,8 @@ function buildPackagePricePreviewItems(clientData, packagePerAdult, packagePerCh
     if (clientData.childBed > 0) items.push(`<li>Per Child (with bed): <strong>PKR ${fmt(packagePerChildBed)}</strong></li>`);
   }
 
-  if (clientData.childNoBed > 0) items.push(`<li>Per Child (without bed): <strong>PKR ${fmt(packagePerChildNoBed)}</strong></li>`);
-  if (clientData.infants > 0) items.push(`<li>Per Infant: <strong>PKR ${fmt(packagePerInfant)}</strong></li>`);
+  if (clientData.childNoBed > 0) items.push(`<li>Child (without bed) x${clientData.childNoBed}: <strong>PKR ${fmt(packagePerChildNoBed)}</strong></li>`);
+  if (clientData.infants > 0) items.push(`<li>Infant x${clientData.infants}: <strong>PKR ${fmt(packagePerInfant)}</strong></li>`);
 
   return items.join('');
 }
