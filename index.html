@@ -5089,7 +5089,6 @@ function getTransferDetails() {
     
     if (date && from && to && vehicle) {
       const formattedDate = formatDateToDMY(date);
-      // Format: "10 Nov - Jeddah Airport to Makkah Hotel by Private Car"
       transferDetails.push(`${formattedDate} - ${from} to ${to} by ${type} ${vehicle}`);
     }
   });
@@ -5098,8 +5097,75 @@ function getTransferDetails() {
     return "No transfers included in this package.";
   }
   
-  // Join with line breaks for better readability
   return transferDetails.join("<br>");
+}
+
+function buildPackagePricePreviewItems(clientData, packagePerAdult, packagePerChildBed, packagePerChildNoBed, packagePerInfant) {
+  const items = [];
+  const roomEntries = (typeof getHotelRoomEntriesBoth === 'function' ? getHotelRoomEntriesBoth() : []);
+  const isActualMode = getHotelPriceMode() === 'actual' && roomEntries.length > 0;
+
+  if (isActualMode) {
+    const roe = parseFloat(roeInput.value || 0);
+    const payingPax = (clientData.adults || 0) + (clientData.childBed || 0);
+    const totalHotelPKR = roomEntries.reduce((sum, room) => sum + (((room.costNight || 0) + (room.svcNight || 0)) * (room.nights || 0) * (room.rooms || 0) * roe), 0);
+    const averageHotelPerPax = payingPax > 0 ? totalHotelPKR / payingPax : 0;
+    const baseAdult = Math.max(0, packagePerAdult - averageHotelPerPax);
+    const baseChildBed = Math.max(0, packagePerChildBed - averageHotelPerPax);
+
+    const groupedRooms = [];
+    roomEntries.forEach((room) => {
+      const key = String(room.roomType || 'Room');
+      let group = groupedRooms.find(entry => entry.key === key);
+      const hotelPerPerson = (((room.costNight || 0) + (room.svcNight || 0)) * (room.nights || 0) / Math.max(room.capacity || 1, 1)) * roe;
+      const paxCapacity = (room.rooms || 0) * Math.max(room.capacity || 1, 1);
+
+      if (!group) {
+        group = {
+          key,
+          roomType: room.roomType || 'Room',
+          paxCapacity,
+          hotelPerPerson: 0
+        };
+        groupedRooms.push(group);
+      } else {
+        group.paxCapacity = Math.max(group.paxCapacity, paxCapacity);
+      }
+
+      group.hotelPerPerson += hotelPerPerson;
+    });
+
+    let adultsRemaining = clientData.adults || 0;
+    let childBedRemaining = clientData.childBed || 0;
+
+    groupedRooms.forEach((group) => {
+      let available = group.paxCapacity || 0;
+      const adultsHere = Math.min(adultsRemaining, available);
+      adultsRemaining -= adultsHere;
+      available -= adultsHere;
+
+      const childBedHere = Math.min(childBedRemaining, available);
+      childBedRemaining -= childBedHere;
+
+      if (adultsHere > 0) {
+        items.push(`<li>Adult x${adultsHere} (${sanitizeInput(group.roomType)} Sharing): <strong>PKR ${fmt(baseAdult + group.hotelPerPerson)}</strong></li>`);
+      }
+      if (childBedHere > 0) {
+        items.push(`<li>Child (bed) x${childBedHere} (${sanitizeInput(group.roomType)} Sharing): <strong>PKR ${fmt(baseChildBed + group.hotelPerPerson)}</strong></li>`);
+      }
+    });
+
+    if (adultsRemaining > 0) items.push(`<li>Adult x${adultsRemaining}: <strong>PKR ${fmt(packagePerAdult)}</strong></li>`);
+    if (childBedRemaining > 0) items.push(`<li>Child (bed) x${childBedRemaining}: <strong>PKR ${fmt(packagePerChildBed)}</strong></li>`);
+  } else {
+    if (clientData.adults > 0) items.push(`<li>Per Adult: <strong>PKR ${fmt(packagePerAdult)}</strong></li>`);
+    if (clientData.childBed > 0) items.push(`<li>Per Child (with bed): <strong>PKR ${fmt(packagePerChildBed)}</strong></li>`);
+  }
+
+  if (clientData.childNoBed > 0) items.push(`<li>Per Child (without bed): <strong>PKR ${fmt(packagePerChildNoBed)}</strong></li>`);
+  if (clientData.infants > 0) items.push(`<li>Per Infant: <strong>PKR ${fmt(packagePerInfant)}</strong></li>`);
+
+  return items.join('');
 }
 
 // --- GENERATE QUOTATION ---
@@ -5447,10 +5513,7 @@ console.log("Total package amount:", totalPackageAmount);
     <div style="margin-bottom: 10px; border: 1px solid #eee; padding: 8px 12px; border-radius: 6px;">
       <h3 style="margin-top: 0; color: #0b76d1; border-bottom: 2px solid #0b76d1; padding-bottom: 3px; margin-bottom: 6px;">Package Price</h3>
       <ul style="list-style: disc; padding-left: 18px; margin: 0; line-height: 1.8;">
-        <li>Per Adult: <strong>PKR ${fmt(packagePerAdult)}</strong></li>
-        ${clientData.childBed > 0 ? `<li>Per Child (with bed): <strong>PKR ${fmt(packagePerChildBed)}</strong></li>` : ''}
-        ${clientData.childNoBed > 0 ? `<li>Per Child (without bed): <strong>PKR ${fmt(packagePerChildNoBed)}</strong></li>` : ''}
-        ${clientData.infants > 0 ? `<li>Per Infant: <strong>PKR ${fmt(packagePerInfant)}</strong></li>` : ''}
+        ${buildPackagePricePreviewItems(clientData, packagePerAdult, packagePerChildBed, packagePerChildNoBed, packagePerInfant)}
       </ul>
       <div style="margin-top: 5px; padding-top: 5px; border-top: 1px solid #ddd; font-weight: bold; color: #0b76d1;">Total Package Amount: PKR ${fmt(totalPackageAmount)}</div>
     </div>
