@@ -4176,14 +4176,16 @@ async function performCalculation() {
       hotelGroupActual[rb.idx].totalSvc += rb.count * rb.svcNight * rb.nights;
     });
     
-    // Add one row per hotel with all room types combined for actual mode
+    // Add one row per hotel with detailed room type breakdown
     Object.values(hotelGroupActual).forEach((hotel) => {
       const nights = hotel.nights;
-      let roomDetails = hotel.rooms.map(r => 
-        `${r.count} ${r.roomType} with ${r.serviceType}`
-      ).join(' & ');
       
-      let desc = `${nights} nights, ${roomDetails} Accommodation in ${hotel.name}, ${hotel.city}`;
+      // Build detailed description with hotel name/location, stay duration, and room breakdowns
+      let desc = `${hotel.name}, ${hotel.city}<br>Stay: ${nights} nights`;
+      
+      hotel.rooms.forEach(rb => {
+        desc += `<br>${rb.count} ${rb.roomType} with ${rb.serviceType} • ${rb.currency} ${fmt(rb.costNight)} cost/night + ${rb.currency} ${fmt(rb.svcNight)} service/night • ${rb.nights} nights • PKR ${fmt(rb.perPerson)} per pax`;
+      });
       
       // Build per person text showing breakdown by room type
       let perPersonTextHotel = hotel.rooms.map(rb => 
@@ -4249,16 +4251,18 @@ async function performCalculation() {
       }
     });
     
-    // Add one row per hotel with all room types combined
+    // Add one row per hotel with detailed room type breakdown
     Object.values(hotelGroups).forEach((hotel) => {
-      // Build description with all room types on single line with & separator
+      // Build description with hotel name/location, stay duration, and room breakdowns
       const nights = hotel.rooms[0].nights;
-      const serviceType = hotel.rooms[0].serviceType;
-      let roomDetails = hotel.rooms.map(r => 
-        `${r.rooms} ${r.roomType} with ${r.serviceType}`
-      ).join(' & ');
+      let desc = `${hotel.name}, ${hotel.city}<br>Stay: ${nights} nights`;
       
-      let desc = `${nights} nights, ${roomDetails} Accommodation in ${hotel.name}, ${hotel.city}`;
+      hotel.rooms.forEach(r => {
+        const avgCostPerNight = r.costNight; // Already averaged
+        const avgSvcPerNight = r.svcNight;   // Already averaged
+        desc += `<br>${r.rooms} ${r.roomType} with ${r.serviceType} • ${r.currency} ${fmt(avgCostPerNight)} cost/night + ${r.currency} ${fmt(avgSvcPerNight)} service/night • ${r.nights} nights • PKR ${fmt(hotelCostPerPerson)} per pax`;
+      });
+      
       addDetailedRow(`Hotel`, hotel.name, desc, hotel.currency, hotel.totalCost, hotel.totalSvc, perPersonText, false);
     });
   }
