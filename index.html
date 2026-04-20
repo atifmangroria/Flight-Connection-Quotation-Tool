@@ -2464,7 +2464,7 @@ function calculateTotalHotelCapacity() {
 }
 
 /// New function to validate ALL hotel configurations
-function validateAllHotels() {
+function validateAllHotels(showErrors = true) {
     const clientData = getClientData();
     if (!clientData) return false;
     
@@ -2475,25 +2475,23 @@ function validateAllHotels() {
     let isValid = true;
     let errorMessage = '';
 
-    // Check if total rooms are enough for total pax
     if (totalPax > totalCapacity) {
         errorMessage += `Total rooms booked can only accommodate ${totalCapacity} people, but your group has ${totalPax}.\n`;
         isValid = false;
     }
 
-    // Check if total rooms are enough for children without bed
     if (totalChildNoBed > totalChildNoBedCapacity) {
         errorMessage += `Total rooms booked can only accommodate ${totalChildNoBedCapacity} children without a bed. Your group has ${totalChildNoBed}.\n`;
         isValid = false;
     }
     
-    // Only show error message if there's an actual validation error
+    const allRoomsInputs = document.querySelectorAll('.hotelRoomsInp, [id^="hkRoomsM_"], [id^="hkRoomsA_"], [id^="rCount_"]');
     if (!isValid) {
-        const allRoomsInputs = document.querySelectorAll('[id^="hkRoomsM_"], [id^="hkRoomsA_"]');
         allRoomsInputs.forEach(input => input.classList.add("input-error"));
-        showAlert(errorMessage, "Room Configuration Error");
+        if (showErrors) {
+          showAlert(errorMessage + "\nPlease adjust room type or room count.", "Room Configuration Error");
+        }
     } else {
-        const allRoomsInputs = document.querySelectorAll('[id^="hkRoomsM_"], [id^="hkRoomsA_"]');
         allRoomsInputs.forEach(input => input.classList.remove("input-error"));
     }
 
@@ -2705,29 +2703,7 @@ function removeRoomType(hotelIndex, roomIdx, city) {
 
 // ===== STAGE 2: CAPACITY VALIDATION =====
 function validateHotelCapacity(hotelIndex, city) {
-  const clientData = getClientData();
-  if (!clientData) return;
-
-  const totalPax = clientData.totalPax || 0;
-  const key = getRoomTypeKey(hotelIndex, city);
-  const roomEntries = hotelRoomEntries[key] || [];
-
-  let totalCapacity = 0;
-  roomEntries.forEach(entry => {
-    const ids = getHotelRoomFieldIds(hotelIndex, city, entry.roomIdx);
-    const roomType = document.getElementById(ids.roomType)?.value || 'Double';
-    const roomCount = parseInt(document.getElementById(ids.rooms)?.value || 0);
-    totalCapacity += getRoomTypeCapacity(roomType) * roomCount;
-  });
-
-  const capacityDisplay = document.getElementById(`capDisplay_${city}_${hotelIndex}`);
-  if (capacityDisplay) {
-    if (totalCapacity >= totalPax) {
-      capacityDisplay.innerHTML = `<span style="color: green; font-weight: bold;">Room Capacity: ${totalCapacity} pax | Required: ${totalPax} pax ✓</span>`;
-    } else {
-      capacityDisplay.innerHTML = `<span style="color: red; font-weight: bold;">Room Capacity: ${totalCapacity} pax | Required: ${totalPax} pax ❌ INSUFFICIENT</span>`;
-    }
-  }
+  validateAllHotels(false);
 }
 
 // ===== STAGE 3: HOTEL PRICING MODE =====
@@ -2750,18 +2726,51 @@ function getHotelPriceMode() {
 }
 
 function updateHotelPriceModeVisibility() {
+  const section = document.getElementById('hotelPriceModeSection');
+  if (section) section.style.display = 'none';
   document.querySelectorAll('input[name="hotelPriceMode"]').forEach(input => {
     input.checked = input.value === hotelPricingMode;
   });
 }
 
 function showHotelPricingModeDialog() {
-  updateHotelPriceModeVisibility();
-  return Promise.resolve(getHotelPriceMode());
+  return new Promise((resolve) => {
+    if (!checkHasMultipleRoomTypes()) {
+      resolve(getHotelPriceMode());
+      return;
+    }
+
+    const existing = document.getElementById('hotelPriceModePrompt');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'hotelPriceModePrompt';
+    overlay.className = 'modal-overlay visible no-print';
+    overlay.innerHTML = `
+      <div class="modal-content" style="max-width: 520px;">
+        <h3>Hotel Pricing Mode</h3>
+        <p>You have multiple room types in this hotel. How would you like to show per-person pricing?</p>
+        <div class="modal-buttons">
+          <button type="button" id="actualModeBtn" class="blue-btn">Per Room Type (Actual)</button>
+          <button type="button" id="averageModeBtn" class="green-btn">Average Per Person</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const closeWith = (mode) => {
+      setHotelPricingMode(mode);
+      overlay.remove();
+      resolve(mode);
+    };
+
+    overlay.querySelector('#actualModeBtn')?.addEventListener('click', () => closeWith('actual'));
+    overlay.querySelector('#averageModeBtn')?.addEventListener('click', () => closeWith('average'));
+  });
 }
 
 function checkHasMultipleRoomTypes() {
-  return Object.values(hotelRoomEntries).some(entries => Array.isArray(entries) && entries.length > 1);
+  return Object.values(hotelRoomEntries).some(entries => Array.isArray(entries) && entries.filter(e => e && e.roomIdx).length > 1);
 }
 
 window.addEventListener('load', () => {
@@ -2809,7 +2818,6 @@ async function createHotelSectionM(index){
       <div id="roomTypeContainer_M_${index}"></div>
       <button type="button" onclick="addRoomTypeToHotel(${index}, 'M')" class="add-btn">+ Add Room Type</button>
     </div>
-    <div id="capDisplay_M_${index}" style="margin-top: 10px; padding: 10px; background: #f0f0f0; border-radius: 4px;"></div>
   `;
   container.appendChild(hotelDiv);
   hotelsMakkah.push(index);
@@ -2854,7 +2862,7 @@ function removeHotelM(index){
       nextHotelNumberM = 0;
   }
   updateHotelPriceModeVisibility();
-  validateAllHotels();
+  validateAllHotels(false);
 }
 
 // Add Hotel button
@@ -2941,7 +2949,6 @@ async function createHotelSectionA(index){
       <div id="roomTypeContainer_A_${index}"></div>
       <button type="button" onclick="addRoomTypeToHotel(${index}, 'A')" class="add-btn">+ Add Room Type</button>
     </div>
-    <div id="capDisplay_A_${index}" style="margin-top: 10px; padding: 10px; background: #f0f0f0; border-radius: 4px;"></div>
   `;
   container.appendChild(hotelDiv);
   hotelsMadina.push(index);
@@ -3003,7 +3010,7 @@ function removeHotelA(index){
       nextHotelNumberA = 0;
   }
   updateHotelPriceModeVisibility();
-  validateAllHotels();
+  validateAllHotels(false);
 }
 
 document.getElementById("btnAddHotelA").addEventListener("click", async ()=>{
@@ -3032,7 +3039,7 @@ document.getElementById("btnAddHotelA").addEventListener("click", async ()=>{
 });
 </script>
 
-<div class="section" id="hotelPriceModeSection">
+<div class="section" id="hotelPriceModeSection" style="display:none;">
   <h3>Hotel Price Display</h3>
   <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:center;">
     <label style="display:flex;align-items:center;gap:6px;">
@@ -4251,7 +4258,7 @@ function getHotelRoomEntriesBoth() {
   return [...getHotelRoomEntriesM(), ...getHotelRoomEntriesA()];
 }
 
-function performCalculation() {
+async function performCalculation() {
   // Check if the calculation was triggered by a button click
   const isButtonClick = document.activeElement === btnCalculate || document.activeElement === btnRecalculate;
 
@@ -4284,8 +4291,13 @@ function performCalculation() {
       showToast("⚠️ Please add at least one service before calculating!", "warning");
       return;
     }
+    if ((hasMakkah || hasMadina) && !validateAllHotels(true)) {
+      return;
+    }
+    if ((hasMakkah || hasMadina) && checkHasMultipleRoomTypes()) {
+      await showHotelPricingModeDialog();
+    }
     
-    // Success toast only shows if all checks pass
     showToast("✅ All details verified. Generating quotation...", "success");
   }
 
