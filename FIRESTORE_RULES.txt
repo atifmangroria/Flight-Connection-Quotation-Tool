@@ -52,8 +52,8 @@ service cloud.firestore {
     // ==================== UMRAH QUOTATIONS ====================
     // Umrah Quotations - Approved users only
     match /umrah_quotations/{quotationId} {
-      // Approved users can read quotations
-      allow read: if isApproved();
+       // Authenticated users can read only their own doc; admins can read all docs
+       allow read: if request.auth != null && (quotationId == request.auth.uid || isAdmin());
       
       // Approved users can create quotations
       allow create: if isApproved();
@@ -78,8 +78,8 @@ service cloud.firestore {
     // ==================== INTERNATIONAL QUOTATIONS ====================
     // International Quotations - Approved users only
     match /international_quotations/{quotationId} {
-      // Approved users can read quotations
-      allow read: if isApproved();
+       // Authenticated users can read only their own doc; admins can read all docs
+       allow read: if request.auth != null && (quotationId == request.auth.uid || isAdmin());
       
       // Approved users can create quotations
       allow create: if isApproved();
@@ -104,8 +104,8 @@ service cloud.firestore {
     // ==================== DOMESTIC QUOTATIONS ====================
     // Domestic Quotations - Approved users only
     match /domestic_quotations/{quotationId} {
-      // Approved users can read quotations
-      allow read: if isApproved();
+       // Authenticated users can read only their own doc; admins can read all docs
+       allow read: if request.auth != null && (quotationId == request.auth.uid || isAdmin());
 
       // Approved users can create quotations
       allow create: if isApproved();

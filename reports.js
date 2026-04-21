@@ -59,6 +59,7 @@ let currentRenderedRows = [];
 let currentRenderedFields = [];
 let lastLoadUsedLocalFallback = false;
 let lastLoadPermissionDenied = false;
+let lastLoadAuthMissing = false;
 
 function setStatus(message, ok = false) {
     reportStatus.textContent = message;
@@ -129,6 +130,33 @@ function isPermissionDeniedError(error) {
         || String(error?.message || "").toLowerCase().includes("insufficient permissions");
 }
 
+function waitForAuthSession(timeoutMs = 4000) {
+    return new Promise(resolve => {
+        if (!firebase.auth) {
+            resolve(null);
+            return;
+        }
+
+        const auth = firebase.auth();
+        if (auth.currentUser) {
+            resolve(auth.currentUser);
+            return;
+        }
+
+        let done = false;
+        const finish = (user) => {
+            if (done) return;
+            done = true;
+            clearTimeout(timer);
+            unsubscribe();
+            resolve(user || null);
+        };
+
+        const timer = setTimeout(() => finish(auth.currentUser), timeoutMs);
+        const unsubscribe = auth.onAuthStateChanged(user => finish(user), () => finish(null));
+    });
+}
+
 function getLocalQuotationsSnapshot() {
     return {
         umrah: JSON.parse(localStorage.getItem("savedQuotations") || "[]"),
@@ -161,12 +189,35 @@ async function loadQuotationRecords() {
     ];
     const agent = getLoggedInAgent();
     const ownerId = getOwnerId(agent);
+    const isAdminSession = String(agent?.role || "").toLowerCase() === "admin";
     const all = [];
 
     lastLoadUsedLocalFallback = false;
     lastLoadPermissionDenied = false;
+    lastLoadAuthMissing = false;
 
-    if (ownerId) {
+    const authUser = firebase.auth ? firebase.auth().currentUser : null;
+    if (!authUser) {
+        lastLoadAuthMissing = true;
+    }
+
+    if (isAdminSession) {
+        for (const source of map) {
+            try {
+                const snapshot = await db.collection(source.collection).get();
+                snapshot.forEach(doc => {
+                    const payload = doc.data() || {};
+                    all.push(...normalizeQuotationList(payload.quotations, source.type, doc.id));
+                });
+            } catch (error) {
+                if (isPermissionDeniedError(error)) {
+                    lastLoadPermissionDenied = true;
+                    break;
+                }
+                throw error;
+            }
+        }
+    } else if (ownerId) {
         for (const source of map) {
             try {
                 const docSnap = await db.collection(source.collection).doc(ownerId).get();
@@ -439,6 +490,7 @@ async function runReport() {
 
     try {
         setStatus("Loading data from Firebase...");
+        await waitForAuthSession();
         const source = dataSourceSelect.value;
         let rows = await getRowsBySource(source);
         rows = applyDateFilter(rows);
@@ -454,6 +506,10 @@ async function runReport() {
 
         renderTable(validFields, rows);
         if (!rows.length) {
+            if (lastLoadAuthMissing) {
+                setStatus("No Firebase session found on this page. Please open Reports from dashboard after login.");
+                return;
+            }
             if (lastLoadPermissionDenied) {
                 setStatus("Firebase access is restricted for reports. Showing only locally available data.");
                 return;
