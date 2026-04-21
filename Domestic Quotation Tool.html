@@ -4339,63 +4339,47 @@ async function performCalculation() {
 
     const nonHotelCostAdult = perAdult - avgHotelCostPerPerson;
     const nonHotelCostChildBed = perChildBed - avgHotelCostPerPerson;
-    const actualPricingAllocations = [];
 
-    const groupedByHotel = {};
+    // Consolidate same room-sharing types across all hotels to avoid repeated lines.
+    const roomTypeTotals = {};
     hotelRoomBreakdown.forEach((rb) => {
-      if (!groupedByHotel[rb.idx]) groupedByHotel[rb.idx] = [];
-      groupedByHotel[rb.idx].push(rb);
-    });
-
-    Object.values(groupedByHotel).forEach((roomsForHotel) => {
-      let remainingAdults = numAdult;
-      let remainingChildBeds = numChildBed;
-      const sortedRooms = [...roomsForHotel].sort((a, b) => a.totalRoomPax - b.totalRoomPax);
-
-      sortedRooms.forEach((rb) => {
-        const availablePax = Math.max(remainingAdults + remainingChildBeds, 0);
-        const occupiedPax = Math.min(rb.totalRoomPax, availablePax);
-        if (occupiedPax <= 0) return;
-
-        const actualHotelPerPerson = rb.totalRoomCostPKR / occupiedPax;
-        const adultsInRoom = Math.min(remainingAdults, occupiedPax);
-        const childrenInRoom = Math.min(remainingChildBeds, Math.max(occupiedPax - adultsInRoom, 0));
-        const sharingLabel = `${rb.roomType} Sharing`;
-
-        if (adultsInRoom > 0) {
-          actualPricingAllocations.push({
-            paxType: 'Adult',
-            count: adultsInRoom,
-            label: sharingLabel,
-            price: actualHotelPerPerson + nonHotelCostAdult
-          });
-        }
-        if (childrenInRoom > 0) {
-          actualPricingAllocations.push({
-            paxType: 'Child (bed)',
-            count: childrenInRoom,
-            label: sharingLabel,
-            price: actualHotelPerPerson + nonHotelCostChildBed
-          });
-        }
-
-        remainingAdults -= adultsInRoom;
-        remainingChildBeds -= childrenInRoom;
-      });
-    });
-
-    const groupedAllocations = {};
-    actualPricingAllocations.forEach((item) => {
-      const roundedPrice = Math.round(item.price);
-      const key = `${item.paxType}|${item.label}|${roundedPrice}`;
-      if (!groupedAllocations[key]) {
-        groupedAllocations[key] = { ...item, count: 0, price: roundedPrice };
+      const key = rb.label || rb.roomType;
+      if (!roomTypeTotals[key]) {
+        roomTypeTotals[key] = {
+          label: key,
+          totalRoomPax: 0,
+          totalRoomCostPKR: 0
+        };
       }
-      groupedAllocations[key].count += item.count;
+      roomTypeTotals[key].totalRoomPax += rb.totalRoomPax || 0;
+      roomTypeTotals[key].totalRoomCostPKR += rb.totalRoomCostPKR || 0;
     });
 
-    Object.values(groupedAllocations).forEach((item) => {
-      packagePricingText.push(`${item.paxType} x${item.count} (${item.label}): PKR ${fmt(item.price)}`);
+    const sortedRoomTypeTotals = Object.values(roomTypeTotals)
+      .filter((item) => item.totalRoomPax > 0)
+      .sort((a, b) => a.totalRoomPax - b.totalRoomPax);
+
+    let remainingAdults = numAdult;
+    let remainingChildBeds = numChildBed;
+
+    sortedRoomTypeTotals.forEach((roomType) => {
+      const availablePax = Math.max(remainingAdults + remainingChildBeds, 0);
+      const occupiedPax = Math.min(roomType.totalRoomPax, availablePax);
+      if (occupiedPax <= 0) return;
+
+      const adultsInRoom = Math.min(remainingAdults, occupiedPax);
+      const childrenInRoom = Math.min(remainingChildBeds, Math.max(occupiedPax - adultsInRoom, 0));
+      const hotelPerPerson = roomType.totalRoomCostPKR / Math.max(roomType.totalRoomPax, 1);
+
+      if (adultsInRoom > 0) {
+        packagePricingText.push(`Adult x${adultsInRoom} (${roomType.label} Sharing): PKR ${fmt(hotelPerPerson + nonHotelCostAdult)}`);
+      }
+      if (childrenInRoom > 0) {
+        packagePricingText.push(`Child (bed) x${childrenInRoom} (${roomType.label} Sharing): PKR ${fmt(hotelPerPerson + nonHotelCostChildBed)}`);
+      }
+
+      remainingAdults -= adultsInRoom;
+      remainingChildBeds -= childrenInRoom;
     });
 
     if (numChildNoBed > 0) packagePricingText.push(`Child (no bed) x${numChildNoBed}: PKR ${fmt(perChildNoBed)}`);
