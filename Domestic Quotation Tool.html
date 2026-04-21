@@ -7152,16 +7152,34 @@ function handleUrlParameters() {
   const urlParams = new URLSearchParams(window.location.search);
   const viewId = urlParams.get('view');
   const editId = urlParams.get('edit');
+  const ownerIdFromUrl = urlParams.get('owner');
   const selectedId = localStorage.getItem('selectedQuotationId');
+  const selectedOwnerId = ownerIdFromUrl || localStorage.getItem('selectedQuotationOwnerId');
+
+  if (ownerIdFromUrl) {
+    localStorage.setItem('selectedQuotationOwnerId', ownerIdFromUrl);
+  }
   
   // Use URL parameter first, then localStorage
   const quotationIdToLoad = viewId || editId || selectedId;
+
+  if (!quotationIdToLoad) {
+    localStorage.removeItem('selectedQuotationOwnerId');
+    return;
+  }
   
   if (quotationIdToLoad) {
     console.log('Loading quotation:', quotationIdToLoad); // Debug log
     
     // Wait for page to fully load
-    setTimeout(() => {
+    setTimeout(async () => {
+      if (selectedOwnerId && window.firebaseDB) {
+        const firebaseData = await window.firebaseDB.getData('domestic_quotations', selectedOwnerId);
+        if (firebaseData && Array.isArray(firebaseData.quotations)) {
+          localStorage.setItem('savedQuotations_domestic', JSON.stringify(firebaseData.quotations));
+        }
+      }
+
       // Load the quotation
       loadQuotation(quotationIdToLoad);
     }, 1000);

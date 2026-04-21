@@ -2078,25 +2078,37 @@ async function updateStatusFromTable(quotationId, quotationType, newStatus) {
 
 function viewQuotation(quotationId, quotationType) {
   localStorage.setItem('selectedQuotationId', quotationId);
+  const agent = checkAgentLogin();
+  const ownerId = findQuotationOwnerId(quotationId, quotationType) || getOwnerId(agent);
+  if (ownerId) {
+    localStorage.setItem('selectedQuotationOwnerId', ownerId);
+  }
+  const ownerQuery = ownerId ? `&owner=${encodeURIComponent(ownerId)}` : '';
   
   if (quotationType === 'umrah') {
-    window.open('index.html?view=' + quotationId, '_blank');
+    window.open('index.html?view=' + quotationId + ownerQuery, '_blank');
   } else if (quotationType === 'domestic') {
-    window.open('Domestic Quotation Tool.html?view=' + quotationId, '_blank');
+    window.open('Domestic Quotation Tool.html?view=' + quotationId + ownerQuery, '_blank');
   } else {
-    window.open('International Quotation Tool.html?view=' + quotationId, '_blank');
+    window.open('International Quotation Tool.html?view=' + quotationId + ownerQuery, '_blank');
   }
 }
 
 function editQuotation(quotationId, quotationType) {
   localStorage.setItem('selectedQuotationId', quotationId);
+  const agent = checkAgentLogin();
+  const ownerId = findQuotationOwnerId(quotationId, quotationType) || getOwnerId(agent);
+  if (ownerId) {
+    localStorage.setItem('selectedQuotationOwnerId', ownerId);
+  }
+  const ownerQuery = ownerId ? `&owner=${encodeURIComponent(ownerId)}` : '';
   
   if (quotationType === 'umrah') {
-    window.open('index.html?edit=' + quotationId, '_blank');
+    window.open('index.html?edit=' + quotationId + ownerQuery, '_blank');
   } else if (quotationType === 'domestic') {
-    window.open('Domestic Quotation Tool.html?edit=' + quotationId, '_blank');
+    window.open('Domestic Quotation Tool.html?edit=' + quotationId + ownerQuery, '_blank');
   } else {
-    window.open('International Quotation Tool.html?edit=' + quotationId, '_blank');
+    window.open('International Quotation Tool.html?edit=' + quotationId + ownerQuery, '_blank');
   }
 }
 
