@@ -1080,17 +1080,65 @@ let allInternationalQuotations = [];
 let allDomesticQuotations = [];
 let allUsersQuotations = [];
 let viewMode = 'active'; // 'active', 'expired', 'all-users'
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+
+function clearSessionStorageKeys() {
+  localStorage.removeItem("loggedInAgent");
+  localStorage.removeItem("loggedInUser");
+  localStorage.removeItem("agentLoggedIn");
+  localStorage.removeItem("loginTime");
+  localStorage.removeItem("sessionExpiresAt");
+  localStorage.removeItem("selectedQuotationId");
+}
+
+function redirectToLogin(message) {
+  if (message) {
+    showNotification(message, 'warning');
+  }
+  setTimeout(() => {
+    window.location.href = "login.html";
+  }, 900);
+}
+
+function isSessionExpired() {
+  const now = Date.now();
+  const explicitExpiry = Number(localStorage.getItem('sessionExpiresAt') || '0');
+  const loginTime = Number(localStorage.getItem('loginTime') || '0');
+
+  if (explicitExpiry > 0) {
+    return now > explicitExpiry;
+  }
+  if (loginTime > 0) {
+    return now - loginTime > SESSION_TTL_MS;
+  }
+  return true;
+}
 
 // Check if agent is logged in
 function checkAgentLogin() {
-  const agent = JSON.parse(localStorage.getItem("loggedInAgent"));
+  const rawAgent = localStorage.getItem("loggedInAgent");
+  const agent = rawAgent ? JSON.parse(rawAgent) : null;
   if (!agent) {
     showNotification("Please login to access dashboard", "error");
     setTimeout(() => {
-      window.location.href = "index.html";
+      window.location.href = "login.html";
     }, 2000);
     return null;
   }
+
+  if (isSessionExpired()) {
+    clearSessionStorageKeys();
+    redirectToLogin('Your session has expired. Please login again.');
+    return null;
+  }
+
+  const authUid = window.auth?.currentUser?.uid || null;
+  if (authUid && agent.id && authUid !== agent.id && authUid !== agent.uid) {
+    clearSessionStorageKeys();
+    redirectToLogin('Session mismatch detected. Please login again.');
+    return null;
+  }
+
   return agent;
 }
 
@@ -1882,73 +1930,67 @@ async function transferQuotation(quotationId, quotationType, fromAgentId) {
       return;
     }
 
-    const sourceData = await loadQuotationsFromFirebase({ id: fromAgentId });
-    const targetData = await loadQuotationsFromFirebase({ id: targetUser.id });
+    if (!window.db || !isFirebaseAvailableForDashboard()) {
+      showNotification('Active Firebase session required for transfer operation', 'error');
+      return;
+    }
 
-    const sourceList = quotationType === 'umrah'
-      ? [...(sourceData.umrah || [])]
+    const collectionName = quotationType === 'umrah'
+      ? 'umrah_quotations'
       : quotationType === 'domestic'
-        ? [...(sourceData.domestic || [])]
-        : [...(sourceData.international || [])];
-    const targetList = quotationType === 'umrah'
-      ? [...(targetData.umrah || [])]
-      : quotationType === 'domestic'
-        ? [...(targetData.domestic || [])]
-        : [...(targetData.international || [])];
+        ? 'domestic_quotations'
+        : 'international_quotations';
 
-    const sourceIndex = sourceList.findIndex(q => q.id === quotationId);
-    if (sourceIndex === -1) {
-      showNotification('Quotation not found in source user account', 'error');
-      return;
-    }
+    const sourceRef = window.db.collection(collectionName).doc(fromAgentId);
+    const targetRef = window.db.collection(collectionName).doc(targetUser.id);
 
-    const quotationToTransfer = {
-      ...sourceList[sourceIndex],
-      updatedAt: new Date().toISOString(),
-      transferredAt: new Date().toISOString(),
-      transferredBy: admin.id,
-      transferredFrom: fromAgentId,
-      transferredTo: targetUser.id
-    };
+    await window.db.runTransaction(async (transaction) => {
+      const [sourceSnap, targetSnap] = await Promise.all([
+        transaction.get(sourceRef),
+        transaction.get(targetRef)
+      ]);
 
-    sourceList.splice(sourceIndex, 1);
+      const sourceDoc = sourceSnap.exists ? sourceSnap.data() : {};
+      const targetDoc = targetSnap.exists ? targetSnap.data() : {};
+      const sourceList = Array.isArray(sourceDoc.quotations) ? [...sourceDoc.quotations] : [];
+      const targetList = Array.isArray(targetDoc.quotations) ? [...targetDoc.quotations] : [];
 
-    const duplicateIndexOnTarget = targetList.findIndex(q => q.id === quotationId);
-    if (duplicateIndexOnTarget !== -1) {
-      targetList.splice(duplicateIndexOnTarget, 1);
-    }
-    targetList.push(quotationToTransfer);
+      const sourceIndex = sourceList.findIndex(q => q.id === quotationId);
+      if (sourceIndex === -1) {
+        throw new Error('Quotation not found in source user account');
+      }
 
-    const sourceSaveSuccess = await saveQuotationsToFirebase(
-      { id: fromAgentId },
-      quotationType === 'umrah' ? sourceList : sourceData.umrah,
-      quotationType === 'international' ? sourceList : sourceData.international,
-      quotationType === 'domestic' ? sourceList : sourceData.domestic
-    );
+      const quotationToTransfer = {
+        ...sourceList[sourceIndex],
+        updatedAt: new Date().toISOString(),
+        transferredAt: new Date().toISOString(),
+        transferredBy: admin.id,
+        transferredFrom: fromAgentId,
+        transferredTo: targetUser.id
+      };
 
-    if (!sourceSaveSuccess) {
-      showNotification('Failed to remove quotation from source user', 'error');
-      return;
-    }
+      sourceList.splice(sourceIndex, 1);
 
-    const targetSaveSuccess = await saveQuotationsToFirebase(
-      { id: targetUser.id },
-      quotationType === 'umrah' ? targetList : targetData.umrah,
-      quotationType === 'international' ? targetList : targetData.international,
-      quotationType === 'domestic' ? targetList : targetData.domestic
-    );
+      const duplicateIndexOnTarget = targetList.findIndex(q => q.id === quotationId);
+      if (duplicateIndexOnTarget !== -1) {
+        targetList.splice(duplicateIndexOnTarget, 1);
+      }
+      targetList.push(quotationToTransfer);
 
-    if (!targetSaveSuccess) {
-      sourceList.splice(sourceIndex, 0, sourceData[quotationType][sourceIndex]);
-      await saveQuotationsToFirebase(
-        { id: fromAgentId },
-        sourceData.umrah,
-        sourceData.international,
-        sourceData.domestic
-      );
-      showNotification('Failed to add quotation to target user. Transfer rolled back.', 'error');
-      return;
-    }
+      transaction.set(sourceRef, {
+        quotations: sourceList,
+        updatedAt: new Date(),
+        agentId: fromAgentId,
+        userId: fromAgentId
+      }, { merge: true });
+
+      transaction.set(targetRef, {
+        quotations: targetList,
+        updatedAt: new Date(),
+        agentId: targetUser.id,
+        userId: targetUser.id
+      }, { merge: true });
+    });
 
     showNotification('Quotation transferred successfully', 'success');
     await loadAllQuotations();
@@ -2111,10 +2153,7 @@ document.getElementById('btnLogout').addEventListener('click', function() {
     if (window.auth.currentUser) {
       window.signOut(window.auth);
     }
-    localStorage.removeItem("loggedInAgent");
-    localStorage.removeItem("agentLoggedIn");
-    localStorage.removeItem("loginTime");
-    localStorage.removeItem("selectedQuotationId");
+    clearSessionStorageKeys();
     
     showNotification('Logged out successfully', 'success');
     
@@ -2149,6 +2188,10 @@ window.calculatePackagePrices = calculatePackagePrices;
 
 // Initialize dashboard
 document.addEventListener('DOMContentLoaded', async function() {
+  await waitForFirebaseAuthSession();
+  const sessionAgent = checkAgentLogin();
+  if (!sessionAgent) return;
+
   loadAgentInfo();
   await loadAllQuotations();
   

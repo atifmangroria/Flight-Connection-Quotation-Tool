@@ -66,6 +66,10 @@ function setStatus(message, ok = false) {
     reportStatus.classList.toggle("ok", ok);
 }
 
+function getDataSourceLabel() {
+    return lastLoadUsedLocalFallback ? "Source: cache" : "Source: live";
+}
+
 function normalizeDate(value) {
     if (!value) return null;
     if (value.toDate) return value.toDate();
@@ -511,14 +515,14 @@ async function runReport() {
                 return;
             }
             if (lastLoadPermissionDenied) {
-                setStatus("No rows found for selected filters and date range.");
+                setStatus(`No rows found for selected filters and date range. ${getDataSourceLabel()}`);
                 return;
             }
-            setStatus("No rows found for selected filters and date range.");
+            setStatus(`No rows found for selected filters and date range. ${getDataSourceLabel()}`);
         } else if (lastLoadUsedLocalFallback && lastLoadPermissionDenied) {
-            setStatus(`Generated ${rows.length} row(s).`, true);
+            setStatus(`Generated ${rows.length} row(s). ${getDataSourceLabel()}`, true);
         } else {
-            setStatus(`Generated ${rows.length} row(s).`, true);
+            setStatus(`Generated ${rows.length} row(s). ${getDataSourceLabel()}`, true);
         }
     } catch (error) {
         console.error(error);

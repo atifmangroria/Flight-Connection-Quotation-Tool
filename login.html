@@ -220,6 +220,8 @@
       };
       localStorage.setItem('loggedInUser', JSON.stringify(sessionUser));
       localStorage.setItem('loggedInAgent', JSON.stringify(sessionUser));
+      localStorage.setItem('loginTime', String(Date.now()));
+      localStorage.setItem('sessionExpiresAt', String(Date.now() + (24 * 60 * 60 * 1000)));
 
       showMessage('login', '✅ Login successful! Redirecting...', 'success');
       setTimeout(() => {
@@ -311,6 +313,8 @@
           };
           localStorage.setItem('loggedInUser', JSON.stringify(sessionUser));
           localStorage.setItem('loggedInAgent', JSON.stringify(sessionUser));
+          localStorage.setItem('loginTime', String(Date.now()));
+          localStorage.setItem('sessionExpiresAt', String(Date.now() + (24 * 60 * 60 * 1000)));
           window.location.href = 'dashboard.html';
         }
       } catch (error) {
