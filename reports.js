@@ -1,126 +1,532 @@
-// reports.js
-// Firebase config placeholder - replace with your actual config
 const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_AUTH_DOMAIN",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_STORAGE_BUCKET",
-    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-    appId: "YOUR_APP_ID"
+    apiKey: "AIzaSyDx3Qxt84vJlz_-mXuxiC0W2flaLadr9Ws",
+    authDomain: "fc-quotation-tool.firebaseapp.com",
+    projectId: "fc-quotation-tool",
+    storageBucket: "fc-quotation-tool.firebasestorage.app",
+    messagingSenderId: "370566945624",
+    appId: "1:370566945624:web:a84b20d5a8f99d20a6e32d"
 };
 
-firebase.initializeApp(firebaseConfig);
+if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+}
 const db = firebase.firestore();
 
-const dataSourceSelect = document.getElementById('data-source');
-const fieldsSelect = document.getElementById('fields');
-const runReportBtn = document.getElementById('run-report');
-const exportPdfBtn = document.getElementById('export-pdf');
-const exportExcelBtn = document.getElementById('export-excel');
-const table = document.getElementById('report-table');
-const tableHead = document.getElementById('table-head');
-const tableBody = document.getElementById('table-body');
-
-let currentData = [];
-let currentFields = [];
-
-// Example fields for each data source
 const DATA_FIELDS = {
-    quotations: ['id', 'customer', 'amount', 'status', 'createdAt'],
-    customers: ['id', 'name', 'email', 'phone', 'createdAt'],
-    sales: ['id', 'product', 'quantity', 'total', 'date']
+    quotations: ["id", "type", "clientName", "destination", "status", "createdAt", "expiresAt", "amount", "agentId"],
+    sales: ["id", "type", "clientName", "destination", "status", "bookedDate", "amount", "agentId"],
+    customers: ["customerName", "phone", "email", "totalQuotations", "bookedQuotations", "bookedSales", "lastQuotationDate"]
 };
 
-function populateFields() {
-    const source = dataSourceSelect.value;
-    fieldsSelect.innerHTML = '';
-    DATA_FIELDS[source].forEach(field => {
-        const option = document.createElement('option');
-        option.value = field;
-        option.textContent = field;
-        option.selected = true;
-        fieldsSelect.appendChild(option);
-    });
-    fieldsSelect.size = DATA_FIELDS[source].length;
+const PRESETS = {
+    sales: {
+        source: "sales",
+        fields: ["id", "clientName", "destination", "bookedDate", "amount", "agentId"],
+        filter: ""
+    },
+    quotation: {
+        source: "quotations",
+        fields: ["id", "type", "clientName", "destination", "status", "createdAt", "amount"],
+        filter: ""
+    },
+    destination: {
+        source: "quotations",
+        fields: ["destination", "totalQuotations", "bookedQuotations", "totalExpectedSales"],
+        filter: "",
+        groupedByDestination: true
+    }
+};
+
+const dataSourceSelect = document.getElementById("data-source");
+const fieldLibrary = document.getElementById("field-library");
+const selectedFieldsZone = document.getElementById("selected-fields-zone");
+const filterInput = document.getElementById("filter");
+const runReportBtn = document.getElementById("run-report");
+const clearBuilderBtn = document.getElementById("clear-builder");
+const exportPdfBtn = document.getElementById("export-pdf");
+const exportExcelBtn = document.getElementById("export-excel");
+const table = document.getElementById("report-table");
+const tableHead = document.getElementById("table-head");
+const tableBody = document.getElementById("table-body");
+const reportStatus = document.getElementById("report-status");
+const dateFromInput = document.getElementById("date-from");
+const dateToInput = document.getElementById("date-to");
+const backDashboardBtn = document.getElementById("back-dashboard");
+
+let selectedFields = [];
+let activePreset = null;
+let currentRenderedRows = [];
+let currentRenderedFields = [];
+
+function setStatus(message, ok = false) {
+    reportStatus.textContent = message;
+    reportStatus.classList.toggle("ok", ok);
 }
 
-dataSourceSelect.addEventListener('change', populateFields);
-populateFields();
+function normalizeDate(value) {
+    if (!value) return null;
+    if (value.toDate) return value.toDate();
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+}
 
-runReportBtn.addEventListener('click', async () => {
-    const source = dataSourceSelect.value;
-    const selectedFields = Array.from(fieldsSelect.selectedOptions).map(opt => opt.value);
-    const filter = document.getElementById('filter').value.trim();
-    const dateFrom = document.getElementById('date-from').value;
-    const dateTo = document.getElementById('date-to').value;
+function formatDate(value) {
+    const d = normalizeDate(value);
+    return d ? d.toLocaleDateString() : "";
+}
 
-    let query = db.collection(source);
-    // Simple filter parser: e.g. status:approved
-    if (filter) {
-        const [field, value] = filter.split(':');
-        if (field && value) query = query.where(field, '==', value);
+function normalizeMoney(value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+}
+
+function inferAmount(quotation) {
+    return normalizeMoney(
+        quotation?.amount
+        ?? quotation?.totalAmount
+        ?? quotation?.grandTotal
+        ?? quotation?.totalPrice
+        ?? quotation?.price
+        ?? quotation?.packagePrice
+        ?? 0
+    );
+}
+
+function inferDestination(quotation) {
+    return quotation?.destination
+        || quotation?.route
+        || quotation?.to
+        || quotation?.travelTo
+        || quotation?.destinationCity
+        || quotation?.clientData?.destination
+        || "N/A";
+}
+
+function inferClientName(quotation) {
+    return quotation?.clientName
+        || quotation?.clientData?.name
+        || quotation?.customerName
+        || quotation?.name
+        || "N/A";
+}
+
+async function loadQuotationRecords() {
+    const map = [
+        { collection: "umrah_quotations", type: "umrah" },
+        { collection: "international_quotations", type: "international" },
+        { collection: "domestic_quotations", type: "domestic" }
+    ];
+    const all = [];
+
+    for (const source of map) {
+        const snapshot = await db.collection(source.collection).get();
+        snapshot.forEach(doc => {
+            const payload = doc.data() || {};
+            const list = Array.isArray(payload.quotations) ? payload.quotations : [];
+            list.forEach(item => {
+                const created = normalizeDate(item.createdAt);
+                const expires = normalizeDate(item.expiresAt);
+                all.push({
+                    id: item.id || "",
+                    type: source.type,
+                    clientName: inferClientName(item),
+                    destination: inferDestination(item),
+                    status: String(item.status || "pending").toLowerCase(),
+                    createdAt: created,
+                    expiresAt: expires,
+                    amount: inferAmount(item),
+                    agentId: doc.id,
+                    phone: item?.clientData?.phone || item?.phone || "",
+                    email: item?.clientData?.email || item?.email || ""
+                });
+            });
+        });
     }
-    if (dateFrom) query = query.where('createdAt', '>=', new Date(dateFrom));
-    if (dateTo) query = query.where('createdAt', '<=', new Date(dateTo));
 
-    const snapshot = await query.get();
-    const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    currentData = data;
-    currentFields = selectedFields;
-    renderTable(selectedFields, data);
-    exportPdfBtn.disabled = data.length === 0;
-    exportExcelBtn.disabled = data.length === 0;
-});
+    return all;
+}
 
-function renderTable(fields, data) {
-    tableHead.innerHTML = '';
-    tableBody.innerHTML = '';
-    if (data.length === 0) {
-        table.style.display = 'none';
+function deriveSales(quotations) {
+    return quotations
+        .filter(q => q.status === "booked")
+        .map(q => ({
+            id: q.id,
+            type: q.type,
+            clientName: q.clientName,
+            destination: q.destination,
+            status: q.status,
+            bookedDate: q.createdAt,
+            amount: q.amount,
+            agentId: q.agentId
+        }));
+}
+
+function deriveCustomers(quotations) {
+    const grouped = new Map();
+    quotations.forEach(q => {
+        const key = `${String(q.clientName || "").trim().toLowerCase()}|${String(q.phone || "").trim()}`;
+        if (!grouped.has(key)) {
+            grouped.set(key, {
+                customerName: q.clientName,
+                phone: q.phone,
+                email: q.email,
+                totalQuotations: 0,
+                bookedQuotations: 0,
+                bookedSales: 0,
+                lastQuotationDate: q.createdAt
+            });
+        }
+        const row = grouped.get(key);
+        row.totalQuotations += 1;
+        if (q.status === "booked") {
+            row.bookedQuotations += 1;
+            row.bookedSales += normalizeMoney(q.amount);
+        }
+        if (normalizeDate(q.createdAt) > normalizeDate(row.lastQuotationDate)) {
+            row.lastQuotationDate = q.createdAt;
+        }
+    });
+    return Array.from(grouped.values());
+}
+
+function destinationSummary(quotations) {
+    const grouped = new Map();
+    quotations.forEach(q => {
+        const key = q.destination || "N/A";
+        if (!grouped.has(key)) {
+            grouped.set(key, {
+                destination: key,
+                totalQuotations: 0,
+                bookedQuotations: 0,
+                totalExpectedSales: 0
+            });
+        }
+        const row = grouped.get(key);
+        row.totalQuotations += 1;
+        row.totalExpectedSales += normalizeMoney(q.amount);
+        if (q.status === "booked") {
+            row.bookedQuotations += 1;
+        }
+    });
+    return Array.from(grouped.values()).sort((a, b) => b.totalQuotations - a.totalQuotations);
+}
+
+function updateFieldLibrary() {
+    const source = dataSourceSelect.value;
+    const fields = DATA_FIELDS[source] || [];
+    fieldLibrary.innerHTML = "";
+
+    fields.forEach(field => {
+        const chip = document.createElement("button");
+        chip.className = "field-chip";
+        chip.type = "button";
+        chip.draggable = true;
+        chip.dataset.field = field;
+        chip.textContent = field;
+        chip.addEventListener("click", () => addField(field));
+        chip.addEventListener("dragstart", (event) => {
+            event.dataTransfer.setData("text/plain", field);
+        });
+        fieldLibrary.appendChild(chip);
+    });
+}
+
+function renderSelectedFields() {
+    selectedFieldsZone.innerHTML = "";
+    if (!selectedFields.length) {
+        const hint = document.createElement("div");
+        hint.className = "drop-hint";
+        hint.textContent = "Drag field blocks here (or click blocks to add).";
+        selectedFieldsZone.appendChild(hint);
         return;
     }
+
+    selectedFields.forEach(field => {
+        const chip = document.createElement("span");
+        chip.className = "selected-chip";
+        chip.innerHTML = `${field} <button class="remove-chip" data-field="${field}" type="button">x</button>`;
+        selectedFieldsZone.appendChild(chip);
+    });
+
+    selectedFieldsZone.querySelectorAll(".remove-chip").forEach(button => {
+        button.addEventListener("click", () => removeField(button.dataset.field));
+    });
+}
+
+function addField(field) {
+    if (!selectedFields.includes(field)) {
+        selectedFields.push(field);
+        renderSelectedFields();
+    }
+}
+
+function removeField(field) {
+    selectedFields = selectedFields.filter(item => item !== field);
+    renderSelectedFields();
+}
+
+function setQuickRange(type) {
+    const now = new Date();
+    const start = new Date(now);
+    const end = new Date(now);
+
+    if (type === "last-week") {
+        start.setDate(now.getDate() - 7);
+    } else if (type === "last-month") {
+        start.setMonth(now.getMonth() - 1);
+    } else if (type === "this-month") {
+        start.setDate(1);
+    } else if (type === "last-3-months") {
+        start.setMonth(now.getMonth() - 3);
+    } else if (type === "custom") {
+        return;
+    }
+
+    dateFromInput.value = start.toISOString().slice(0, 10);
+    dateToInput.value = end.toISOString().slice(0, 10);
+}
+
+function bindQuickRangeButtons() {
+    document.querySelectorAll("[data-range]").forEach(button => {
+        button.addEventListener("click", () => {
+            document.querySelectorAll("[data-range]").forEach(b => b.classList.remove("active-range"));
+            button.classList.add("active-range");
+            setQuickRange(button.dataset.range);
+        });
+    });
+}
+
+function applyFilterText(rows, filterText) {
+    const text = String(filterText || "").trim();
+    if (!text) return rows;
+
+    const expressions = text
+        .split(",")
+        .map(item => item.trim())
+        .filter(Boolean)
+        .map(item => item.split(":").map(i => i.trim()))
+        .filter(parts => parts.length === 2 && parts[0] && parts[1]);
+
+    if (!expressions.length) return rows;
+
+    return rows.filter(row => expressions.every(([field, expected]) => {
+        const value = String(row[field] ?? "").toLowerCase();
+        return value.includes(expected.toLowerCase());
+    }));
+}
+
+function applyDateFilter(rows) {
+    const from = dateFromInput.value ? new Date(dateFromInput.value) : null;
+    const to = dateToInput.value ? new Date(dateToInput.value) : null;
+
+    if (!from && !to) return rows;
+
+    return rows.filter(row => {
+        const ref = normalizeDate(row.createdAt || row.bookedDate || row.lastQuotationDate);
+        if (!ref) return false;
+        if (from && ref < from) return false;
+        if (to) {
+            const end = new Date(to);
+            end.setHours(23, 59, 59, 999);
+            if (ref > end) return false;
+        }
+        return true;
+    });
+}
+
+function serializeValue(value) {
+    if (value === null || value === undefined) return "";
+    if (value instanceof Date || (value && value.toDate)) return formatDate(value);
+    if (typeof value === "number") return String(Math.round(value * 100) / 100);
+    return String(value);
+}
+
+function renderTable(fields, rows) {
+    tableHead.innerHTML = "";
+    tableBody.innerHTML = "";
+    if (!rows.length || !fields.length) {
+        table.style.display = "none";
+        exportPdfBtn.disabled = true;
+        exportExcelBtn.disabled = true;
+        return;
+    }
+
     fields.forEach(field => {
-        const th = document.createElement('th');
+        const th = document.createElement("th");
         th.textContent = field;
         tableHead.appendChild(th);
     });
-    data.forEach(row => {
-        const tr = document.createElement('tr');
+
+    rows.forEach(row => {
+        const tr = document.createElement("tr");
         fields.forEach(field => {
-            const td = document.createElement('td');
-            td.textContent = row[field] !== undefined ? row[field] : '';
+            const td = document.createElement("td");
+            td.textContent = serializeValue(row[field]);
             tr.appendChild(td);
         });
         tableBody.appendChild(tr);
     });
-    table.style.display = '';
+
+    table.style.display = "table";
+    exportPdfBtn.disabled = false;
+    exportExcelBtn.disabled = false;
 }
 
-exportPdfBtn.addEventListener('click', () => {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-    let y = 10;
-    doc.text('Custom Report', 10, y);
-    y += 10;
-    // Header
-    currentFields.forEach((field, i) => {
-        doc.text(field, 10 + i * 40, y);
-    });
-    y += 10;
-    // Rows
-    currentData.forEach(row => {
-        currentFields.forEach((field, i) => {
-            doc.text(String(row[field] ?? ''), 10 + i * 40, y);
-        });
-        y += 10;
-    });
-    doc.save('report.pdf');
-});
+async function getRowsBySource(source) {
+    const quotations = await loadQuotationRecords();
+    if (source === "quotations") return quotations;
+    if (source === "sales") return deriveSales(quotations);
+    if (source === "customers") return deriveCustomers(quotations);
+    return [];
+}
 
-exportExcelBtn.addEventListener('click', () => {
-    const wsData = [currentFields, ...currentData.map(row => currentFields.map(f => row[f] ?? ''))];
+async function runReport() {
+    if (!selectedFields.length) {
+        setStatus("Please add at least one field block before generating.");
+        return;
+    }
+
+    try {
+        setStatus("Loading data from Firebase...");
+        const source = dataSourceSelect.value;
+        let rows = await getRowsBySource(source);
+        rows = applyDateFilter(rows);
+        rows = applyFilterText(rows, filterInput.value);
+
+        if (activePreset === "destination") {
+            rows = destinationSummary(rows);
+        }
+
+        const validFields = selectedFields.filter(field => rows.length === 0 || Object.prototype.hasOwnProperty.call(rows[0], field));
+        currentRenderedRows = rows;
+        currentRenderedFields = validFields;
+
+        renderTable(validFields, rows);
+        if (!rows.length) {
+            setStatus("No rows found for selected filters and date range.");
+        } else {
+            setStatus(`Generated ${rows.length} row(s).`, true);
+        }
+    } catch (error) {
+        console.error(error);
+        setStatus(`Could not generate report: ${error.message || error}`);
+    }
+}
+
+function applyPreset(name) {
+    const preset = PRESETS[name];
+    if (!preset) return;
+
+    activePreset = name;
+    dataSourceSelect.value = preset.source;
+    selectedFields = [...preset.fields];
+    filterInput.value = preset.filter || "";
+    updateFieldLibrary();
+    renderSelectedFields();
+    setStatus(`${name.replace("-", " ")} preset selected. Click Generate.`);
+}
+
+function clearBuilder() {
+    selectedFields = [];
+    activePreset = null;
+    filterInput.value = "";
+    renderSelectedFields();
+    table.style.display = "none";
+    tableHead.innerHTML = "";
+    tableBody.innerHTML = "";
+    exportPdfBtn.disabled = true;
+    exportExcelBtn.disabled = true;
+    currentRenderedRows = [];
+    currentRenderedFields = [];
+    setStatus("Builder reset. Select fields and click Generate.");
+}
+
+function exportExcel() {
+    const rows = currentRenderedRows;
+    const fields = currentRenderedFields;
+    if (!rows.length || !fields.length) return;
+
+    const wsData = [fields, ...rows.map(row => fields.map(field => serializeValue(row[field])))];
     const ws = XLSX.utils.aoa_to_sheet(wsData);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Report');
-    XLSX.writeFile(wb, 'report.xlsx');
+    XLSX.utils.book_append_sheet(wb, ws, "Report");
+    XLSX.writeFile(wb, "custom-report.xlsx");
+}
+
+function exportPdf() {
+    const rows = currentRenderedRows;
+    const fields = currentRenderedFields;
+    if (!rows.length || !fields.length) return;
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: "landscape" });
+    doc.setFontSize(12);
+    doc.text("Custom Report", 14, 14);
+
+    let y = 24;
+    doc.setFontSize(9);
+    doc.text(fields.join(" | "), 14, y);
+    y += 7;
+
+    rows.slice(0, 45).forEach(row => {
+        const line = fields.map(field => serializeValue(row[field])).join(" | ");
+        doc.text(line.slice(0, 240), 14, y);
+        y += 6;
+    });
+
+    doc.save("custom-report.pdf");
+}
+
+function initDropZone() {
+    selectedFieldsZone.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        selectedFieldsZone.classList.add("drag-over");
+    });
+    selectedFieldsZone.addEventListener("dragleave", () => {
+        selectedFieldsZone.classList.remove("drag-over");
+    });
+    selectedFieldsZone.addEventListener("drop", (event) => {
+        event.preventDefault();
+        selectedFieldsZone.classList.remove("drag-over");
+        const field = event.dataTransfer.getData("text/plain");
+        if (field) addField(field);
+    });
+}
+
+function initDefaults() {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    dateFromInput.value = monthStart.toISOString().slice(0, 10);
+    dateToInput.value = now.toISOString().slice(0, 10);
+
+    updateFieldLibrary();
+    selectedFields = ["id", "clientName", "destination", "status", "createdAt", "amount"];
+    renderSelectedFields();
+    setStatus("Select fields and click Generate.");
+}
+
+dataSourceSelect.addEventListener("change", () => {
+    activePreset = null;
+    selectedFields = [];
+    updateFieldLibrary();
+    renderSelectedFields();
+    setStatus("Data source changed. Add field blocks and generate.");
 });
+
+document.querySelectorAll("[data-preset]").forEach(button => {
+    button.addEventListener("click", () => applyPreset(button.dataset.preset));
+});
+
+runReportBtn.addEventListener("click", runReport);
+clearBuilderBtn.addEventListener("click", clearBuilder);
+exportExcelBtn.addEventListener("click", exportExcel);
+exportPdfBtn.addEventListener("click", exportPdf);
+bindQuickRangeButtons();
+initDropZone();
+initDefaults();
+
+if (backDashboardBtn) {
+    backDashboardBtn.addEventListener("click", () => {
+        window.location.href = "dashboard.html";
+    });
+}

@@ -3,69 +3,364 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Custom Reports</title>
+    <title>Report Builder</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
-        .container { max-width: 1200px; margin: 40px auto; padding: 20px; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-        h1 { margin-bottom: 24px; }
-        .controls { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
-        .controls label { margin-right: 8px; }
-        .table-container { overflow-x: auto; }
-        table { border-collapse: collapse; width: 100%; margin-bottom: 24px; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background: #f4f4f4; }
-        .actions { display: flex; gap: 12px; }
-        button { padding: 8px 16px; border: none; border-radius: 4px; background: #007bff; color: #fff; cursor: pointer; }
-        button:disabled { background: #ccc; }
-        .export-btns { margin-bottom: 24px; }
+        :root {
+            --bg: #f2f5fb;
+            --panel: #ffffff;
+            --ink: #18253b;
+            --muted: #5b6880;
+            --line: #dce3ef;
+            --accent: #0b76d1;
+            --accent-dark: #085ea3;
+            --success: #1f9d5b;
+            --chip: #edf5ff;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            background: radial-gradient(circle at 10% 10%, #ffffff 0%, var(--bg) 65%);
+            color: var(--ink);
+        }
+
+        .page {
+            max-width: 1400px;
+            margin: 20px auto;
+            padding: 0 16px 20px;
+        }
+
+        .topbar {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 14px 16px;
+            margin-bottom: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .topbar h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+
+        .subtitle {
+            color: var(--muted);
+            font-size: 13px;
+            margin-top: 4px;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            gap: 14px;
+        }
+
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 14px;
+        }
+
+        .section-title {
+            margin: 0 0 10px;
+            font-size: 14px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .row { margin-bottom: 14px; }
+
+        label {
+            font-size: 12px;
+            color: var(--muted);
+            display: block;
+            margin-bottom: 6px;
+        }
+
+        select,
+        input[type="text"],
+        input[type="date"] {
+            width: 100%;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 14px;
+            background: #fff;
+            color: var(--ink);
+        }
+
+        .preset-grid,
+        .quick-range {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .btn {
+            border: none;
+            border-radius: 8px;
+            padding: 9px 12px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: .2s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+            color: #fff;
+        }
+
+        .btn-primary:hover { transform: translateY(-1px); }
+        .btn-ghost {
+            background: #fff;
+            border: 1px solid var(--line);
+            color: var(--ink);
+        }
+
+        .btn.active-range {
+            background: var(--chip);
+            border: 1px solid #bfd5fb;
+            color: var(--accent-dark);
+            font-weight: 600;
+        }
+
+        .field-library {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            min-height: 50px;
+        }
+
+        .field-chip {
+            border: 1px dashed #9dbce7;
+            background: var(--chip);
+            color: #17457d;
+            border-radius: 18px;
+            padding: 6px 10px;
+            font-size: 12px;
+            cursor: grab;
+            user-select: none;
+        }
+
+        .workspace {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 14px;
+        }
+
+        .dropzone {
+            min-height: 72px;
+            border: 2px dashed #aac2e5;
+            border-radius: 10px;
+            padding: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-content: flex-start;
+            background: #fbfdff;
+        }
+
+        .dropzone.drag-over {
+            border-color: var(--accent);
+            background: #eef6ff;
+        }
+
+        .drop-hint {
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .selected-chip {
+            border: 1px solid #9dc0ef;
+            background: #e7f0ff;
+            color: #143f74;
+            border-radius: 999px;
+            padding: 6px 10px;
+            font-size: 12px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .remove-chip {
+            border: none;
+            background: transparent;
+            color: #163862;
+            cursor: pointer;
+            font-size: 13px;
+            line-height: 1;
+            padding: 0;
+        }
+
+        .workspace-toolbar {
+            margin: 12px 0;
+            display: grid;
+            grid-template-columns: 1fr auto auto;
+            gap: 8px;
+        }
+
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 10px 0 12px;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .status {
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .status.ok { color: var(--success); }
+
+        .export-group {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            min-width: 680px;
+        }
+
+        th, td {
+            border-bottom: 1px solid var(--line);
+            padding: 9px 8px;
+            text-align: left;
+        }
+
+        th {
+            background: #f8fbff;
+            position: sticky;
+            top: 0;
+            z-index: 2;
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+            max-height: 58vh;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+        }
+
+        .helper {
+            margin-top: 10px;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        @media (max-width: 980px) {
+            .layout { grid-template-columns: 1fr; }
+            .workspace-toolbar { grid-template-columns: 1fr; }
+            .preset-grid,
+            .quick-range { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Custom Reports</h1>
-        <div class="controls">
+    <div class="page">
+        <div class="topbar">
             <div>
-                <label for="data-source">Data Source:</label>
-                <select id="data-source">
-                    <option value="quotations">Quotations</option>
-                    <option value="customers">Customers</option>
-                    <option value="sales">Sales</option>
-                </select>
+                <h1>Report Builder</h1>
+                <div class="subtitle">Build custom reports from blocks, pick date ranges fast, and export in one click.</div>
             </div>
-            <div>
-                <label for="fields">Fields:</label>
-                <select id="fields" multiple size="1" style="min-width: 180px;"></select>
-            </div>
-            <div>
-                <label for="filter">Filter:</label>
-                <input type="text" id="filter" placeholder="e.g. status:approved">
-            </div>
-            <div>
-                <label for="date-from">From:</label>
-                <input type="date" id="date-from">
-            </div>
-            <div>
-                <label for="date-to">To:</label>
-                <input type="date" id="date-to">
-            </div>
-            <div>
-                <button id="run-report">Run Report</button>
-            </div>
+            <button class="btn btn-ghost" id="back-dashboard"><i class="fa fa-arrow-left"></i> Back to Dashboard</button>
         </div>
-        <div class="export-btns">
-            <button id="export-pdf" disabled><i class="fa fa-file-pdf"></i> Export PDF</button>
-            <button id="export-excel" disabled><i class="fa fa-file-excel"></i> Export Excel</button>
-        </div>
-        <div class="table-container">
-            <table id="report-table" style="display:none;">
-                <thead><tr id="table-head"></tr></thead>
-                <tbody id="table-body"></tbody>
-            </table>
+
+        <div class="layout">
+            <aside class="panel">
+                <div class="row">
+                    <h3 class="section-title">Ready Reports</h3>
+                    <div class="preset-grid">
+                        <button class="btn btn-ghost" data-preset="sales">Sales Report</button>
+                        <button class="btn btn-ghost" data-preset="quotation">Quotation Report</button>
+                        <button class="btn btn-ghost" data-preset="destination">By Destination</button>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <label for="data-source">Data Source</label>
+                    <select id="data-source">
+                        <option value="quotations">Quotations</option>
+                        <option value="sales">Sales</option>
+                        <option value="customers">Customers</option>
+                    </select>
+                </div>
+
+                <div class="row">
+                    <h3 class="section-title">Field Blocks</h3>
+                    <div class="field-library" id="field-library"></div>
+                </div>
+
+                <div class="row">
+                    <h3 class="section-title">Date Range</h3>
+                    <div class="quick-range" id="quick-range-group">
+                        <button class="btn btn-ghost" data-range="last-week">Last Week</button>
+                        <button class="btn btn-ghost" data-range="last-month">Last Month</button>
+                        <button class="btn btn-ghost" data-range="this-month">This Month</button>
+                        <button class="btn btn-ghost" data-range="last-3-months">3 Months</button>
+                        <button class="btn btn-ghost" data-range="custom">Custom</button>
+                    </div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px;">
+                        <input type="date" id="date-from">
+                        <input type="date" id="date-to">
+                    </div>
+                </div>
+            </aside>
+
+            <main class="workspace">
+                <h3 class="section-title">Report Canvas</h3>
+                <div class="dropzone" id="selected-fields-zone">
+                    <div class="drop-hint">Drag field blocks here (or click blocks to add).</div>
+                </div>
+
+                <div class="workspace-toolbar">
+                    <input type="text" id="filter" placeholder="Optional filter: status:booked, type:umrah">
+                    <button class="btn btn-primary" id="run-report"><i class="fa fa-play"></i> Generate</button>
+                    <button class="btn btn-ghost" id="clear-builder">Clear</button>
+                </div>
+
+                <div class="status-row">
+                    <div class="status" id="report-status">Select fields and click Generate.</div>
+                    <div class="export-group">
+                        <button class="btn btn-ghost" id="export-pdf" disabled><i class="fa fa-file-pdf"></i> PDF</button>
+                        <button class="btn btn-ghost" id="export-excel" disabled><i class="fa fa-file-excel"></i> Excel</button>
+                    </div>
+                </div>
+
+                <div class="table-wrap">
+                    <table id="report-table" style="display:none;">
+                        <thead><tr id="table-head"></tr></thead>
+                        <tbody id="table-body"></tbody>
+                    </table>
+                </div>
+
+                <div class="helper">
+                    Tip: For "By Destination" report, click the ready report button once, then Generate.
+                </div>
+            </main>
         </div>
     </div>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="reports.js"></script>
