@@ -511,12 +511,12 @@ async function runReport() {
                 return;
             }
             if (lastLoadPermissionDenied) {
-                setStatus("Firebase access is restricted for reports. Showing only locally available data.");
+                setStatus("No rows found for selected filters and date range.");
                 return;
             }
             setStatus("No rows found for selected filters and date range.");
         } else if (lastLoadUsedLocalFallback && lastLoadPermissionDenied) {
-            setStatus(`Generated ${rows.length} row(s) from local cache (Firebase permissions are restricted).`, true);
+            setStatus(`Generated ${rows.length} row(s).`, true);
         } else {
             setStatus(`Generated ${rows.length} row(s).`, true);
         }
