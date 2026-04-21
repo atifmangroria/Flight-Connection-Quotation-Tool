@@ -57,6 +57,8 @@ let selectedFields = [];
 let activePreset = null;
 let currentRenderedRows = [];
 let currentRenderedFields = [];
+let lastLoadUsedLocalFallback = false;
+let lastLoadPermissionDenied = false;
 
 function setStatus(message, ok = false) {
     reportStatus.textContent = message;
@@ -110,38 +112,87 @@ function inferClientName(quotation) {
         || "N/A";
 }
 
+function getLoggedInAgent() {
+    try {
+        return JSON.parse(localStorage.getItem("loggedInAgent")) || null;
+    } catch {
+        return null;
+    }
+}
+
+function getOwnerId(agent) {
+    return agent?.uid || agent?.id || firebase.auth?.()?.currentUser?.uid || null;
+}
+
+function isPermissionDeniedError(error) {
+    return error?.code === "permission-denied"
+        || String(error?.message || "").toLowerCase().includes("insufficient permissions");
+}
+
+function getLocalQuotationsSnapshot() {
+    return {
+        umrah: JSON.parse(localStorage.getItem("savedQuotations") || "[]"),
+        international: JSON.parse(localStorage.getItem("savedQuotations_international") || "[]"),
+        domestic: JSON.parse(localStorage.getItem("savedQuotations_domestic") || "[]")
+    };
+}
+
+function normalizeQuotationList(list, type, agentId) {
+    return (Array.isArray(list) ? list : []).map(item => ({
+        id: item.id || "",
+        type,
+        clientName: inferClientName(item),
+        destination: inferDestination(item),
+        status: String(item.status || "pending").toLowerCase(),
+        createdAt: normalizeDate(item.createdAt),
+        expiresAt: normalizeDate(item.expiresAt),
+        amount: inferAmount(item),
+        agentId: agentId || item.agentId || "",
+        phone: item?.clientData?.phone || item?.phone || "",
+        email: item?.clientData?.email || item?.email || ""
+    }));
+}
+
 async function loadQuotationRecords() {
     const map = [
         { collection: "umrah_quotations", type: "umrah" },
         { collection: "international_quotations", type: "international" },
         { collection: "domestic_quotations", type: "domestic" }
     ];
+    const agent = getLoggedInAgent();
+    const ownerId = getOwnerId(agent);
     const all = [];
 
-    for (const source of map) {
-        const snapshot = await db.collection(source.collection).get();
-        snapshot.forEach(doc => {
-            const payload = doc.data() || {};
-            const list = Array.isArray(payload.quotations) ? payload.quotations : [];
-            list.forEach(item => {
-                const created = normalizeDate(item.createdAt);
-                const expires = normalizeDate(item.expiresAt);
-                all.push({
-                    id: item.id || "",
-                    type: source.type,
-                    clientName: inferClientName(item),
-                    destination: inferDestination(item),
-                    status: String(item.status || "pending").toLowerCase(),
-                    createdAt: created,
-                    expiresAt: expires,
-                    amount: inferAmount(item),
-                    agentId: doc.id,
-                    phone: item?.clientData?.phone || item?.phone || "",
-                    email: item?.clientData?.email || item?.email || ""
-                });
-            });
-        });
+    lastLoadUsedLocalFallback = false;
+    lastLoadPermissionDenied = false;
+
+    if (ownerId) {
+        for (const source of map) {
+            try {
+                const docSnap = await db.collection(source.collection).doc(ownerId).get();
+                if (!docSnap.exists) continue;
+                const payload = docSnap.data() || {};
+                all.push(...normalizeQuotationList(payload.quotations, source.type, ownerId));
+            } catch (error) {
+                if (isPermissionDeniedError(error)) {
+                    lastLoadPermissionDenied = true;
+                    break;
+                }
+                throw error;
+            }
+        }
     }
+
+    if (all.length > 0) {
+        return all;
+    }
+
+    const local = getLocalQuotationsSnapshot();
+    lastLoadUsedLocalFallback = true;
+
+    all.push(...normalizeQuotationList(local.umrah, "umrah", ownerId));
+    all.push(...normalizeQuotationList(local.international, "international", ownerId));
+    all.push(...normalizeQuotationList(local.domestic, "domestic", ownerId));
 
     return all;
 }
@@ -403,7 +454,13 @@ async function runReport() {
 
         renderTable(validFields, rows);
         if (!rows.length) {
+            if (lastLoadPermissionDenied) {
+                setStatus("Firebase access is restricted for reports. Showing only locally available data.");
+                return;
+            }
             setStatus("No rows found for selected filters and date range.");
+        } else if (lastLoadUsedLocalFallback && lastLoadPermissionDenied) {
+            setStatus(`Generated ${rows.length} row(s) from local cache (Firebase permissions are restricted).`, true);
         } else {
             setStatus(`Generated ${rows.length} row(s).`, true);
         }
