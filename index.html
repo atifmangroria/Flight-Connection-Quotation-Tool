@@ -6867,6 +6867,9 @@ function saveQuotation() {
       ? packageSelectEl.selectedOptions[0].textContent
       : '';
     const selectedSvcOption = document.querySelector('input[name="svcOption"]:checked')?.value || 'none';
+    let allQuotations = JSON.parse(localStorage.getItem('savedQuotations')) || [];
+    const existingQuotation = currentQuotationId ? allQuotations.find(q => q.id === currentQuotationId) : null;
+    const ownerAgentData = existingQuotation?.agentData || agent;
     
     // Create a complete quotation object
     const quotationData = {
@@ -6886,7 +6889,7 @@ function saveQuotation() {
         nightsMakkah: savedClientData.nightsMakkah || 0,
         nightsMadina: savedClientData.nightsMadina || 0
       },
-      agentData: agent,
+      agentData: ownerAgentData,
       createdAt: currentQuotationId ? 
         (savedQuotations.find(q => q.id === currentQuotationId)?.createdAt || new Date().toISOString()) : 
         new Date().toISOString(),
@@ -6936,9 +6939,6 @@ function saveQuotation() {
       };
     }
     
-    // Get ALL existing quotations from localStorage
-    let allQuotations = JSON.parse(localStorage.getItem('savedQuotations')) || [];
-    
     // Always upsert by id to avoid stale records after remove/edit actions.
     const targetQuotationId = currentQuotationId || quotationData.id;
     quotationData.id = targetQuotationId;
@@ -6950,11 +6950,13 @@ function saveQuotation() {
     localStorage.setItem('savedQuotations', JSON.stringify(allQuotations));
     
     // Save to Firebase
-    if (agent && agent.id) {
-      window.firebaseDB.saveData('umrah_quotations', agent.id, { 
-        quotations: allQuotations, 
+    const ownerDocId = ownerAgentData?.id || ownerAgentData?.uid || agent?.id;
+    if (ownerDocId) {
+      const ownerQuotations = allQuotations.filter(q => ((q?.agentData?.id || q?.agentData?.uid) === ownerDocId));
+      window.firebaseDB.saveData('umrah_quotations', ownerDocId, { 
+        quotations: ownerQuotations, 
         updatedAt: new Date(),
-        agentId: agent.id 
+        agentId: ownerDocId 
       }).catch(err => console.error('Firebase save error:', err));
     }
     

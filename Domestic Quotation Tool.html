@@ -6423,6 +6423,9 @@ const customSectionsData = {
       ? packageSelectEl.selectedOptions[0].textContent
       : '';
     const selectedSvcOption = document.querySelector('input[name="svcOption"]:checked')?.value || 'none';
+    let allQuotations = JSON.parse(localStorage.getItem('savedQuotations_domestic')) || [];
+    const existingQuotation = currentQuotationId ? allQuotations.find(q => q.id === currentQuotationId) : null;
+    const ownerAgentData = existingQuotation?.agentData || agent;
 
     // Create a complete quotation object
     const quotationData = {
@@ -6442,7 +6445,7 @@ const customSectionsData = {
         dateTo: savedClientData.dateTo || dateTo,
         tourDestination: savedClientData.tourDestination || ""
       },
-      agentData: agent,
+      agentData: ownerAgentData,
       createdAt: currentQuotationId ? 
         (savedQuotations.find(q => q.id === currentQuotationId)?.createdAt || new Date().toISOString()) : 
         new Date().toISOString(),
@@ -6493,9 +6496,6 @@ const customSectionsData = {
       };
     }
     
-    // Get ALL existing quotations from localStorage
-    let allQuotations = JSON.parse(localStorage.getItem('savedQuotations_domestic')) || [];
-    
     // Always upsert by id to avoid stale records after remove/edit actions.
     const targetQuotationId = currentQuotationId || quotationData.id;
     quotationData.id = targetQuotationId;
@@ -6507,12 +6507,13 @@ const customSectionsData = {
     localStorage.setItem('savedQuotations_domestic', JSON.stringify(allQuotations));
     
     // Save to Firebase
-    const agentDocId = getAgentDocId(agent);
-    if (agentDocId) {
-      window.firebaseDB.saveData('domestic_quotations', agentDocId, { 
-        quotations: allQuotations, 
+    const ownerDocId = getAgentDocId(ownerAgentData) || getAgentDocId(agent);
+    if (ownerDocId) {
+      const ownerQuotations = allQuotations.filter(q => (getAgentDocId(q?.agentData) === ownerDocId));
+      window.firebaseDB.saveData('domestic_quotations', ownerDocId, { 
+        quotations: ownerQuotations, 
         updatedAt: new Date(),
-        agentId: agentDocId 
+        agentId: ownerDocId 
       }).catch(err => console.error('Firebase save error:', err));
     }
     
