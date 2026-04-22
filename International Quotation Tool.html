@@ -5443,15 +5443,19 @@ async function printQuotation() {
     const total = (rate || 0) * qty;
     return `<td style="padding:6px;border:1px solid #dbe6f3;text-align:right;">${fmt(rate || 0)} x ${qty} = ${fmt(total)}</td>`;
   };
-  const addBreakdownRow = (service, details, rates, lineTotal) => {
+  const addBreakdownRow = (service, details, rates, lineTotal, qtyOverride = {}) => {
+    const adultQty = qtyOverride.adult ?? numAdult;
+    const childBedQty = qtyOverride.childBed ?? numChildBed;
+    const childNoBedQty = qtyOverride.childNoBed ?? numChildNoBed;
+    const infantQty = qtyOverride.infant ?? numInfant;
     quotationHTML += `
       <tr>
         <td style="padding:6px;border:1px solid #dbe6f3;font-weight:600;">${service}</td>
         <td style="padding:6px;border:1px solid #dbe6f3;">${details}</td>
-        ${buildBreakdownCell(rates.adult, numAdult)}
-        ${breakdownShowChildBed ? buildBreakdownCell(rates.childBed, numChildBed) : ''}
-        ${breakdownShowChildNoBed ? buildBreakdownCell(rates.childNoBed, numChildNoBed) : ''}
-        ${breakdownShowInfant ? buildBreakdownCell(rates.infant, numInfant) : ''}
+        ${buildBreakdownCell(rates.adult, adultQty)}
+        ${breakdownShowChildBed ? buildBreakdownCell(rates.childBed, childBedQty) : ''}
+        ${breakdownShowChildNoBed ? buildBreakdownCell(rates.childNoBed, childNoBedQty) : ''}
+        ${breakdownShowInfant ? buildBreakdownCell(rates.infant, infantQty) : ''}
         <td style="padding:6px;border:1px solid #dbe6f3;text-align:right;font-weight:700;color:#0b76d1;">${fmt(lineTotal || 0)}</td>
       </tr>
     `;
@@ -5519,7 +5523,13 @@ async function printQuotation() {
         'Hotel',
         `${sanitizeInput(room.city)} | ${sanitizeInput(room.name)} | ${sanitizeInput(room.roomType)}${room.roomName ? ` (${sanitizeInput(room.roomName)})` : ''} x${room.rooms} | ${room.nights}N | ${sanitizeInput(room.serviceType)}`,
         { adult: perPersonCost, childBed: perPersonCost, childNoBed: 0, infant: 0 },
-        totalHotel
+        totalHotel,
+        {
+          adult: (parseFloat(room.rooms) || 0) * Math.max(1, parseFloat(room.capacity) || 1),
+          childBed: 0,
+          childNoBed: 0,
+          infant: 0
+        }
       );
     });
   } else {
@@ -5530,7 +5540,13 @@ async function printQuotation() {
         'Hotel',
         `${sanitizeInput(room.city)} | ${sanitizeInput(room.name)} | ${sanitizeInput(room.roomType)}${room.roomName ? ` (${sanitizeInput(room.roomName)})` : ''} x${room.rooms} | ${room.nights}N | ${sanitizeInput(room.serviceType)}`,
         { adult: perPersonCost, childBed: perPersonCost, childNoBed: 0, infant: 0 },
-        totalHotel
+        totalHotel,
+        {
+          adult: (parseFloat(room.rooms) || 0) * Math.max(1, parseFloat(room.capacity) || 1),
+          childBed: 0,
+          childNoBed: 0,
+          infant: 0
+        }
       );
     });
   }
@@ -5600,7 +5616,7 @@ addBreakdownRow(
     
     addBreakdownRow(
       'Tour',
-      `${sanitizeInput(tourName)} | ${sanitizeInput(tourCity)} | ${sanitizeInput(tourDuration)} | ${sanitizeInput(tourMode)} | ${sanitizeInput(tourVehicle)}${tourDate ? ` | ${formatDateToDMY(tourDate)}` : ''}`,
+      `${sanitizeInput(tourName)}`,
       { adult: perAdultCost, childBed: perChildBedCost, childNoBed: perChildNoBedCost, infant: perInfantCost },
       totalTour
     );

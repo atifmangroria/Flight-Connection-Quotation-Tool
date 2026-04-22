@@ -5676,15 +5676,19 @@ console.log("Total package amount:", totalPackageAmount);
     const total = (rate || 0) * qty;
     return `<td style="padding:6px;border:1px solid #dbe6f3;text-align:right;">${fmt(rate || 0)} x ${qty} = ${fmt(total)}</td>`;
   };
-  const addBreakdownRow = (service, details, rates, lineTotal) => {
+  const addBreakdownRow = (service, details, rates, lineTotal, qtyOverride = {}) => {
+    const adultQty = qtyOverride.adult ?? clientData.adults;
+    const childBedQty = qtyOverride.childBed ?? clientData.childBed;
+    const childNoBedQty = qtyOverride.childNoBed ?? clientData.childNoBed;
+    const infantQty = qtyOverride.infant ?? clientData.infants;
     quotationHTML += `
       <tr>
         <td style="padding:6px;border:1px solid #dbe6f3;font-weight:600;">${service}</td>
         <td style="padding:6px;border:1px solid #dbe6f3;">${details}</td>
-        ${buildBreakdownCell(rates.adult, clientData.adults)}
-        ${breakdownShowChildBed ? buildBreakdownCell(rates.childBed, clientData.childBed) : ''}
-        ${breakdownShowChildNoBed ? buildBreakdownCell(rates.childNoBed, clientData.childNoBed) : ''}
-        ${breakdownShowInfant ? buildBreakdownCell(rates.infant, clientData.infants) : ''}
+        ${buildBreakdownCell(rates.adult, adultQty)}
+        ${breakdownShowChildBed ? buildBreakdownCell(rates.childBed, childBedQty) : ''}
+        ${breakdownShowChildNoBed ? buildBreakdownCell(rates.childNoBed, childNoBedQty) : ''}
+        ${breakdownShowInfant ? buildBreakdownCell(rates.infant, infantQty) : ''}
         <td style="padding:6px;border:1px solid #dbe6f3;text-align:right;font-weight:700;color:#0b76d1;">${fmt(lineTotal || 0)}</td>
       </tr>
     `;
@@ -5744,48 +5748,35 @@ console.log("Total package amount:", totalPackageAmount);
   });
   
   const appendHotelQuotationRows = (cityLabel, hotels) => {
-    hotels.forEach((hotel, hotelIndex) => {
+    hotels.forEach((hotel) => {
       const payingPax = clientData.adults + clientData.childBed;
-      const totalHotel = (hotel.roomEntries || []).reduce((sum, room) => {
-        return sum + ((room.costNight + room.svcNight) * hotel.nights * room.rooms * roe);
-      }, 0);
-      if (totalHotel <= 0) return;
-      const perPersonCost = payingPax > 0 ? totalHotel / payingPax : 0;
-      const roomSummary = (hotel.roomEntries || []).map(room => `${room.rooms} ${room.roomType} ${room.serviceType}`).join(' • ');
-      const perPersonLabel = getHotelPriceMode() === 'actual' && (hotel.roomEntries || []).length > 1
-        ? (hotel.roomEntries || []).map(room => {
-            const capacity = getRoomTypeCapacity(room.roomType) || 1;
-            const actualPerPerson = ((room.costNight + room.svcNight) * hotel.nights) / capacity * roe;
-            return `${room.roomType}: PKR ${fmt(actualPerPerson)}`;
-          }).join(' • ')
-        : `Adult: PKR ${fmt(perPersonCost)}${clientData.childBed > 0 ? ` • Child(bed): PKR ${fmt(perPersonCost)}` : ''}`;
+      const hotelMode = getHotelPriceMode();
 
-      const defaultRoomPerPerson = payingPax > 0 ? totalHotel / payingPax : 0;
-      const actualRoomMap = {};
-      if (getHotelPriceMode() === 'actual') {
-        (hotel.roomEntries || []).forEach((room) => {
-          const capacity = Math.max(getRoomTypeCapacity(room.roomType) || 1, 1);
-          const label = `${room.roomType || 'Room'} Sharing`;
-          const actualPerPerson = ((room.costNight + room.svcNight) * hotel.nights / capacity) * roe;
-          actualRoomMap[label] = actualPerPerson;
-        });
-      }
+      (hotel.roomEntries || []).forEach((room) => {
+        const roomCount = Math.max(parseFloat(room.rooms) || 0, 0);
+        if (!roomCount) return;
 
-      Object.keys(actualRoomMap).length
-        ? Object.entries(actualRoomMap).forEach(([label, perPerson]) => {
-            addBreakdownRow(
-              'Hotel',
-              `${cityLabel} | ${sanitizeInput(hotel.name)} | ${sanitizeInput(label)} | ${hotel.nights}N`,
-              { adult: perPerson, childBed: perPerson, childNoBed: 0, infant: 0 },
-              totalHotel
-            );
-          })
-        : addBreakdownRow(
-            'Hotel',
-            `${cityLabel} | ${sanitizeInput(hotel.name)} | ${sanitizeInput(roomSummary || hotel.roomType)} | ${hotel.nights}N`,
-            { adult: defaultRoomPerPerson, childBed: defaultRoomPerPerson, childNoBed: 0, infant: 0 },
-            totalHotel
-          );
+        const roomCapacity = Math.max(getRoomTypeCapacity(room.roomType) || 1, 1);
+        const roomTotal = (room.costNight + room.svcNight) * hotel.nights * roomCount * roe;
+        if (roomTotal <= 0) return;
+
+        const roomPerPerson = hotelMode === 'actual'
+          ? (((room.costNight + room.svcNight) * hotel.nights) / roomCapacity) * roe
+          : (payingPax > 0 ? roomTotal / payingPax : 0);
+
+        addBreakdownRow(
+          'Hotel',
+          `${cityLabel} | ${sanitizeInput(hotel.name)} | ${sanitizeInput(room.roomType || 'Room')} x${roomCount} | ${hotel.nights}N | ${sanitizeInput(room.serviceType || 'Room Only')}`,
+          { adult: roomPerPerson, childBed: 0, childNoBed: 0, infant: 0 },
+          roomTotal,
+          {
+            adult: hotelMode === 'actual' ? roomCount * roomCapacity : clientData.adults,
+            childBed: 0,
+            childNoBed: 0,
+            infant: 0
+          }
+        );
+      });
     });
   };
 
