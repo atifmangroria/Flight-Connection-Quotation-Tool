@@ -1289,11 +1289,28 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     }
 
-    // Load quotations from Firebase
+    // Load quotations from Firebase without clobbering newer local edits.
     window.firebaseDB.getData('umrah_quotations', agent.id).then(firebaseData => {
-      if (firebaseData && firebaseData.quotations) {
-        localStorage.setItem('savedQuotations', JSON.stringify(firebaseData.quotations));
-        savedQuotations = firebaseData.quotations;
+      if (firebaseData && Array.isArray(firebaseData.quotations)) {
+        const localRows = JSON.parse(localStorage.getItem('savedQuotations')) || [];
+        const remoteRows = firebaseData.quotations;
+
+        const parseTs = (row) => {
+          const ts = new Date(row?.updatedAt || row?.createdAt || 0).getTime();
+          return Number.isFinite(ts) ? ts : 0;
+        };
+        const pickNewer = (a, b) => (parseTs(a) >= parseTs(b) ? a : b);
+
+        const mergedById = new Map();
+        [...remoteRows, ...localRows].forEach((row) => {
+          if (!row || !row.id) return;
+          const existing = mergedById.get(row.id);
+          mergedById.set(row.id, existing ? pickNewer(existing, row) : row);
+        });
+
+        const mergedRows = Array.from(mergedById.values());
+        localStorage.setItem('savedQuotations', JSON.stringify(mergedRows));
+        savedQuotations = mergedRows;
       }
     }).catch(err => console.error('Load error:', err));
 
