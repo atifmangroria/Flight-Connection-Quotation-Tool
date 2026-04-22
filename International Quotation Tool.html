@@ -6616,18 +6616,12 @@ const customSectionsData = {
     // Get ALL existing quotations from localStorage
     let allQuotations = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
     
-    // Add or update the quotation
-    if (currentQuotationId) {
-      // Update existing
-      const index = allQuotations.findIndex(q => q.id === currentQuotationId);
-      if (index !== -1) {
-        allQuotations[index] = quotationData;
-      }
-    } else {
-      // Add new
-      allQuotations.push(quotationData);
-      currentQuotationId = quotationData.id;
-    }
+    // Always upsert by id to avoid stale records after remove/edit actions.
+    const targetQuotationId = currentQuotationId || quotationData.id;
+    quotationData.id = targetQuotationId;
+    allQuotations = allQuotations.filter(q => q.id !== targetQuotationId);
+    allQuotations.push(quotationData);
+    currentQuotationId = targetQuotationId;
     
     // Save to localStorage
     localStorage.setItem('savedQuotations_international', JSON.stringify(allQuotations));
