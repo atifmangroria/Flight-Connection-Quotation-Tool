@@ -5667,6 +5667,44 @@ console.log("Total package amount:", totalPackageAmount);
   <div id="calculationSummarySection" style="margin-bottom: 10px; display: none;">
     <h3 style="color: #0b76d1; border-bottom: 2px solid #0b76d1; padding-bottom: 3px; margin-bottom: 6px;">Price Breakdown</h3>
   `;
+
+  const breakdownShowChildBed = clientData.childBed > 0;
+  const breakdownShowChildNoBed = clientData.childNoBed > 0;
+  const breakdownShowInfant = clientData.infants > 0;
+  const buildBreakdownCell = (rate, qty) => {
+    if (!qty || qty <= 0) return '<td style="padding:6px;border:1px solid #dbe6f3;color:#777;text-align:right;">-</td>';
+    const total = (rate || 0) * qty;
+    return `<td style="padding:6px;border:1px solid #dbe6f3;text-align:right;">${fmt(rate || 0)} x ${qty} = ${fmt(total)}</td>`;
+  };
+  const addBreakdownRow = (service, details, rates, lineTotal) => {
+    quotationHTML += `
+      <tr>
+        <td style="padding:6px;border:1px solid #dbe6f3;font-weight:600;">${service}</td>
+        <td style="padding:6px;border:1px solid #dbe6f3;">${details}</td>
+        ${buildBreakdownCell(rates.adult, clientData.adults)}
+        ${breakdownShowChildBed ? buildBreakdownCell(rates.childBed, clientData.childBed) : ''}
+        ${breakdownShowChildNoBed ? buildBreakdownCell(rates.childNoBed, clientData.childNoBed) : ''}
+        ${breakdownShowInfant ? buildBreakdownCell(rates.infant, clientData.infants) : ''}
+        <td style="padding:6px;border:1px solid #dbe6f3;text-align:right;font-weight:700;color:#0b76d1;">${fmt(lineTotal || 0)}</td>
+      </tr>
+    `;
+  };
+
+  quotationHTML += `
+    <table style="width:100%;border-collapse:collapse;background:#fff;">
+      <thead>
+        <tr style="background:#eef5ff;">
+          <th style="padding:6px;border:1px solid #dbe6f3;text-align:left;">Service</th>
+          <th style="padding:6px;border:1px solid #dbe6f3;text-align:left;">Details</th>
+          <th style="padding:6px;border:1px solid #dbe6f3;text-align:right;">Adult</th>
+          ${breakdownShowChildBed ? '<th style="padding:6px;border:1px solid #dbe6f3;text-align:right;">Child (bed)</th>' : ''}
+          ${breakdownShowChildNoBed ? '<th style="padding:6px;border:1px solid #dbe6f3;text-align:right;">Child (no bed)</th>' : ''}
+          ${breakdownShowInfant ? '<th style="padding:6px;border:1px solid #dbe6f3;text-align:right;">Infant</th>' : ''}
+          <th style="padding:6px;border:1px solid #dbe6f3;text-align:right;">Line Total</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
   
   // Add flight details
   document.querySelectorAll("[id^='flightBlock_']").forEach((el) => {
@@ -5697,12 +5735,12 @@ console.log("Total package amount:", totalPackageAmount);
     const totalInf = perInfantCost * clientData.infants;
     const totalFlight = totalAdult + totalChildBed + totalChildNoBed + totalInf;
     
-    quotationHTML += `
-  <div style="margin:2px 0;padding:4px 8px;background:#f8f9fa;border-left:3px solid #0b76d1;border-radius:3px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
-    <span><b>✈️ Flight ${idx}</b> &mdash; ${sanitizeInput(airline)} &bull; ${sanitizeInput(flightType)} &nbsp; <span style="color:#555;font-size:11px;">${clientData.adults>0?`Adult: PKR ${fmt(perAdultCost)}`:''}${clientData.childBed>0?` &bull; Child(bed): PKR ${fmt(perChildBedCost)}`:''}${clientData.childNoBed>0?` &bull; Child(no bed): PKR ${fmt(perChildNoBedCost)}`:''}${clientData.infants>0?` &bull; Infant: PKR ${fmt(perInfantCost)}`:''}</span></span>
-    <b style="color:#0b76d1;white-space:nowrap;">PKR ${fmt(totalFlight)}</b>
-  </div>
-`;
+    addBreakdownRow(
+      'Flight',
+      `${sanitizeInput(airline)} | ${sanitizeInput(flightType)}`,
+      { adult: perAdultCost, childBed: perChildBedCost, childNoBed: perChildNoBedCost, infant: perInfantCost },
+      totalFlight
+    );
   });
   
   const appendHotelQuotationRows = (cityLabel, hotels) => {
@@ -5722,12 +5760,32 @@ console.log("Total package amount:", totalPackageAmount);
           }).join(' • ')
         : `Adult: PKR ${fmt(perPersonCost)}${clientData.childBed > 0 ? ` • Child(bed): PKR ${fmt(perPersonCost)}` : ''}`;
 
-      quotationHTML += `
-  <div style="margin:2px 0;padding:4px 8px;background:${cityLabel === 'Makkah' ? '#fff' : '#f8f9fa'};border-left:3px solid #0b76d1;border-radius:3px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
-    <span><b>🏨 ${cityLabel} Hotel ${hotelIndex + 1}</b> &mdash; ${sanitizeInput(hotel.name)} &bull; ${sanitizeInput(roomSummary || hotel.roomType)} &bull; ${hotel.nights}N &nbsp; <span style="color:#555;font-size:11px;">${perPersonLabel}</span></span>
-    <b style="color:#0b76d1;white-space:nowrap;">PKR ${fmt(totalHotel)}</b>
-  </div>
-`;
+      const defaultRoomPerPerson = payingPax > 0 ? totalHotel / payingPax : 0;
+      const actualRoomMap = {};
+      if (getHotelPriceMode() === 'actual') {
+        (hotel.roomEntries || []).forEach((room) => {
+          const capacity = Math.max(getRoomTypeCapacity(room.roomType) || 1, 1);
+          const label = `${room.roomType || 'Room'} Sharing`;
+          const actualPerPerson = ((room.costNight + room.svcNight) * hotel.nights / capacity) * roe;
+          actualRoomMap[label] = actualPerPerson;
+        });
+      }
+
+      Object.keys(actualRoomMap).length
+        ? Object.entries(actualRoomMap).forEach(([label, perPerson]) => {
+            addBreakdownRow(
+              'Hotel',
+              `${cityLabel} | ${sanitizeInput(hotel.name)} | ${sanitizeInput(label)} | ${hotel.nights}N`,
+              { adult: perPerson, childBed: perPerson, childNoBed: 0, infant: 0 },
+              totalHotel
+            );
+          })
+        : addBreakdownRow(
+            'Hotel',
+            `${cityLabel} | ${sanitizeInput(hotel.name)} | ${sanitizeInput(roomSummary || hotel.roomType)} | ${hotel.nights}N`,
+            { adult: defaultRoomPerPerson, childBed: defaultRoomPerPerson, childNoBed: 0, infant: 0 },
+            totalHotel
+          );
     });
   };
 
@@ -5748,12 +5806,12 @@ console.log("Total package amount:", totalPackageAmount);
     const costPerChildNoBed = clientData.childNoBed > 0 ? pricing.perChildPKR : 0;
     const costPerInfant = clientData.infants > 0 ? pricing.perInfantPKR : 0;
     
-    quotationHTML += `
-  <div style="margin:2px 0;padding:4px 8px;background:#fff;border-left:3px solid #0b76d1;border-radius:3px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
-    <span><b>🚗 Transfer ${idx}</b> &mdash; ${sanitizeInput(from)} &rarr; ${sanitizeInput(to)} &bull; ${sanitizeInput(vehicle)} (${sanitizeInput(type)}) &bull; ${pricing.type === 'sharing' ? 'Sharing' : 'Private'} &nbsp; <span style="color:#555;font-size:11px;">${clientData.adults>0?`Adult: PKR ${fmt(costPerAdult)}`:''}${clientData.childBed>0?` &bull; Child(bed): PKR ${fmt(costPerChildBed)}`:''}${clientData.childNoBed>0?` &bull; Child(no bed): PKR ${fmt(costPerChildNoBed)}`:''}${clientData.infants>0&&costPerInfant>0?` &bull; Infant: PKR ${fmt(costPerInfant)}`:''}</span></span>
-    <b style="color:#0b76d1;white-space:nowrap;">PKR ${fmt(totalTransfer)}</b>
-  </div>
-`;
+    addBreakdownRow(
+      'Transfer',
+      `${sanitizeInput(from)} -> ${sanitizeInput(to)} | ${sanitizeInput(vehicle)} (${sanitizeInput(type)}) | ${pricing.type === 'sharing' ? 'Sharing' : 'Private'}`,
+      { adult: costPerAdult, childBed: costPerChildBed, childNoBed: costPerChildNoBed, infant: costPerInfant },
+      totalTransfer
+    );
   });
   
  // Add visa details
@@ -5772,15 +5830,17 @@ if (visaCostVal > 0 || visaSvc > 0) {
   const costPerChildNoBed = clientData.childNoBed > 0 ? costPerVisa : 0;
   const costPerInfant = clientData.infants > 0 ? costPerVisa : 0;
   
-quotationHTML += `
-  <div style="margin:2px 0;padding:4px 8px;background:#f8f9fa;border-left:3px solid #0b76d1;border-radius:3px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
-    <span><b>🛂 Visa</b> &mdash; Umrah Visa &bull; ${visaCount} visas &nbsp; <span style="color:#555;font-size:11px;">${clientData.adults>0?`Adult: PKR ${fmt(costPerAdult)}`:''}${clientData.childBed>0?` &bull; Child(bed): PKR ${fmt(costPerChildBed)}`:''}${clientData.childNoBed>0?` &bull; Child(no bed): PKR ${fmt(costPerChildNoBed)}`:''}${clientData.infants>0?` &bull; Infant: PKR ${fmt(costPerInfant)}`:''}</span></span>
-    <b style="color:#0b76d1;white-space:nowrap;">PKR ${fmt(totalVisa)}</b>
-  </div>
-`;
+addBreakdownRow(
+  'Visa',
+  `Umrah Visa | ${visaCount} visas`,
+  { adult: costPerAdult, childBed: costPerChildBed, childNoBed: costPerChildNoBed, infant: costPerInfant },
+  totalVisa
+);
 }
   
   quotationHTML += `
+      </tbody>
+    </table>
     </div>
   `;
   

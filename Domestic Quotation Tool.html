@@ -5298,6 +5298,44 @@ async function printQuotation() {
   <div id="calculationSummarySection" style="margin-bottom: 10px; display: none;">
     <h3 style="color: #0b76d1; border-bottom: 2px solid #0b76d1; padding-bottom: 3px; margin-bottom: 6px;">Price Breakdown</h3>
   `;
+
+  const breakdownShowChildBed = numChildBed > 0;
+  const breakdownShowChildNoBed = numChildNoBed > 0;
+  const breakdownShowInfant = numInfant > 0;
+  const buildBreakdownCell = (rate, qty) => {
+    if (!qty || qty <= 0) return '<td style="padding:6px;border:1px solid #dbe6f3;color:#777;text-align:right;">-</td>';
+    const total = (rate || 0) * qty;
+    return `<td style="padding:6px;border:1px solid #dbe6f3;text-align:right;">${fmt(rate || 0)} x ${qty} = ${fmt(total)}</td>`;
+  };
+  const addBreakdownRow = (service, details, rates, lineTotal) => {
+    quotationHTML += `
+      <tr>
+        <td style="padding:6px;border:1px solid #dbe6f3;font-weight:600;">${service}</td>
+        <td style="padding:6px;border:1px solid #dbe6f3;">${details}</td>
+        ${buildBreakdownCell(rates.adult, numAdult)}
+        ${breakdownShowChildBed ? buildBreakdownCell(rates.childBed, numChildBed) : ''}
+        ${breakdownShowChildNoBed ? buildBreakdownCell(rates.childNoBed, numChildNoBed) : ''}
+        ${breakdownShowInfant ? buildBreakdownCell(rates.infant, numInfant) : ''}
+        <td style="padding:6px;border:1px solid #dbe6f3;text-align:right;font-weight:700;color:#0b76d1;">${fmt(lineTotal || 0)}</td>
+      </tr>
+    `;
+  };
+
+  quotationHTML += `
+    <table style="width:100%;border-collapse:collapse;background:#fff;">
+      <thead>
+        <tr style="background:#eef5ff;">
+          <th style="padding:6px;border:1px solid #dbe6f3;text-align:left;">Service</th>
+          <th style="padding:6px;border:1px solid #dbe6f3;text-align:left;">Details</th>
+          <th style="padding:6px;border:1px solid #dbe6f3;text-align:right;">Adult</th>
+          ${breakdownShowChildBed ? '<th style="padding:6px;border:1px solid #dbe6f3;text-align:right;">Child (bed)</th>' : ''}
+          ${breakdownShowChildNoBed ? '<th style="padding:6px;border:1px solid #dbe6f3;text-align:right;">Child (no bed)</th>' : ''}
+          ${breakdownShowInfant ? '<th style="padding:6px;border:1px solid #dbe6f3;text-align:right;">Infant</th>' : ''}
+          <th style="padding:6px;border:1px solid #dbe6f3;text-align:right;">Line Total</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
   
   // Add flight details
   document.querySelectorAll("[id^='flightBlock_']").forEach((el) => {
@@ -5328,12 +5366,12 @@ async function printQuotation() {
     const totalInf = perInfantCost * numInfant;
     const totalFlight = totalAdult + totalChildBed + totalChildNoBed + totalInf;
     
-    quotationHTML += `
-  <div style="margin:2px 0;padding:4px 8px;background:#f8f9fa;border-left:3px solid #0b76d1;border-radius:3px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
-    <span><b>✈️ Flight ${idx}</b> &mdash; ${sanitizeInput(airline)} &nbsp; <span style="color:#555;font-size:11px;">${numAdult>0?`Adult: PKR ${fmt(perAdultCost)}`:''}${numChildBed>0?` &bull; Child(bed): PKR ${fmt(perChildBedCost)}`:''}${numChildNoBed>0?` &bull; Child(no bed): PKR ${fmt(perChildNoBedCost)}`:''}${numInfant>0?` &bull; Infant: PKR ${fmt(perInfantCost)}`:''}</span></span>
-    <b style="color:#0b76d1;white-space:nowrap;">PKR ${fmt(totalFlight)}</b>
-  </div>
-`;
+    addBreakdownRow(
+      'Flight',
+      `${sanitizeInput(airline)}`,
+      { adult: perAdultCost, childBed: perChildBedCost, childNoBed: perChildNoBedCost, infant: perInfantCost },
+      totalFlight
+    );
   });
   
   // Add hotel details
@@ -5346,12 +5384,12 @@ async function printQuotation() {
     if (!validRooms.length) {
       const payingPax = numAdult + numChildBed;
       const avgCost = payingPax > 0 ? totalHotel / payingPax : 0;
-      quotationHTML += `
-  <div style="margin:2px 0;padding:4px 8px;background:#fff;border-left:3px solid #0b76d1;border-radius:3px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
-    <span><b>🏨 ${sanitizeInput(hotel.city)} Hotel ${index + 1}</b> &mdash; ${sanitizeInput(hotel.name)} &bull; ${hotel.nights}N &nbsp; <span style="color:#555;font-size:11px;">Per Person: PKR ${fmt(avgCost)}</span></span>
-    <b style="color:#0b76d1;white-space:nowrap;">PKR ${fmt(totalHotel)}</b>
-  </div>
-`;
+      addBreakdownRow(
+        'Hotel',
+        `${sanitizeInput(hotel.city)} | ${sanitizeInput(hotel.name)} | ${hotel.nights}N`,
+        { adult: avgCost, childBed: avgCost, childNoBed: 0, infant: 0 },
+        totalHotel
+      );
       return;
     }
 
@@ -5364,12 +5402,12 @@ async function printQuotation() {
         : ((numAdult + numChildBed) > 0 ? totalHotel / (numAdult + numChildBed) : 0);
       const roomLabel = `${sanitizeInput(room.roomType || 'Room')}${room.roomName ? ` (${sanitizeInput(room.roomName)})` : ''} &times;${roomCount}`;
 
-      quotationHTML += `
-  <div style="margin:2px 0;padding:4px 8px;background:#fff;border-left:3px solid #0b76d1;border-radius:3px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
-    <span><b>🏨 ${sanitizeInput(hotel.city)} Hotel ${index + 1}</b> &mdash; ${sanitizeInput(hotel.name)} &bull; ${roomLabel} &bull; ${hotel.nights}N &bull; ${sanitizeInput(room.serviceType || 'Room Only')} &nbsp; <span style="color:#555;font-size:11px;">Per Person: PKR ${fmt(roomPerPerson)}</span></span>
-    <b style="color:#0b76d1;white-space:nowrap;">PKR ${fmt(roomTotal)}</b>
-  </div>
-`;
+      addBreakdownRow(
+        'Hotel',
+        `${sanitizeInput(hotel.city)} | ${sanitizeInput(hotel.name)} | ${roomLabel} | ${hotel.nights}N | ${sanitizeInput(room.serviceType || 'Room Only')}`,
+        { adult: roomPerPerson, childBed: roomPerPerson, childNoBed: 0, infant: 0 },
+        roomTotal
+      );
     });
   });
   
@@ -5386,12 +5424,12 @@ async function printQuotation() {
     const costPerChildNoBed = pricing.perChildPKR;
     const costPerInfant = pricing.perInfantPKR;
     
-    quotationHTML += `
-  <div style="margin:2px 0;padding:4px 8px;background:#f8f9fa;border-left:3px solid #0b76d1;border-radius:3px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
-    <span><b>🚗 Transfer ${idx}</b> &mdash; ${sanitizeInput(from)} &rarr; ${sanitizeInput(to)} &bull; ${direction} &nbsp; <span style="color:#555;font-size:11px;">${numAdult>0?`Adult: PKR ${fmt(costPerAdult)}`:''}${numChildBed>0?` &bull; Child(bed): PKR ${fmt(costPerChildBed)}`:''}${numChildNoBed>0?` &bull; Child(no bed): PKR ${fmt(costPerChildNoBed)}`:''}${numInfant>0&&costPerInfant>0?` &bull; Infant: PKR ${fmt(costPerInfant)}`:''}</span></span>
-    <b style="color:#0b76d1;white-space:nowrap;">PKR ${fmt(totalTransfer)}</b>
-  </div>
-`;
+    addBreakdownRow(
+      'Transfer',
+      `${sanitizeInput(from)} -> ${sanitizeInput(to)} | ${direction}`,
+      { adult: costPerAdult, childBed: costPerChildBed, childNoBed: costPerChildNoBed, infant: costPerInfant },
+      totalTransfer
+    );
   });
   
  // Add visa details
@@ -5412,12 +5450,12 @@ if (visaCost > 0 || visaSvc > 0) {
   const costPerChildNoBed = numChildNoBed > 0 ? costPerVisa : 0;
   const costPerInfant = numInfant > 0 ? costPerVisa : 0;
   
-quotationHTML += `
-  <div style="margin:2px 0;padding:4px 8px;background:#f8f9fa;border-left:3px solid #0b76d1;border-radius:3px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
-    <span><b>🛂 Visa</b> &mdash; ${visaType} (${visaCountry}) &bull; ${visaCount} visas &nbsp; <span style="color:#555;font-size:11px;">${numAdult>0?`Adult: PKR ${fmt(costPerAdult)}`:''}${numChildBed>0?` &bull; Child(bed): PKR ${fmt(costPerChildBed)}`:''}${numChildNoBed>0?` &bull; Child(no bed): PKR ${fmt(costPerChildNoBed)}`:''}${numInfant>0?` &bull; Infant: PKR ${fmt(costPerInfant)}`:''}</span></span>
-    <b style="color:#0b76d1;white-space:nowrap;">PKR ${fmt(totalVisa)}</b>
-  </div>
-`;
+addBreakdownRow(
+  'Visa',
+  `${sanitizeInput(visaType)} (${sanitizeInput(visaCountry)}) | ${visaCount} visas`,
+  { adult: costPerAdult, childBed: costPerChildBed, childNoBed: costPerChildNoBed, infant: costPerInfant },
+  totalVisa
+);
 }
   
   // Add tour details
@@ -5436,15 +5474,17 @@ quotationHTML += `
     const perInfantCost = pricing.perInfantPKR;
     const totalTour = convertToPKR(pricing.costOrig + pricing.svcOrig, pricing.currency);
     
-    quotationHTML += `
-  <div style="margin:2px 0;padding:4px 8px;background:#f0f8ff;border-left:3px solid #0b76d1;border-radius:3px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
-    <span><b>🏛️ Tour ${idx}</b> &mdash; ${sanitizeInput(tourName)} &bull; ${sanitizeInput(tourCity)} &bull; ${sanitizeInput(tourDuration)} &bull; ${sanitizeInput(tourMode)} &bull; ${sanitizeInput(tourVehicle)}${tourDate ? ` &bull; ${formatDateToDMY(tourDate)}` : ''} &nbsp; <span style="color:#555;font-size:11px;">${numAdult>0?`Adult: PKR ${fmt(perAdultCost)}`:''}${numChildBed>0?` &bull; Child(bed): PKR ${fmt(perChildBedCost)}`:''}${numChildNoBed>0?` &bull; Child(no bed): PKR ${fmt(perChildNoBedCost)}`:''}${numInfant>0?` &bull; Infant: PKR ${fmt(perInfantCost)}`:''}</span></span>
-    <b style="color:#0b76d1;white-space:nowrap;">PKR ${fmt(totalTour)}</b>
-  </div>
-`;
+    addBreakdownRow(
+      'Tour',
+      `${sanitizeInput(tourName)} | ${sanitizeInput(tourCity)} | ${sanitizeInput(tourDuration)} | ${sanitizeInput(tourMode)} | ${sanitizeInput(tourVehicle)}${tourDate ? ` | ${formatDateToDMY(tourDate)}` : ''}`,
+      { adult: perAdultCost, childBed: perChildBedCost, childNoBed: perChildNoBedCost, infant: perInfantCost },
+      totalTour
+    );
   });
   
   quotationHTML += `
+      </tbody>
+    </table>
     </div>
   `;
   
