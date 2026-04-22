@@ -5440,8 +5440,7 @@ async function printQuotation() {
   const breakdownShowInfant = numInfant > 0;
   const buildBreakdownCell = (rate, qty) => {
     if (!qty || qty <= 0) return '<td style="padding:6px;border:1px solid #dbe6f3;color:#777;text-align:right;">-</td>';
-    const total = (rate || 0) * qty;
-    return `<td style="padding:6px;border:1px solid #dbe6f3;text-align:right;">${fmt(rate || 0)} x ${qty} = ${fmt(total)}</td>`;
+    return `<td style="padding:6px;border:1px solid #dbe6f3;text-align:right;">${fmt(rate || 0)} x ${qty}</td>`;
   };
   const addBreakdownRow = (service, details, rates, lineTotal, qtyOverride = {}) => {
     const adultQty = qtyOverride.adult ?? numAdult;
