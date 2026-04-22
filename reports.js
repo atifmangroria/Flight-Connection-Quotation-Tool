@@ -99,13 +99,20 @@ function inferAmount(quotation) {
     );
 }
 
-function inferDestination(quotation) {
-    return quotation?.destination
+function inferDestination(quotation, type = "") {
+    const qType = String(type || quotation?.type || "").toLowerCase();
+    if (qType === "umrah") {
+        return "Umrah";
+    }
+
+    return quotation?.clientData?.tourDestination
+        || quotation?.tourDestination
+        || quotation?.clientData?.destination
+        || quotation?.destination
         || quotation?.route
         || quotation?.to
         || quotation?.travelTo
         || quotation?.destinationCity
-        || quotation?.clientData?.destination
         || "N/A";
 }
 
@@ -174,7 +181,7 @@ function normalizeQuotationList(list, type, agentId) {
         id: item.id || "",
         type,
         clientName: inferClientName(item),
-        destination: inferDestination(item),
+        destination: inferDestination(item, type),
         status: String(item.status || "pending").toLowerCase(),
         createdAt: normalizeDate(item.createdAt),
         expiresAt: normalizeDate(item.expiresAt),
