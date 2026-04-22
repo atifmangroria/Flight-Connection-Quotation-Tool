@@ -4707,7 +4707,7 @@ async function performCalculation() {
       const adultsInRoom = Math.min(remainingAdults, occupiedPax);
       const childrenInRoom = Math.min(remainingChildBed, Math.max(occupiedPax - adultsInRoom, 0));
       const pricingBucket = roomTypeTotals[roomType.label];
-      const hotelPerPerson = pricingBucket ? pricingBucket.totalRoomCostPKR / Math.max(pricingBucket.totalRoomPax, 1) : 0;
+      const hotelPerPerson = pricingBucket ? pricingBucket.totalRoomCostPKR / Math.max(roomType.totalRoomPax, 1) : 0;
 
       if (adultsInRoom > 0) {
         packagePricingText.push(`Adult x${adultsInRoom} (${roomType.label} Sharing): PKR ${fmt(hotelPerPerson + nonHotelCostAdult)}`);
