@@ -164,28 +164,17 @@
       </div>
       <div class="grid cols3">
         <div>
-          <label>Travel Month & Year <span class="req">*</span></label>
-          <select id="travelMonthYear" required>
-            <option value="">-- Select Month & Year --</option>
-            <option value="04-2026">April 2026</option>
-            <option value="05-2026">May 2026</option>
-            <option value="06-2026">June 2026</option>
-            <option value="07-2026">July 2026</option>
-            <option value="08-2026">August 2026</option>
-            <option value="09-2026">September 2026</option>
-            <option value="10-2026">October 2026</option>
-            <option value="11-2026">November 2026</option>
-            <option value="12-2026">December 2026</option>
-            <option value="01-2027">January 2027</option>
-            <option value="02-2027">February 2027</option>
-            <option value="03-2027">March 2027</option>
-          </select>
+          <label>Valid From <span class="req">*</span></label>
+          <input type="date" id="validFrom" required>
+        </div>
+        <div>
+          <label>Valid To <span class="req">*</span></label>
+          <input type="date" id="validTo" required>
         </div>
         <div>
           <label>Total Nights <span class="req">*</span></label>
           <input type="number" id="totalNights" min="1" max="30" required placeholder="10">
         </div>
-        <div></div>
       </div>
 
       <h4 style="margin: 30px 0 15px 0; color: #0b76d1; font-size: 16px; border-bottom: 2px solid #0b76d1; padding-bottom: 8px;">🌍 Destinations & Cities</h4>
@@ -269,16 +258,7 @@ async function generateImage() {
     showNotification('Save or fill package name first', 'error');
     return;
   }
-  const monthYearVal = document.getElementById('travelMonthYear').value || '';
-  const [monthVal, yearVal] = monthYearVal ? monthYearVal.split('-') : ['N/A', 'N/A'];
-  const monthNames = [ '', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December' ];
-  let travelPeriod = 'N/A';
-  if (monthVal && yearVal && monthVal.length === 2 && !isNaN(Number(monthVal))) {
-    const monthNum = parseInt(monthVal, 10);
-    travelPeriod = monthNum > 0 && monthNum <= 12 ? `${monthNames[monthNum]}/${yearVal}` : `${monthVal}/${yearVal}`;
-  } else if (monthVal && yearVal) {
-    travelPeriod = `${monthVal}/${yearVal}`;
-  }
+  const travelPeriod = getTravelPeriodDisplay();
   const packageCode = currentPackageCode || await getNextPackageCode();
   const typeVal = (document.getElementById('packageType').value || 'N/A').toUpperCase();
   const currentAgent = JSON.parse(localStorage.getItem('loggedInAgent') || 'null')
@@ -614,6 +594,49 @@ let editingPackageId = null;
 let currentPackageCode = null;
 let isReadOnlyMode = false;
 
+function toIsoDateString(value) {
+  const dateObj = new Date(value);
+  if (Number.isNaN(dateObj.getTime())) return '';
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function formatDateDisplay(value) {
+  if (!value) return 'N/A';
+  const dateObj = new Date(value);
+  if (Number.isNaN(dateObj.getTime())) return value;
+  return dateObj.toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  });
+}
+
+function getTravelPeriodDisplay() {
+  const validFrom = document.getElementById('validFrom')?.value || '';
+  const validTo = document.getElementById('validTo')?.value || '';
+  if (validFrom && validTo) {
+    return `${formatDateDisplay(validFrom)} - ${formatDateDisplay(validTo)}`;
+  }
+  return 'N/A';
+}
+
+function getDateRangeFromLegacy(month, year) {
+  const numericMonth = parseInt(month, 10);
+  const numericYear = parseInt(year, 10);
+  if (!Number.isFinite(numericMonth) || !Number.isFinite(numericYear) || numericMonth < 1 || numericMonth > 12) {
+    return { validFrom: '', validTo: '' };
+  }
+  const startDate = new Date(numericYear, numericMonth - 1, 1);
+  const endDate = new Date(numericYear, numericMonth, 0);
+  return {
+    validFrom: toIsoDateString(startDate),
+    validTo: toIsoDateString(endDate)
+  };
+}
+
 function formatPackageCode(number) {
   return `PKG-${String(number).padStart(4, '0')}`;
 }
@@ -679,8 +702,13 @@ async function loadPackageForEditing(packageId, options = {}) {
 
   document.getElementById('packageName').value = data.name || '';
   document.getElementById('packageType').value = data.type || '';
-  if (data.travelMonth && data.travelYear) {
-    document.getElementById('travelMonthYear').value = `${String(data.travelMonth).padStart(2, '0')}-${data.travelYear}`;
+  if (data.validFrom && data.validTo) {
+    document.getElementById('validFrom').value = String(data.validFrom).slice(0, 10);
+    document.getElementById('validTo').value = String(data.validTo).slice(0, 10);
+  } else if (data.travelMonth && data.travelYear) {
+    const legacyRange = getDateRangeFromLegacy(data.travelMonth, data.travelYear);
+    document.getElementById('validFrom').value = legacyRange.validFrom;
+    document.getElementById('validTo').value = legacyRange.validTo;
   }
   document.getElementById('totalNights').value = data.totalNights || '';
   updateSections();
@@ -1354,22 +1382,35 @@ document.getElementById('packageForm').addEventListener('submit', async (e) => {
     return;
   }
 
-  // Parse month-year field
-  const monthYearValue = document.getElementById('travelMonthYear').value;
-  console.log('Month-year value:', monthYearValue);
-  if (!monthYearValue || !monthYearValue.includes('-')) {
-    showNotification('Please select travel month and year', 'error');
+  const validFromInput = document.getElementById('validFrom').value;
+  const validToInput = document.getElementById('validTo').value;
+  if (!validFromInput || !validToInput) {
+    showNotification('Please select both Valid From and Valid To dates', 'error');
     return;
   }
-  const [month, year] = monthYearValue.split('-');
+  const validFromDate = new Date(validFromInput);
+  const validToDate = new Date(validToInput);
+  if (Number.isNaN(validFromDate.getTime()) || Number.isNaN(validToDate.getTime())) {
+    showNotification('Please enter valid date range values', 'error');
+    return;
+  }
+  if (validToDate < validFromDate) {
+    showNotification('Valid To date must be same as or after Valid From date', 'error');
+    return;
+  }
+
+  const month = String(validFromDate.getMonth() + 1).padStart(2, '0');
+  const year = validFromDate.getFullYear();
 
   const packageCode = currentPackageCode || await getNextPackageCode();
 
   const data = {
     name: document.getElementById('packageName').value,
     type: pkgType,
+    validFrom: validFromInput,
+    validTo: validToInput,
     travelMonth: month,
-    travelYear: parseInt(year),
+    travelYear: parseInt(year, 10),
     packageCode,
     totalNights: parseInt(document.getElementById('totalNights').value),
     destinations,
@@ -1521,22 +1562,13 @@ async function generatePDF() {
 
   // ========= PACKAGE META =========
   const typeVal = (document.getElementById('packageType').value || 'N/A').toUpperCase();
-  const monthYearVal = document.getElementById('travelMonthYear').value || '';
-  const [monthVal, yearVal] = monthYearVal ? monthYearVal.split('-') : ['N/A', 'N/A'];
+  const validFromVal = document.getElementById('validFrom').value || '';
+  const validToVal = document.getElementById('validTo').value || '';
   const totalNights = toNumber(document.getElementById('totalNights').value || 0);
   const totalDays = totalNights > 0 ? totalNights + 1 : 0;
-  // Convert month number to month name
-  const monthNames = [
-    '', 'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
-  ];
-  let travelPeriod = 'N/A';
-  if (monthVal && yearVal && monthVal.length === 2 && !isNaN(Number(monthVal))) {
-    const monthNum = parseInt(monthVal, 10);
-    travelPeriod = monthNum > 0 && monthNum <= 12 ? `${monthNames[monthNum]}/${yearVal}` : `${monthVal}/${yearVal}`;
-  } else if (monthVal && yearVal) {
-    travelPeriod = `${monthVal}/${yearVal}`;
-  }
+  const travelPeriod = (validFromVal && validToVal)
+    ? `${formatDateDisplay(validFromVal)} - ${formatDateDisplay(validToVal)}`
+    : 'N/A';
   const packageCode = currentPackageCode || await getNextPackageCode();
   currentPackageCode = packageCode;
   const currentAgent = JSON.parse(localStorage.getItem('loggedInAgent') || 'null') || {};
