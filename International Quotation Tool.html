@@ -877,6 +877,29 @@ function updateAgentUI() {
 
 let availablePackages = [];
 
+function getPackageTimestamp(pkg) {
+  if (pkg?.updatedAt?.toDate) return pkg.updatedAt.toDate().getTime();
+  if (pkg?.createdAt?.toDate) return pkg.createdAt.toDate().getTime();
+  const parsedUpdated = new Date(pkg?.updatedAt || 0).getTime();
+  if (Number.isFinite(parsedUpdated) && parsedUpdated > 0) return parsedUpdated;
+  const parsedCreated = new Date(pkg?.createdAt || 0).getTime();
+  return Number.isFinite(parsedCreated) ? parsedCreated : 0;
+}
+
+function getPackageIdentityKey(pkg) {
+  const packageCode = String(pkg?.packageCode || '').trim().toLowerCase();
+  if (packageCode) return `code:${packageCode}`;
+  const packageId = String(pkg?.id || '').trim().toLowerCase();
+  if (packageId) return `id:${packageId}`;
+  const packageName = String(pkg?.name || '').trim().toLowerCase();
+  const packageType = String(pkg?.type || '').trim().toLowerCase();
+  const validFrom = String(pkg?.validFrom || '').trim().toLowerCase();
+  const validTo = String(pkg?.validTo || '').trim().toLowerCase();
+  const travelMonth = String(pkg?.travelMonth || '').trim().toLowerCase();
+  const travelYear = String(pkg?.travelYear || '').trim().toLowerCase();
+  return `name:${packageName}|type:${packageType}|from:${validFrom}|to:${validTo}|month:${travelMonth}|year:${travelYear}`;
+}
+
 async function loadPackages(type = 'international') {
   const packageSelect = document.getElementById('packageSelect');
   if (!packageSelect) return;
@@ -887,7 +910,18 @@ async function loadPackages(type = 'international') {
     availablePackages = packages || [];
     const filtered = availablePackages.filter(pkg => pkg.type === type || pkg.type === 'both');
 
+    const dedupedMap = new Map();
     filtered.forEach(pkg => {
+      const key = getPackageIdentityKey(pkg);
+      const existing = dedupedMap.get(key);
+      if (!existing || getPackageTimestamp(pkg) >= getPackageTimestamp(existing)) {
+        dedupedMap.set(key, pkg);
+      }
+    });
+    const dedupedPackages = Array.from(dedupedMap.values());
+    availablePackages = dedupedPackages;
+
+    dedupedPackages.forEach(pkg => {
       const opt = document.createElement('option');
       opt.value = pkg.id || pkg.name.replace(/\s+/g, '_').toLowerCase();
       opt.textContent = `${pkg.name} (Travel Month: ${pkg.travelMonth || 'Any'})`;
