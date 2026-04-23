@@ -145,20 +145,26 @@
   .quotation-table th, .quotation-table td{padding:10px;text-align:left;border-bottom:1px solid #eee}
   .quotation-table th{background:#f8f9fa;font-weight:bold}
   #packagesTable{table-layout:fixed;width:100%}
-  #packagesTable th:nth-child(1){width:13%}
-  #packagesTable th:nth-child(2){width:30%}
-  #packagesTable th:nth-child(3){width:11%}
-  #packagesTable th:nth-child(4){width:11%}
-  #packagesTable th:nth-child(5){width:16%}
+  #packagesTable th:nth-child(1){width:11%}
+  #packagesTable th:nth-child(2){width:26%}
+  #packagesTable th:nth-child(3){width:10%}
+  #packagesTable th:nth-child(4){width:9%}
+  #packagesTable th:nth-child(5){width:17%}
   #packagesTable th:nth-child(6){width:9%}
   #packagesTable th:nth-child(7){width:10%}
+  #packagesTable th:nth-child(8){width:8%}
   #packagesTable td.pkg-name-cell{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   #packagesTable td.pkg-name-cell .pkg-name-text{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #packagesTable td.pkg-validity-cell{font-size:12px}
   #packagesTableContainer{max-height:48vh;overflow-y:auto;border:1px solid #eee;border-radius:6px}
   #packagesTable thead th{position:sticky;top:0;z-index:2}
   .package-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}
   .package-search{flex:1;max-width:360px}
   .package-search input{width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:4px;font-size:14px}
+  .package-active-filter{display:flex;align-items:center;gap:8px}
+  .package-active-filter input{padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px}
+  .pkg-row-expired{background:#fff6f6}
+  .pkg-validity-expired{color:#c0392b;font-weight:bold}
   .pkg-actions{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
   .pkg-actions .btn-edit,.pkg-actions .btn-delete,.pkg-actions .btn-view{min-width:64px;padding:4px 8px;line-height:1.1;text-align:center}
   .expiring-soon{color:var(--warning);font-weight:bold}
@@ -560,6 +566,11 @@
           <div class="package-search">
             <input type="text" id="packageSearchInput" placeholder="Search package name or destinations...">
           </div>
+          <div class="package-active-filter">
+            <label for="packageActiveDate" style="font-size:13px; color:#555;">Active On</label>
+            <input type="date" id="packageActiveDate">
+            <button type="button" onclick="clearPackageActiveDate()" class="btn-action btn-view">Clear</button>
+          </div>
           <div id="createPackageWrap" style="text-align: right;">
             <button onclick="openPackageBuilder()" class="btn-primary">➕ Create New Package</button>
           </div>
@@ -574,12 +585,13 @@
                 <th>Total Nights</th>
                 <th>Destinations</th>
                 <th>Created</th>
+                <th>Validity</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody id="packagesTableBody">
               <tr>
-                <td colspan="7" style="text-align: center;">Loading packages...</td>
+                <td colspan="8" style="text-align: center;">Loading packages...</td>
               </tr>
             </tbody>
           </table>
@@ -713,6 +725,22 @@ document.getElementById('packageSearchInput')?.addEventListener('input', () => {
   const isAdmin = !!(agent && agent.role === 'admin');
   renderPackagesTable(isAdmin);
 });
+
+document.getElementById('packageActiveDate')?.addEventListener('change', () => {
+  const agent = checkAgentLogin();
+  const isAdmin = !!(agent && agent.role === 'admin');
+  renderPackagesTable(isAdmin);
+});
+
+function clearPackageActiveDate() {
+  const activeDateInput = document.getElementById('packageActiveDate');
+  if (activeDateInput) {
+    activeDateInput.value = '';
+  }
+  const agent = checkAgentLogin();
+  const isAdmin = !!(agent && agent.role === 'admin');
+  renderPackagesTable(isAdmin);
+}
 
 // Show package list view
 function showPackageList() {
@@ -859,14 +887,71 @@ async function loadPackages() {
 
 function getFilteredPackages() {
   const query = (document.getElementById('packageSearchInput')?.value || '').trim().toLowerCase();
-  if (!query) return allPackagesCache;
+  const activeOnDate = document.getElementById('packageActiveDate')?.value || '';
 
-  return allPackagesCache.filter(pkg => {
-    const name = String(pkg.name || pkg.id || '').toLowerCase();
-    const destinations = Array.isArray(pkg.destinations)
-      ? pkg.destinations.map(d => String(d?.city || '')).join(', ').toLowerCase()
-      : '';
-    return name.includes(query) || destinations.includes(query);
+  let filtered = allPackagesCache;
+  if (query) {
+    filtered = filtered.filter(pkg => {
+      const name = String(pkg.name || pkg.id || '').toLowerCase();
+      const destinations = Array.isArray(pkg.destinations)
+        ? pkg.destinations.map(d => String(d?.city || '')).join(', ').toLowerCase()
+        : '';
+      return name.includes(query) || destinations.includes(query);
+    });
+  }
+
+  if (activeOnDate) {
+    const selectedDate = new Date(activeOnDate);
+    selectedDate.setHours(0, 0, 0, 0);
+    filtered = filtered.filter(pkg => {
+      const validity = getPackageValidityRange(pkg);
+      if (!validity.validFromDate || !validity.validToDate) return false;
+      return selectedDate >= validity.validFromDate && selectedDate <= validity.validToDate;
+    });
+  }
+
+  return filtered;
+}
+
+function getPackageValidityRange(pkg) {
+  let validFromRaw = pkg?.validFrom || '';
+  let validToRaw = pkg?.validTo || '';
+
+  if ((!validFromRaw || !validToRaw) && pkg?.travelMonth && pkg?.travelYear) {
+    const month = parseInt(pkg.travelMonth, 10);
+    const year = parseInt(pkg.travelYear, 10);
+    if (Number.isFinite(month) && Number.isFinite(year) && month >= 1 && month <= 12) {
+      const startDate = new Date(year, month - 1, 1);
+      const endDate = new Date(year, month, 0);
+      validFromRaw = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}`;
+      validToRaw = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
+    }
+  }
+
+  const validFromDate = validFromRaw ? new Date(validFromRaw) : null;
+  const validToDate = validToRaw ? new Date(validToRaw) : null;
+  if (validFromDate) validFromDate.setHours(0, 0, 0, 0);
+  if (validToDate) validToDate.setHours(0, 0, 0, 0);
+
+  const isFromValid = validFromDate && !isNaN(validFromDate.getTime());
+  const isToValid = validToDate && !isNaN(validToDate.getTime());
+
+  return {
+    validFromRaw: isFromValid ? validFromRaw : '',
+    validToRaw: isToValid ? validToRaw : '',
+    validFromDate: isFromValid ? validFromDate : null,
+    validToDate: isToValid ? validToDate : null
+  };
+}
+
+function formatDateShort(dateValue) {
+  if (!dateValue) return 'N/A';
+  const dateObj = new Date(dateValue);
+  if (isNaN(dateObj.getTime())) return 'N/A';
+  return dateObj.toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
   });
 }
 
@@ -876,9 +961,13 @@ function renderPackagesTable(isAdmin) {
     
     if (packages.length === 0) {
       const hasQuery = (document.getElementById('packageSearchInput')?.value || '').trim().length > 0;
+      const hasDateFilter = !!(document.getElementById('packageActiveDate')?.value || '');
+      const isFilteredEmpty = hasQuery || hasDateFilter;
       tbody.innerHTML = hasQuery
-        ? '<tr><td colspan="7" style="text-align: center;">No packages match your search.</td></tr>'
-        : '<tr><td colspan="7" style="text-align: center;">No packages found. Create your first package!</td></tr>';
+        ? '<tr><td colspan="8" style="text-align: center;">No packages match your search.</td></tr>'
+        : (isFilteredEmpty
+          ? '<tr><td colspan="8" style="text-align: center;">No packages found for selected active date.</td></tr>'
+          : '<tr><td colspan="8" style="text-align: center;">No packages found. Create your first package!</td></tr>');
       return;
     }
     
@@ -907,6 +996,16 @@ function renderPackagesTable(isAdmin) {
         }
       }
 
+      const validity = getPackageValidityRange(pkg);
+      const validityText = (validity.validFromRaw && validity.validToRaw)
+        ? `${formatDateShort(validity.validFromRaw)} - ${formatDateShort(validity.validToRaw)}`
+        : 'N/A';
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const isExpired = !!(validity.validToDate && validity.validToDate < today);
+      const rowClass = isExpired ? 'pkg-row-expired' : '';
+      const validityClass = isExpired ? 'pkg-validity-expired' : '';
+
       const canInlineEdit = !!(pkg.pax && pkg.costs);
       const editBtn = canInlineEdit
         ? `<button onclick="editPackage('${pkg.id}')" class="btn-edit">Edit</button>`
@@ -917,13 +1016,14 @@ function renderPackagesTable(isAdmin) {
         : `<div class="pkg-actions"><button onclick="viewPackage('${pkg.id}')" class="btn-view">View</button></div>`;
 
       return `
-      <tr>
+      <tr class="${rowClass}">
         <td>${packageCode}</td>
         <td class="pkg-name-cell" title="${escapeHtml(pkgName)}"><span class="pkg-name-text">${escapeHtml(pkgName)}</span></td>
         <td>${pkgType}</td>
         <td>${totalNightsText}</td>
         <td title="${escapeHtml(destinationsText)}">${escapeHtml(destinationsText)}</td>
         <td>${createdText}</td>
+        <td class="pkg-validity-cell ${validityClass}">${escapeHtml(validityText)}</td>
         <td>${actions}</td>
       </tr>
     `;
