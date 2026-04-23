@@ -1455,8 +1455,12 @@ document.getElementById('packageForm').addEventListener('submit', async (e) => {
     console.log('Save result:', success);
 
     if (success) {
-      showNotification(editingPackageId ? '✅ Package updated successfully!' : '✅ Package saved successfully!', 'success');
-      setTimeout(() => window.close(), 1500);
+      showNotification(editingPackageId ? '✅ Package updated successfully!' : '✅ Package saved successfully! You can continue editing.', 'success');
+      if (!editingPackageId) {
+        editingPackageId = docId;
+        const submitBtn = document.querySelector('#packageForm button[type="submit"]');
+        if (submitBtn) submitBtn.textContent = '💾 Update Package';
+      }
     } else {
       const firebaseErr = window.lastFirebaseError;
       const detail = firebaseErr?.message ? ` (${firebaseErr.message})` : '';
