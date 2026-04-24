@@ -798,7 +798,7 @@ function updatePackageFilterHint(hasSelectedDates, activeCount) {
   if (!hintEl) return;
 
   if (!hasSelectedDates) {
-    hintEl.textContent = 'Select travel dates to check active packages. Showing all packages.';
+    hintEl.textContent = 'Select travel dates to check active packages.';
     hintEl.style.color = '#6c757d';
     return;
   }
@@ -872,7 +872,7 @@ async function loadPackages(type = 'domestic') {
       const packages = await window.firebaseDB.getAll('packages');
       availablePackages = packages || [];
       const filteredByType = availablePackages.filter(pkg => pkg.type === type || pkg.type === 'both');
-      const filtered = hasSelectedDates ? filteredByType.filter(pkg => isPackageInSelectedDateRange(pkg, tripFrom, tripTo)) : filteredByType;
+      const filtered = hasSelectedDates ? filteredByType.filter(pkg => isPackageInSelectedDateRange(pkg, tripFrom, tripTo)) : [];
 
       const dedupedMap = new Map();
       filtered.forEach(pkg => {
@@ -1341,7 +1341,7 @@ document.addEventListener('DOMContentLoaded', function() {
     <select id="packageSelect" style="font-size:12px;">
       <option value="">-- No Package --</option>
     </select>
-    <div id="packageFilterHint" class="small" style="margin-top:6px;color:#6c757d;">Select travel dates to check active packages. Showing all packages.</div>
+    <div id="packageFilterHint" class="small" style="margin-top:6px;color:#6c757d;">Select travel dates to check active packages.</div>
   </div>
 </div>
 
