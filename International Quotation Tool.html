@@ -876,6 +876,7 @@ function updateAgentUI() {
 }
 
 let availablePackages = [];
+let loadPackagesPromise = null;
 
 function getPackageTimestamp(pkg) {
   if (pkg?.updatedAt?.toDate) return pkg.updatedAt.toDate().getTime();
@@ -901,36 +902,52 @@ function getPackageIdentityKey(pkg) {
 }
 
 async function loadPackages(type = 'international') {
+  if (loadPackagesPromise) return loadPackagesPromise;
   const packageSelect = document.getElementById('packageSelect');
   if (!packageSelect) return;
   packageSelect.innerHTML = '<option value="">-- No Package --</option>';
 
-  try {
-    const packages = await window.firebaseDB.getAll('packages');
-    availablePackages = packages || [];
-    const filtered = availablePackages.filter(pkg => pkg.type === type || pkg.type === 'both');
+  loadPackagesPromise = (async () => {
+    try {
+      const packages = await window.firebaseDB.getAll('packages');
+      availablePackages = packages || [];
+      const filtered = availablePackages.filter(pkg => pkg.type === type || pkg.type === 'both');
 
-    const dedupedMap = new Map();
-    filtered.forEach(pkg => {
-      const key = getPackageIdentityKey(pkg);
-      const existing = dedupedMap.get(key);
-      if (!existing || getPackageTimestamp(pkg) >= getPackageTimestamp(existing)) {
-        dedupedMap.set(key, pkg);
-      }
-    });
-    const dedupedPackages = Array.from(dedupedMap.values());
-    availablePackages = dedupedPackages;
+      const dedupedMap = new Map();
+      filtered.forEach(pkg => {
+        const key = getPackageIdentityKey(pkg);
+        const existing = dedupedMap.get(key);
+        if (!existing || getPackageTimestamp(pkg) >= getPackageTimestamp(existing)) {
+          dedupedMap.set(key, pkg);
+        }
+      });
 
-    dedupedPackages.forEach(pkg => {
-      const opt = document.createElement('option');
-      opt.value = pkg.id || pkg.name.replace(/\s+/g, '_').toLowerCase();
-      opt.textContent = `${pkg.name} (Travel Month: ${pkg.travelMonth || 'Any'})`;
-      packageSelect.appendChild(opt);
-    });
-  } catch (error) {
-    console.error('Failed to load packages', error);
-    showNotification('Failed to load packages', 'error');
-  }
+      // Secondary dedup by name+type+travelMonth: keeps only the latest version per logical package
+      const nameMap = new Map();
+      Array.from(dedupedMap.values()).forEach(pkg => {
+        const nameKey = `${String(pkg.name || '').trim().toLowerCase()}|${String(pkg.type || '').trim().toLowerCase()}|${String(pkg.travelMonth || '').trim().toLowerCase()}`;
+        const existing = nameMap.get(nameKey);
+        if (!existing || getPackageTimestamp(pkg) >= getPackageTimestamp(existing)) {
+          nameMap.set(nameKey, pkg);
+        }
+      });
+      const dedupedPackages = Array.from(nameMap.values());
+      availablePackages = dedupedPackages;
+
+      dedupedPackages.forEach(pkg => {
+        const opt = document.createElement('option');
+        opt.value = pkg.id || pkg.name.replace(/\s+/g, '_').toLowerCase();
+        opt.textContent = `${pkg.name} (Travel Month: ${pkg.travelMonth || 'Any'})`;
+        packageSelect.appendChild(opt);
+      });
+    } catch (error) {
+      console.error('Failed to load packages', error);
+      showNotification('Failed to load packages', 'error');
+    } finally {
+      loadPackagesPromise = null;
+    }
+  })();
+  return loadPackagesPromise;
 }
 
 function checkPackageMonthMatch(pkg) {
