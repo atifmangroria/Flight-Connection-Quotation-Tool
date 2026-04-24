@@ -931,17 +931,116 @@ function getPackageIdentityKey(pkg) {
   return `name:${packageName}|type:${packageType}|from:${validFrom}|to:${validTo}|month:${travelMonth}|year:${travelYear}`;
 }
 
+function formatPackageDateDisplay(dateValue) {
+  if (!dateValue) return '';
+  const parsed = new Date(dateValue);
+  if (isNaN(parsed.getTime())) return '';
+  return parsed.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function getPackageValidityLabel(pkg) {
+  const from = formatPackageDateDisplay(pkg?.validFrom);
+  const to = formatPackageDateDisplay(pkg?.validTo);
+  if (from && to) return `${from} to ${to}`;
+  if (from) return `${from} onward`;
+  if (to) return `Until ${to}`;
+  return 'Any Validity';
+}
+
+function isPackageInSelectedDateRange(pkg, tripFrom, tripTo) {
+  const validFromRaw = pkg?.validFrom;
+  const validToRaw = pkg?.validTo;
+  if (!validFromRaw || !validToRaw) return true;
+
+  const validFrom = new Date(validFromRaw);
+  const validTo = new Date(validToRaw);
+  if (isNaN(validFrom.getTime()) || isNaN(validTo.getTime())) return true;
+
+  validFrom.setHours(0, 0, 0, 0);
+  validTo.setHours(0, 0, 0, 0);
+  return tripFrom <= validTo && tripTo >= validFrom;
+}
+
+function updatePackageFilterHint(hasSelectedDates, activeCount) {
+  const hintEl = document.getElementById('packageFilterHint');
+  if (!hintEl) return;
+
+  if (!hasSelectedDates) {
+    hintEl.textContent = 'Select travel dates to check active packages. Showing all packages.';
+    hintEl.style.color = '#6c757d';
+    return;
+  }
+
+  if (activeCount === 0) {
+    hintEl.textContent = 'No active packages found for selected travel dates.';
+    hintEl.style.color = '#dc3545';
+    return;
+  }
+
+  hintEl.textContent = `Showing ${activeCount} active package(s) for selected travel dates.`;
+  hintEl.style.color = '#2e7d32';
+}
+
+function getPackageDisplayLabel(pkg) {
+  const code = String(pkg?.packageCode || '').trim() || 'NO-CODE';
+  const name = String(pkg?.name || 'Unnamed Package').trim();
+  const validity = getPackageValidityLabel(pkg);
+  return `${code} - ${name} - ${validity}`;
+}
+
+function filterPackagesBySearch(packages, searchTerm) {
+  const term = String(searchTerm || '').trim().toLowerCase();
+  if (!term) return packages;
+  return packages.filter(pkg => {
+    const code = String(pkg?.packageCode || '').toLowerCase();
+    const name = String(pkg?.name || '').toLowerCase();
+    const validity = getPackageValidityLabel(pkg).toLowerCase();
+    return code.includes(term) || name.includes(term) || validity.includes(term);
+  });
+}
+
+function renderPackageOptions(packages) {
+  const packageSelect = document.getElementById('packageSelect');
+  if (!packageSelect) return;
+
+  const previousValue = packageSelect.value;
+  const searchTerm = document.getElementById('packageSearchInput')?.value || '';
+  const visiblePackages = filterPackagesBySearch(packages, searchTerm);
+
+  packageSelect.innerHTML = '<option value="">-- No Package --</option>';
+  visiblePackages.forEach(pkg => {
+    const opt = document.createElement('option');
+    opt.value = pkg.id || pkg.name.replace(/\s+/g, '_').toLowerCase();
+    opt.textContent = getPackageDisplayLabel(pkg);
+    packageSelect.appendChild(opt);
+  });
+
+  if (previousValue && visiblePackages.some(pkg => (pkg.id || pkg.name.replace(/\s+/g, '_').toLowerCase()) === previousValue)) {
+    packageSelect.value = previousValue;
+  }
+}
+
 async function loadPackages(type = 'umrah') {
   if (loadPackagesPromise) return loadPackagesPromise;
   const packageSelect = document.getElementById('packageSelect');
   if (!packageSelect) return;
-  packageSelect.innerHTML = '<option value="">-- No Package --</option>';
+  packageSelect.innerHTML = '<option value="">Loading packages...</option>';
+
+  const dateFromValue = document.getElementById('dateFrom')?.value;
+  const dateToValue = document.getElementById('dateTo')?.value;
+  const hasSelectedDates = !!(dateFromValue && dateToValue);
+  const tripFrom = hasSelectedDates ? new Date(dateFromValue) : null;
+  const tripTo = hasSelectedDates ? new Date(dateToValue) : null;
+
+  if (tripFrom) tripFrom.setHours(0, 0, 0, 0);
+  if (tripTo) tripTo.setHours(0, 0, 0, 0);
 
   loadPackagesPromise = (async () => {
     try {
       const packages = await window.firebaseDB.getAll('packages');
       availablePackages = packages || [];
-      const filtered = availablePackages.filter(pkg => pkg.type === type || pkg.type === 'both');
+      const filteredByType = availablePackages.filter(pkg => pkg.type === type || pkg.type === 'both');
+      const filtered = hasSelectedDates ? filteredByType.filter(pkg => isPackageInSelectedDateRange(pkg, tripFrom, tripTo)) : filteredByType;
 
       const dedupedMap = new Map();
       filtered.forEach(pkg => {
@@ -963,13 +1062,8 @@ async function loadPackages(type = 'umrah') {
       });
       const dedupedPackages = Array.from(nameMap.values());
       availablePackages = dedupedPackages;
-
-      dedupedPackages.forEach(pkg => {
-        const opt = document.createElement('option');
-        opt.value = pkg.id || pkg.name.replace(/\s+/g, '_').toLowerCase();
-        opt.textContent = `${pkg.name} (Travel Month: ${pkg.travelMonth || 'Any'})`;
-        packageSelect.appendChild(opt);
-      });
+      updatePackageFilterHint(hasSelectedDates, dedupedPackages.length);
+      renderPackageOptions(dedupedPackages);
     } catch (error) {
       console.error('Failed to load packages', error);
       showNotification('Failed to load packages', 'error');
@@ -1330,6 +1424,17 @@ document.addEventListener('DOMContentLoaded', function() {
     updateAgentUI();
     loadPackages('umrah');
 
+    const packageSearchInput = document.getElementById('packageSearchInput');
+    if (packageSearchInput) {
+      packageSearchInput.addEventListener('input', () => {
+        renderPackageOptions(availablePackages);
+      });
+    }
+
+    const reloadPackagesForDates = () => loadPackages('umrah');
+    document.getElementById('dateFrom')?.addEventListener('change', reloadPackagesForDates);
+    document.getElementById('dateTo')?.addEventListener('change', reloadPackagesForDates);
+
     const packageSelect = document.getElementById('packageSelect');
     if (packageSelect) {
       packageSelect.addEventListener('change', async function () {
@@ -1392,10 +1497,13 @@ document.addEventListener('DOMContentLoaded', function() {
   <div class="section" id="packageSelectionSection">
     <h3>Package Selection (Optional)</h3>
     <div>
+      <label for="packageSearchInput" class="small">Search Package</label>
+      <input id="packageSearchInput" type="text" placeholder="Search by package code or name" style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; margin-bottom:6px;">
       <label for="packageSelect">Select Package</label>
-      <select id="packageSelect" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+      <select id="packageSelect" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:12px;">
         <option value="">-- No Package --</option>
       </select>
+      <div id="packageFilterHint" class="small" style="margin-top:6px;color:#6c757d;">Select travel dates to check active packages. Showing all packages.</div>
     </div>
   </div>
 
