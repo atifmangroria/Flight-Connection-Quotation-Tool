@@ -166,6 +166,29 @@ service cloud.firestore {
       // Only admin can modify destinations
       allow write: if isAdmin();
     }
+
+    // ==================== VOUCHERS COLLECTION ====================
+    // Vouchers - agents create/manage, customers view published/cancelled vouchers
+    match /vouchers/{voucherId} {
+      // Logged-in approved users (agents/admins) can read voucher docs.
+      allow read: if isApproved() || isAdmin();
+
+      // Public customer access to published/cancelled vouchers by direct ID.
+      // (No list rule here; only direct document get is expected by app.)
+      allow get: if resource.data.status in ['published', 'cancelled'];
+
+      // Approved users can create/edit vouchers.
+      allow create: if isApproved() || isAdmin();
+      allow update: if isApproved() || isAdmin();
+
+      // Public view logging from voucher-view page (increments viewCount + viewedAt only).
+      allow update: if resource.data.status in ['published', 'cancelled']
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount', 'viewedAt'])
+        && request.resource.data.viewCount >= resource.data.viewCount;
+
+      // Restrict hard delete to admin.
+      allow delete: if isAdmin();
+    }
     
     // ==================== HELPER FUNCTIONS ====================
     

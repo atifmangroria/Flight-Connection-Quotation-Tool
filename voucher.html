@@ -10,6 +10,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
   import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, query, where } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+  import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
   const firebaseConfig = {
     apiKey: "AIzaSyDx3Qxt84vJlz_-mXuxiC0W2flaLadr9Ws",
     authDomain: "fc-quotation-tool.firebaseapp.com",
@@ -20,6 +21,11 @@
   };
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
+  const auth = getAuth(app);
+  window.auth = auth;
+  window.__authReady = new Promise((resolve) => {
+    onAuthStateChanged(auth, () => resolve(), () => resolve());
+  });
   window.firebaseDB = {
     async save(col, id, data) { await setDoc(doc(db, col, id), data, { merge: true }); return true; },
     async get(col, id) { const s = await getDoc(doc(db, col, id)); return s.exists() ? { id: s.id, ...s.data() } : null; },
@@ -303,6 +309,42 @@ function setVal(id, v) { const e = document.getElementById(id); if (e) e.value =
 
 function generateVoucherId() {
   return 'VCHR-' + Math.random().toString(36).substr(2, 6).toUpperCase();
+}
+
+function getDeterministicVoucherId(qId) {
+  return 'VCHR-' + String(qId || '').replace(/[^A-Za-z0-9_-]/g, '').toUpperCase();
+}
+
+function loadVoucherIdMap() {
+  try {
+    return JSON.parse(localStorage.getItem('voucherIdByQuotation') || '{}') || {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveVoucherIdMap(map) {
+  localStorage.setItem('voucherIdByQuotation', JSON.stringify(map || {}));
+}
+
+function linkVoucherToQuotation(qId, vId) {
+  if (!qId || !vId) return;
+  const map = loadVoucherIdMap();
+  map[qId] = vId;
+  saveVoucherIdMap(map);
+}
+
+async function ensureSignedInForWrite() {
+  try {
+    if (window.__authReady) await window.__authReady;
+  } catch (e) {
+    // Ignore and continue with current auth state.
+  }
+  if (!window.auth || !window.auth.currentUser) {
+    showNotif('You are not signed in. Please login again from Umrah tool, then retry.', 'error', 5000);
+    return false;
+  }
+  return true;
 }
 
 function getVoucherUrl(id) {
@@ -682,11 +724,13 @@ function generateQR(url) {
 
 // ===== Save draft =====
 async function saveDraft() {
+  if (!(await ensureSignedInForWrite())) return;
   const data = collectFormData();
   const doc = buildVoucherDoc(data, voucherData?.status === 'published' ? 'published' : 'draft');
   try {
     await window.firebaseDB.save('vouchers', voucherId, doc);
     voucherData = doc;
+    linkVoucherToQuotation(quotationId, voucherId);
     updateStatusBar();
     showNotif('✅ Draft saved!', 'success');
   } catch (e) {
@@ -697,6 +741,7 @@ async function saveDraft() {
 
 // ===== Publish =====
 async function publishVoucher() {
+  if (!(await ensureSignedInForWrite())) return;
   const data = collectFormData();
   const errs = validateForPublish(data);
   if (errs.length) {
@@ -709,6 +754,7 @@ async function publishVoucher() {
   try {
     await window.firebaseDB.save('vouchers', voucherId, doc);
     voucherData = doc;
+    linkVoucherToQuotation(quotationId, voucherId);
     updateStatusBar();
     showNotif('🎉 Voucher published! Share the link with the customer.', 'success', 5000);
   } catch (e) {
@@ -719,6 +765,7 @@ async function publishVoucher() {
 
 // ===== Cancel voucher =====
 async function cancelVoucher() {
+  if (!(await ensureSignedInForWrite())) return;
   const ok = await confirm('Cancel this voucher? The customer will see a cancellation message.', 'Cancel Voucher');
   if (!ok) return;
   const data = collectFormData();
@@ -726,6 +773,7 @@ async function cancelVoucher() {
   try {
     await window.firebaseDB.save('vouchers', voucherId, doc);
     voucherData = doc;
+    linkVoucherToQuotation(quotationId, voucherId);
     updateStatusBar();
     showNotif('Voucher cancelled.', 'info');
   } catch (e) {
@@ -814,21 +862,62 @@ async function init() {
   document.getElementById('pageSubtitle').textContent = quotation.clientData?.name + ' · ' + quotationId;
   document.title = 'Voucher — ' + quotation.clientData?.name;
 
-  // Check if voucher already exists for this quotation
+  // Ensure auth state is restored before Firestore calls (needed for auth-based rules).
+  if (window.__authReady) {
+    try { await window.__authReady; } catch (e) {}
+  }
+
+  // Check if voucher already exists for this quotation.
+  // Prefer direct doc reads to avoid list/query permission issues with strict rules.
   let existing = null;
+  const idMap = loadVoucherIdMap();
+  const mappedId = idMap[quotationId] || '';
+  const deterministicId = getDeterministicVoucherId(quotationId);
+
+  if (mappedId) {
+    try {
+      existing = await window.firebaseDB.get('vouchers', mappedId);
+      if (existing) {
+        voucherId = mappedId;
+        voucherData = existing;
+      }
+    } catch (e) {
+      console.warn('Mapped voucher lookup failed:', e);
+    }
+  }
+
+  if (!existing) {
+    try {
+      existing = await window.firebaseDB.get('vouchers', deterministicId);
+      if (existing) {
+        voucherId = deterministicId;
+        voucherData = existing;
+      }
+    } catch (e) {
+      console.warn('Deterministic voucher lookup failed:', e);
+    }
+  }
+
+  // Backward compatibility for legacy random IDs (requires query/list permission).
   try {
-    const results = await window.firebaseDB.findByField('vouchers', 'quotationId', quotationId);
-    if (results && results.length) {
-      existing = results[0];
-      voucherId = existing.id;
-      voucherData = existing;
+    if (!existing) {
+      const results = await window.firebaseDB.findByField('vouchers', 'quotationId', quotationId);
+      if (results && results.length) {
+        existing = results[0];
+        voucherId = existing.id;
+        voucherData = existing;
+      }
     }
   } catch (e) {
-    console.warn('Could not check existing vouchers:', e);
+    console.warn('Legacy voucher query lookup skipped (likely rules):', e);
   }
 
   if (!voucherId) {
-    voucherId = generateVoucherId();
+    voucherId = deterministicId || generateVoucherId();
+  }
+
+  if (voucherId) {
+    linkVoucherToQuotation(quotationId, voucherId);
   }
 
   renderOverview();
