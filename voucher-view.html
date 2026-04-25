@@ -134,11 +134,17 @@ button{padding:8px 16px;border:none;border-radius:6px;cursor:pointer;font-size:1
       <p id="cancelledMsg">This voucher has been cancelled. Please contact your travel agent for assistance.</p>
     </div>
 
+    <!-- Company name banner -->
+    <div style="text-align:center;padding:10px 0 4px;margin-bottom:10px">
+      <img src="https://flightconnection.net.pk/wp-content/uploads/2018/09/cropped-cropped-Flight-Connection-Travel-1.png" alt="Flight Connection" style="height:38px;display:block;margin:0 auto 6px">
+      <div style="font-size:18px;font-weight:700;color:var(--accent);letter-spacing:.3px">Flight Connection Travel &amp; Tours</div>
+      <div style="font-size:11px;color:var(--muted)">www.flightconnection.net.pk</div>
+    </div>
+
     <!-- Header -->
     <div class="header-card">
       <div>
         <h1>🕋 Umrah Travel Voucher</h1>
-        <div class="sub" style="font-size:14px;font-weight:700;opacity:1;margin-bottom:2px">Flight Connection Travel &amp; Tours</div>
         <div class="sub" id="hdrClientName"></div>
         <div class="sub" id="hdrDates"></div>
       </div>
@@ -189,7 +195,14 @@ button{padding:8px 16px;border:none;border-radius:6px;cursor:pointer;font-size:1
         <div class="field"><div class="field-label">Phone</div><div class="field-value" id="emergPhone"></div></div>
       </div>
     </div>
-
+    <!-- Travel Agent Contact -->
+    <div class="card" id="agentContactCard" style="display:none">
+      <h3>📞 Your Travel Agent</h3>
+      <div class="grid">
+        <div class="field"><div class="field-label">Agent Name</div><div class="field-value" id="agentContactName"></div></div>
+        <div class="field"><div class="field-label">Agent Phone</div><div class="field-value" id="agentContactPhone"></div></div>
+      </div>
+    </div>
     <!-- Flights -->
     <div class="card" id="flightsCard" style="display:none">
       <h3>✈️ Flight Details</h3>
@@ -260,8 +273,6 @@ button{padding:8px 16px;border:none;border-radius:6px;cursor:pointer;font-size:1
 
     <!-- Company Footer -->
     <div class="company-footer">
-      <img src="https://flightconnection.net.pk/wp-content/uploads/2018/09/cropped-cropped-Flight-Connection-Travel-1.png" alt="Flight Connection" style="height:40px;margin-bottom:6px;display:block;margin:0 auto 8px"><br>
-      <strong>Flight Connection Travel &amp; Tours</strong><br>
       Email: muhammad.atif@flightconnection.net.pk &bull; Website: www.flightconnection.net.pk<br>
       <span class="small" id="voucherIdFooter"></span>
     </div>
@@ -346,6 +357,16 @@ function renderEmergency(vc) {
   setEl('emergName', sanitize(ec.name));
   setEl('emergRelation', sanitize(ec.relation || '—'));
   setEl('emergPhone', sanitize(ec.phone || '—'));
+}
+
+function renderAgentContact(vc) {
+  const ag = vc.agentData || {};
+  const name = String(ag.name || '').trim();
+  const phone = String(ag.phone || '').trim();
+  if (!name && !phone) return;
+  showCard('agentContactCard');
+  setEl('agentContactName', name ? sanitize(name) : '<span class="tba">—</span>');
+  setEl('agentContactPhone', phone ? sanitize(phone) : '<span class="tba">—</span>');
 }
 
 function renderFlights(vc) {
@@ -583,6 +604,7 @@ function renderVoucher(vc) {
   if (!isCancelled) {
     renderPassengers(vc);
     renderEmergency(vc);
+    renderAgentContact(vc);
     renderFlights(vc);
     renderHotels(vc.hotelsMakkah, 'hotelMBody', 'hotelMCard');
     renderHotels(vc.hotelsMadina, 'hotelABody', 'hotelACard');
