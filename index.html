@@ -4076,6 +4076,7 @@ function showToast(message, type = "info") {
   </div>
   <div class="actions" style="margin-top:10px">
     <button id="btnUpdateStatus" type="button">Update Status</button>
+    <button id="btnCreateVoucher" type="button" class="green-btn" style="display:none;">🎫 Create Voucher</button>
   </div>
 </div>
 
@@ -8456,19 +8457,25 @@ function updateQuotationStatus(quotationId, newStatus) {
 function showStatusSection() {
   const statusSection = document.getElementById('statusSection');
   const quotationStatus = document.getElementById('quotationStatus');
-  
+  const btnCreateVoucher = document.getElementById('btnCreateVoucher');
+
   // Get all quotations from localStorage
   const allSavedQuotations = JSON.parse(localStorage.getItem('savedQuotations')) || [];
-  
+
   if (currentQuotationId) {
     statusSection.style.display = 'block';
     // Get current status
     const quotation = allSavedQuotations.find(q => q.id === currentQuotationId);
     if (quotation && quotation.status) {
       quotationStatus.value = quotation.status;
-    } // Do not set to 'pending' by default; leave unchanged if no status
+    }
+    // Show Create Voucher button only when status is booked
+    if (btnCreateVoucher) {
+      btnCreateVoucher.style.display = (quotationStatus.value === 'booked') ? 'inline-block' : 'none';
+    }
   } else {
     statusSection.style.display = 'none';
+    if (btnCreateVoucher) btnCreateVoucher.style.display = 'none';
   }
 }
 
@@ -8486,6 +8493,23 @@ document.getElementById('btnUpdateStatus').addEventListener('click', () => {
   
   const newStatus = document.getElementById('quotationStatus').value;
   updateQuotationStatus(currentQuotationId, newStatus);
+});
+
+// Event listener for Create Voucher button
+document.getElementById('btnCreateVoucher')?.addEventListener('click', () => {
+  if (!currentQuotationId) {
+    showAlert("No quotation selected. Please save or load a quotation first.");
+    return;
+  }
+  window.location.href = 'voucher.html?quotationId=' + encodeURIComponent(currentQuotationId) + '&type=umrah';
+});
+
+// Show/hide Create Voucher button when status changes
+document.getElementById('quotationStatus')?.addEventListener('change', () => {
+  const btnCreateVoucher = document.getElementById('btnCreateVoucher');
+  if (btnCreateVoucher) {
+    btnCreateVoucher.style.display = (document.getElementById('quotationStatus').value === 'booked') ? 'inline-block' : 'none';
+  }
 });
 
 

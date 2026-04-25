@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Create Voucher — Flight Connection</title>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+  import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, query, where } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+  const firebaseConfig = {
+    apiKey: "AIzaSyDx3Qxt84vJlz_-mXuxiC0W2flaLadr9Ws",
+    authDomain: "fc-quotation-tool.firebaseapp.com",
+    projectId: "fc-quotation-tool",
+    storageBucket: "fc-quotation-tool.firebasestorage.app",
+    messagingSenderId: "370566945624",
+    appId: "1:370566945624:web:a84b20d5a8f99d20a6e32d"
+  };
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  window.firebaseDB = {
+    async save(col, id, data) { await setDoc(doc(db, col, id), data, { merge: true }); return true; },
+    async get(col, id) { const s = await getDoc(doc(db, col, id)); return s.exists() ? { id: s.id, ...s.data() } : null; },
+    async getAll(col) { const s = await getDocs(collection(db, col)); return s.docs.map(d => ({ id: d.id, ...d.data() })); },
+    async update(col, id, upd) { await updateDoc(doc(db, col, id), upd); return true; },
+    async findByField(col, field, val) {
+      const q = query(collection(db, col), where(field, '==', val));
+      const s = await getDocs(q);
+      return s.docs.map(d => ({ id: d.id, ...d.data() }));
+    }
+  };
+</script>
+<style>
+:root{--accent:#0b76d1;--muted:#666;--green:#28a745;--red:#dc3545;--orange:#f39c12}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Calibri,Arial,sans-serif;font-size:14px;background:#f5f7fa;color:#333}
+.wrap{max-width:960px;margin:0 auto;padding:16px}
+.section{background:#fff;border:1px solid #e4ebf4;border-radius:8px;padding:16px;margin-bottom:14px}
+.section h3{color:var(--accent);margin-bottom:12px;font-size:15px;border-bottom:1px solid #e4ebf4;padding-bottom:8px}
+.section h4{color:#444;margin-bottom:8px;font-size:13px;font-weight:700}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid-3{grid-template-columns:1fr 1fr 1fr}
+.full{grid-column:1/-1}
+label{display:block;font-size:11px;color:var(--muted);margin-bottom:3px;font-weight:700;text-transform:uppercase;letter-spacing:.3px}
+input,select,textarea{width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:13px;font-family:inherit}
+textarea{min-height:70px;resize:vertical}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px rgba(11,118,209,.12)}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+button{padding:8px 16px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-family:inherit;background:var(--accent);color:#fff;transition:background .2s}
+button:hover{background:#085ea3}
+button.ghost{background:#eef5fb;color:var(--accent);border:1px solid #d6e8fb}
+button.ghost:hover{background:#d6e8fb}
+button.green{background:var(--green)}
+button.green:hover{background:#218838}
+button.red{background:var(--red)}
+button.red:hover{background:#c82333}
+button.orange{background:var(--orange)}
+button.orange:hover{background:#d68910}
+button.whatsapp{background:#25D366}
+button.whatsapp:hover{background:#128C7E}
+.card{border:1px solid #e4ebf4;border-radius:7px;padding:13px;margin-bottom:10px;background:#fafcff}
+.card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.card-header h4{margin:0}
+.badge{display:inline-block;padding:2px 9px;border-radius:12px;font-size:11px;font-weight:700}
+.badge-draft{background:#fff3cd;color:#856404}
+.badge-published{background:#d4edda;color:#155724}
+.badge-cancelled{background:#f8d7da;color:#721c24}
+.info-bar{display:flex;align-items:center;gap:12px;padding:10px 14px;background:#fff;border:1px solid #e4ebf4;border-radius:8px;margin-bottom:14px;flex-wrap:wrap}
+.info-bar strong{font-size:15px}
+.small{font-size:12px;color:var(--muted)}
+.alert{padding:10px 14px;border-radius:6px;margin-bottom:12px;font-size:13px}
+.alert-info{background:#e3f2fd;border:1px solid #90caf9;color:#0d47a1}
+.alert-warn{background:#fff3cd;border:1px solid #ffc107;color:#856404}
+.alert-success{background:#d4edda;border:1px solid #28a745;color:#155724}
+.alert-danger{background:#f8d7da;border:1px solid #dc3545;color:#721c24}
+.link-row{display:flex;gap:8px;align-items:center}
+.link-row input{flex:1;font-size:12px;background:#f8f9fa;color:#444}
+.modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center}
+.modal-overlay.visible{display:flex}
+.modal-box{background:#fff;border-radius:8px;padding:24px;max-width:440px;width:94%}
+.modal-box h3{margin-bottom:10px;font-size:16px}
+.modal-box p{color:#666;margin-bottom:16px;font-size:13px}
+.modal-btns{display:flex;gap:8px;justify-content:flex-end}
+.notif{position:fixed;top:16px;right:16px;padding:11px 18px;border-radius:6px;font-size:13px;z-index:99999;display:none;box-shadow:0 4px 12px rgba(0,0,0,.15)}
+.notif.success{background:#d4edda;color:#155724;border:1px solid #c3e6cb}
+.notif.error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb}
+.notif.info{background:#cce5ff;color:#004085;border:1px solid #b8daff}
+@keyframes slIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.notif.show{display:block;animation:slIn .25s ease}
+.service-box{border:1px solid #e4ebf4;border-radius:6px;padding:11px;margin-bottom:10px;background:#f9fbff}
+.service-box h5{font-size:13px;color:var(--accent);margin-bottom:8px}
+.remove-btn{background:#e74c3c;color:#fff;border:none;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px}
+.remove-btn:hover{background:#c0392b}
+.add-small{background:#4CAF50;color:#fff;border:none;padding:5px 11px;border-radius:5px;cursor:pointer;font-size:12px}
+.add-small:hover{background:#45a049}
+@media(max-width:600px){.grid{grid-template-columns:1fr}.grid-3{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<!-- Notification -->
+<div id="notif" class="notif"></div>
+
+<!-- Confirm modal -->
+<div id="confirmModal" class="modal-overlay">
+  <div class="modal-box">
+    <h3 id="confirmTitle">Confirm</h3>
+    <p id="confirmMsg"></p>
+    <div class="modal-btns">
+      <button id="confirmNo" class="ghost">No</button>
+      <button id="confirmYes">Yes</button>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+
+<!-- Header -->
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+  <div>
+    <h2 style="color:var(--accent);margin:0">🎫 Create Voucher</h2>
+    <div class="small" id="pageSubtitle">Loading quotation...</div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <button class="ghost" onclick="window.history.back()">← Back</button>
+    <button id="btnSaveDraft" class="orange">💾 Save Draft</button>
+    <button id="btnPublish" class="green">📤 Publish Voucher</button>
+    <button id="btnCancelVoucher" class="red" style="display:none">🚫 Cancel Voucher</button>
+  </div>
+</div>
+
+<!-- Status bar (shown after save) -->
+<div id="statusBar" class="info-bar" style="display:none">
+  <div>
+    <strong id="sbVoucherId">—</strong>
+    <span id="sbBadge" class="badge badge-draft" style="margin-left:8px">Draft</span>
+  </div>
+  <div class="small" id="sbVersion"></div>
+  <div class="small" id="sbViewCount"></div>
+  <div class="small" id="sbLastViewed"></div>
+  <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+    <div id="voucherLinkArea" style="display:none">
+      <div class="link-row">
+        <input type="text" id="voucherLinkInput" readonly>
+        <button id="btnCopyLink" class="ghost">📋 Copy</button>
+        <button id="btnWhatsApp" class="whatsapp">📱 WhatsApp</button>
+        <button id="btnDownloadPDF">🖨️ PDF</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- QR Code (hidden, used for PDF) -->
+<div id="qrArea" style="display:none;margin-bottom:14px">
+  <div class="section">
+    <h3>QR Code</h3>
+    <div id="qrcode" style="display:inline-block;padding:6px;background:#fff;border:1px solid #ddd;border-radius:6px"></div>
+    <div class="small" style="margin-top:6px">Scan to open customer voucher page</div>
+  </div>
+</div>
+
+<!-- Overview (read-only) -->
+<div class="section" id="overviewSection" style="display:none">
+  <h3>Quotation Overview</h3>
+  <div id="overviewContent" class="grid"></div>
+</div>
+
+<!-- Passenger Details -->
+<div class="section">
+  <h3>Passenger Details</h3>
+  <div id="passengerList"></div>
+  <button class="add-small" id="btnAddPassenger">+ Add Passenger</button>
+</div>
+
+<!-- Emergency Contact -->
+<div class="section">
+  <h3>Emergency Contact</h3>
+  <div class="grid grid-3">
+    <div>
+      <label>Contact Name</label>
+      <input type="text" id="emergName" placeholder="Full name">
+    </div>
+    <div>
+      <label>Relation</label>
+      <input type="text" id="emergRelation" placeholder="e.g. Father, Spouse">
+    </div>
+    <div>
+      <label>Phone</label>
+      <input type="text" id="emergPhone" placeholder="03xx-xxxxxxx">
+    </div>
+  </div>
+</div>
+
+<!-- Flight Operational Details -->
+<div class="section" id="flightsSection" style="display:none">
+  <h3>Flight Details</h3>
+  <div id="flightOpsList"></div>
+</div>
+
+<!-- Hotel Makkah Operational Details -->
+<div class="section" id="hotelMSection" style="display:none">
+  <h3>Makkah Hotel Details</h3>
+  <div id="hotelMOpsList"></div>
+</div>
+
+<!-- Hotel Madina Operational Details -->
+<div class="section" id="hotelASection" style="display:none">
+  <h3>Madina Hotel Details</h3>
+  <div id="hotelAOpsList"></div>
+</div>
+
+<!-- Transfer Operational Details -->
+<div class="section" id="transfersSection" style="display:none">
+  <h3>Transfer Details</h3>
+  <div id="transferOpsList"></div>
+</div>
+
+<!-- Ziyarah Operational Details -->
+<div class="section" id="ziyarahSection" style="display:none">
+  <h3>Ziyarah Details</h3>
+  <div id="ziyarahOpsList"></div>
+</div>
+
+<!-- Visa Operational Details -->
+<div class="section" id="visaSection" style="display:none">
+  <h3>Visa Details</h3>
+  <div id="visaOpsList"></div>
+</div>
+
+<!-- Agent Note -->
+<div class="section">
+  <h3>Agent Note to Customer</h3>
+  <div>
+    <label>Message (shown prominently on customer voucher)</label>
+    <textarea id="agentNote" placeholder="e.g. Please carry all documents. Hotel check-in is at 3pm. Contact us for any queries."></textarea>
+  </div>
+</div>
+
+<!-- Bottom actions -->
+<div class="actions" style="margin-bottom:20px">
+  <button id="btnSaveDraft2" class="orange">💾 Save Draft</button>
+  <button id="btnPublish2" class="green">📤 Publish Voucher</button>
+  <button id="btnCancelVoucher2" class="red" style="display:none">🚫 Cancel Voucher</button>
+</div>
+
+</div><!-- /.wrap -->
+
+<script>
+// ===== State =====
+let quotationId = null;
+let quotation = null;
+let voucherData = null;
+let voucherId = null;
+let passengerCount = 0;
+let flightOpsCount = 0;
+let hotelMOpsCount = 0;
+let hotelAOpsCount = 0;
+let transferOpsCount = 0;
+let ziyarahOpsCount = 0;
+
+// ===== Helpers =====
+function showNotif(msg, type = 'info', dur = 3500) {
+  const el = document.getElementById('notif');
+  el.textContent = msg;
+  el.className = 'notif show ' + type;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.classList.remove('show'); }, dur);
+}
+
+function confirm(msg, title = 'Confirm') {
+  return new Promise(res => {
+    const modal = document.getElementById('confirmModal');
+    document.getElementById('confirmTitle').textContent = title;
+    document.getElementById('confirmMsg').textContent = msg;
+    modal.classList.add('visible');
+    const yes = document.getElementById('confirmYes');
+    const no = document.getElementById('confirmNo');
+    const cleanup = (val) => { modal.classList.remove('visible'); yes.onclick = null; no.onclick = null; res(val); };
+    yes.onclick = () => cleanup(true);
+    no.onclick = () => cleanup(false);
+  });
+}
+
+function sanitize(s) {
+  const d = document.createElement('div');
+  d.textContent = String(s || '');
+  return d.innerHTML;
+}
+
+function fmt(n) { return Number(n || 0).toLocaleString('en-PK', { maximumFractionDigits: 0 }); }
+
+function fmtDate(ds) {
+  if (!ds) return '';
+  const d = new Date(ds);
+  if (isNaN(d.getTime())) return ds;
+  return d.toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function getVal(id) { return (document.getElementById(id)?.value || '').trim(); }
+function setVal(id, v) { const e = document.getElementById(id); if (e) e.value = v || ''; }
+
+function generateVoucherId() {
+  return 'VCHR-' + Math.random().toString(36).substr(2, 6).toUpperCase();
+}
+
+function getVoucherUrl(id) {
+  return 'https://atifmangroria.github.io/Flight-Connection-Quotation-Tool/voucher-view.html?id=' + encodeURIComponent(id);
+}
+
+// ===== Parse URL =====
+function getUrlParam(name) {
+  return new URLSearchParams(window.location.search).get(name);
+}
+
+// ===== Build passenger slots from quotation pax data =====
+function addPassengerSlot(data = {}) {
+  passengerCount++;
+  const idx = passengerCount;
+  const div = document.createElement('div');
+  div.className = 'card';
+  div.id = 'pax_' + idx;
+  div.innerHTML = `
+    <div class="card-header">
+      <h4>Passenger ${idx}</h4>
+      ${idx > 1 ? `<button class="remove-btn" onclick="removePax(${idx})">Remove</button>` : ''}
+    </div>
+    <div class="grid grid-3">
+      <div class="full"><label>Full Name (as on passport)</label><input type="text" id="paxName_${idx}" value="${sanitize(data.name || '')}" placeholder="Full name"></div>
+      <div><label>Passport No</label><input type="text" id="paxPassport_${idx}" value="${sanitize(data.passport || '')}" placeholder="AB1234567"></div>
+      <div><label>Nationality</label><input type="text" id="paxNationality_${idx}" value="${sanitize(data.nationality || 'Pakistani')}" placeholder="Pakistani"></div>
+      <div><label>Date of Birth</label><input type="date" id="paxDob_${idx}" value="${sanitize(data.dob || '')}"></div>
+      <div><label>Passport Expiry</label><input type="date" id="paxExpiry_${idx}" value="${sanitize(data.expiry || '')}"></div>
+      <div><label>Ticket No (optional)</label><input type="text" id="paxTicket_${idx}" value="${sanitize(data.ticketNo || '')}" placeholder="e.g. 083-1234567890"></div>
+      <div><label>Seat No (optional)</label><input type="text" id="paxSeat_${idx}" value="${sanitize(data.seatNo || '')}" placeholder="e.g. 24A"></div>
+    </div>
+  `;
+  document.getElementById('passengerList').appendChild(div);
+}
+
+function removePax(idx) {
+  const el = document.getElementById('pax_' + idx);
+  if (el) el.remove();
+}
+
+document.getElementById('btnAddPassenger').addEventListener('click', () => addPassengerSlot());
+
+// ===== Build flight ops fields =====
+function buildFlightOps(flights, savedFlights) {
+  const section = document.getElementById('flightsSection');
+  const list = document.getElementById('flightOpsList');
+  if (!flights || !flights.length) return;
+  section.style.display = 'block';
+  list.innerHTML = '';
+
+  flights.forEach((f, i) => {
+    const saved = (savedFlights && savedFlights[i]) || {};
+    flightOpsCount++;
+    const idx = flightOpsCount;
+    const div = document.createElement('div');
+    div.className = 'service-box';
+    div.innerHTML = `
+      <h5>Flight ${idx}: ${sanitize(f.airline || 'Unknown')} — ${sanitize(f.itinerary || '').substring(0, 60)}</h5>
+      <div class="grid">
+        <div><label>PNR / Booking Reference *</label><input type="text" id="fPnr_${idx}" value="${sanitize(saved.pnr || '')}" placeholder="e.g. ABCDEF"></div>
+        <div><label>Meal Included?</label>
+          <select id="fMealIncl_${idx}">
+            <option value="no" ${saved.meal?.included === false || !saved.meal ? 'selected' : ''}>No</option>
+            <option value="yes" ${saved.meal?.included === true ? 'selected' : ''}>Yes</option>
+          </select>
+        </div>
+        <div><label>Meal Type (if included)</label><input type="text" id="fMealType_${idx}" value="${sanitize(saved.meal?.type || '')}" placeholder="e.g. Veg, Halal"></div>
+        <div class="full"><label>Ticket Numbers (one per line: Name: TicketNo)</label><textarea id="fTickets_${idx}" placeholder="Ahmed Ali: 083-1234567890\nFatima Ahmed: 083-0987654321">${sanitize(Object.entries(saved.ticketNumbers || {}).map(([k,v]) => k + ': ' + v).join('\n'))}</textarea></div>
+      </div>
+    `;
+    list.appendChild(div);
+  });
+}
+
+// ===== Build hotel ops fields =====
+function buildHotelOps(hotels, savedHotels, city, listId, sectionId) {
+  const section = document.getElementById(sectionId);
+  const list = document.getElementById(listId);
+  if (!hotels || !hotels.length) return;
+  section.style.display = 'block';
+  list.innerHTML = '';
+
+  hotels.forEach((h, i) => {
+    const saved = (savedHotels && savedHotels[i]) || {};
+    const div = document.createElement('div');
+    div.className = 'service-box';
+    div.innerHTML = `
+      <h5>Hotel ${i + 1}: ${sanitize(h.name || 'Unknown')} (${city})</h5>
+      <div class="grid">
+        <div><label>Confirmation Number</label><input type="text" id="${listId}Conf_${i}" value="${sanitize(saved.confirmationNo || '')}" placeholder="TBA if not yet confirmed"></div>
+        <div><label>Lead Guest Name</label><input type="text" id="${listId}Lead_${i}" value="${sanitize(saved.leadGuest || '')}" placeholder="Name on booking"></div>
+        <div><label>Hotel Phone (optional)</label><input type="text" id="${listId}Phone_${i}" value="${sanitize(saved.phone || '')}" placeholder="+966..."></div>
+        <div class="full"><label>Hotel Address (optional — enables Google Maps link)</label><input type="text" id="${listId}Addr_${i}" value="${sanitize(saved.address || '')}" placeholder="e.g. Ibrahim Al Khalil Rd, Makkah"></div>
+      </div>
+    `;
+    list.appendChild(div);
+  });
+}
+
+// ===== Build transfer ops fields =====
+function buildTransferOps(transfers, savedTransfers) {
+  const section = document.getElementById('transfersSection');
+  const list = document.getElementById('transferOpsList');
+  if (!transfers || !transfers.length) return;
+  section.style.display = 'block';
+  list.innerHTML = '';
+
+  transfers.forEach((t, i) => {
+    const saved = (savedTransfers && savedTransfers[i]) || {};
+    const div = document.createElement('div');
+    div.className = 'service-box';
+    div.innerHTML = `
+      <h5>Transfer ${i + 1}: ${sanitize(t.from || '')} → ${sanitize(t.to || '')} (${sanitize(t.vehicle || '')})</h5>
+      <div class="grid">
+        <div><label>Driver Name</label><input type="text" id="trDriver_${i}" value="${sanitize(saved.driverName || '')}" placeholder="TBA if not yet assigned"></div>
+        <div><label>Driver Phone</label><input type="text" id="trPhone_${i}" value="${sanitize(saved.driverPhone || '')}" placeholder="TBA if not yet assigned"></div>
+        <div><label>Vehicle Number</label><input type="text" id="trVehicle_${i}" value="${sanitize(saved.vehicleNo || '')}" placeholder="e.g. ABC-123"></div>
+        <div><label>Pickup Notes</label><input type="text" id="trNotes_${i}" value="${sanitize(saved.pickupNotes || '')}" placeholder="e.g. Meet at Gate 5"></div>
+      </div>
+    `;
+    list.appendChild(div);
+  });
+}
+
+// ===== Build ziyarah ops fields =====
+function buildZiyarahOps(ziyarahs, savedZiyarahs) {
+  const section = document.getElementById('ziyarahSection');
+  const list = document.getElementById('ziyarahOpsList');
+  if (!ziyarahs || !ziyarahs.length) return;
+  section.style.display = 'block';
+  list.innerHTML = '';
+
+  ziyarahs.forEach((z, i) => {
+    const saved = (savedZiyarahs && savedZiyarahs[i]) || {};
+    const div = document.createElement('div');
+    div.className = 'service-box';
+    div.innerHTML = `
+      <h5>Ziyarah ${i + 1}: ${sanitize(z.city || '')} (${sanitize(z.vehicle || '')})</h5>
+      <div class="grid">
+        <div><label>Driver Phone</label><input type="text" id="zyPhone_${i}" value="${sanitize(saved.driverPhone || '')}" placeholder="TBA"></div>
+        <div><label>Guide Name (optional)</label><input type="text" id="zyGuide_${i}" value="${sanitize(saved.guideName || '')}" placeholder="Guide name"></div>
+        <div class="full"><label>Notes (optional)</label><input type="text" id="zyNotes_${i}" value="${sanitize(saved.notes || '')}" placeholder="Additional notes for customer"></div>
+      </div>
+    `;
+    list.appendChild(div);
+  });
+}
+
+// ===== Build visa ops fields =====
+function buildVisaOps(visa, savedVisa, passengers) {
+  const section = document.getElementById('visaSection');
+  const list = document.getElementById('visaOpsList');
+  if (!visa) return;
+  section.style.display = 'block';
+  list.innerHTML = '';
+
+  const savedNos = savedVisa?.visaNumbers || {};
+  const div = document.createElement('div');
+  div.className = 'service-box';
+  div.innerHTML = `
+    <h5>Visa Numbers (${visa.count || 0} visa(s))</h5>
+    <p class="small" style="margin-bottom:8px">Enter visa number for each passenger (optional, fill as available)</p>
+    <div id="visaNumbersList"></div>
+  `;
+  list.appendChild(div);
+
+  const vList = document.getElementById('visaNumbersList');
+  for (let i = 1; i <= (visa.count || 1); i++) {
+    const pName = (passengers && passengers[i - 1]) ? passengers[i - 1].name || '' : '';
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:6px';
+    row.innerHTML = `
+      <input type="text" id="visaPaxName_${i}" value="${sanitize(pName)}" placeholder="Passenger name" style="flex:1">
+      <input type="text" id="visaNo_${i}" value="${sanitize(savedNos[pName] || '')}" placeholder="Visa number" style="flex:1">
+    `;
+    vList.appendChild(row);
+  }
+}
+
+// ===== Render overview =====
+function renderOverview() {
+  if (!quotation) return;
+  const cd = quotation.clientData || {};
+  const section = document.getElementById('overviewSection');
+  section.style.display = 'block';
+  document.getElementById('overviewContent').innerHTML = `
+    <div><label>Client Name</label><div style="font-weight:700">${sanitize(cd.name || '—')}</div></div>
+    <div><label>Phone</label><div>${sanitize(cd.phone || '—')}</div></div>
+    <div><label>Quotation ID</label><div>${sanitize(quotationId || '—')}</div></div>
+    <div><label>Travel Dates</label><div>${fmtDate(cd.dateFrom)} — ${fmtDate(cd.dateTo)}</div></div>
+    <div><label>Departure City</label><div>${sanitize(cd.depCity || '—')}</div></div>
+    <div><label>Nights (Makkah / Madina)</label><div>${cd.nightsMakkah || 0} / ${cd.nightsMadina || 0}</div></div>
+  `;
+}
+
+// ===== Collect form data =====
+function collectFormData() {
+  // Passengers
+  const passengers = [];
+  document.querySelectorAll('[id^="pax_"]').forEach(card => {
+    const idx = card.id.split('_')[1];
+    if (!idx) return;
+    const name = getVal('paxName_' + idx);
+    if (!name) return;
+    passengers.push({
+      name,
+      passport: getVal('paxPassport_' + idx),
+      nationality: getVal('paxNationality_' + idx),
+      dob: getVal('paxDob_' + idx),
+      expiry: getVal('paxExpiry_' + idx),
+      ticketNo: getVal('paxTicket_' + idx),
+      seatNo: getVal('paxSeat_' + idx)
+    });
+  });
+
+  // Emergency contact
+  const emergencyContact = {
+    name: getVal('emergName'),
+    relation: getVal('emergRelation'),
+    phone: getVal('emergPhone')
+  };
+
+  // Flights
+  const flights = (quotation.flights || []).map((f, i) => {
+    const idx = i + 1;
+    const ticketText = getVal('fTickets_' + idx);
+    const ticketNumbers = {};
+    ticketText.split('\n').forEach(line => {
+      const parts = line.split(':');
+      if (parts.length >= 2) {
+        const k = parts[0].trim();
+        const v = parts.slice(1).join(':').trim();
+        if (k) ticketNumbers[k] = v;
+      }
+    });
+    return {
+      ...f,
+      pnr: getVal('fPnr_' + idx),
+      meal: {
+        included: getVal('fMealIncl_' + idx) === 'yes',
+        type: getVal('fMealType_' + idx)
+      },
+      ticketNumbers
+    };
+  });
+
+  // Hotels Makkah
+  const hotelsMakkah = (quotation.hotelsMakkah || []).map((h, i) => ({
+    ...h,
+    confirmationNo: getVal('hotelMOpsListConf_' + i),
+    leadGuest: getVal('hotelMOpsListLead_' + i),
+    phone: getVal('hotelMOpsListPhone_' + i),
+    address: getVal('hotelMOpsListAddr_' + i)
+  }));
+
+  // Hotels Madina
+  const hotelsMadina = (quotation.hotelsMadina || []).map((h, i) => ({
+    ...h,
+    confirmationNo: getVal('hotelAOpsListConf_' + i),
+    leadGuest: getVal('hotelAOpsListLead_' + i),
+    phone: getVal('hotelAOpsListPhone_' + i),
+    address: getVal('hotelAOpsListAddr_' + i)
+  }));
+
+  // Transfers
+  const transfers = (quotation.transfers || []).map((t, i) => ({
+    ...t,
+    driverName: getVal('trDriver_' + i),
+    driverPhone: getVal('trPhone_' + i),
+    vehicleNo: getVal('trVehicle_' + i),
+    pickupNotes: getVal('trNotes_' + i)
+  }));
+
+  // Ziyarah
+  const ziyarah = ((quotation.addons && quotation.addons.ziyarah) || []).map((z, i) => ({
+    ...z,
+    driverPhone: getVal('zyPhone_' + i),
+    guideName: getVal('zyGuide_' + i),
+    notes: getVal('zyNotes_' + i)
+  }));
+
+  // Visa
+  let visa = quotation.visa ? { ...quotation.visa } : null;
+  if (visa) {
+    const visaNumbers = {};
+    const total = visa.count || 1;
+    for (let i = 1; i <= total; i++) {
+      const name = getVal('visaPaxName_' + i);
+      const no = getVal('visaNo_' + i);
+      if (name) visaNumbers[name] = no;
+    }
+    visa.visaNumbers = visaNumbers;
+  }
+
+  return { passengers, emergencyContact, flights, hotelsMakkah, hotelsMadina, transfers, ziyarah, visa };
+}
+
+// ===== Validate for publish =====
+function validateForPublish(data) {
+  const errs = [];
+  if (!data.passengers.length) errs.push('Add at least one passenger (Name is required).');
+  const firstPax = data.passengers[0];
+  if (firstPax && (!firstPax.passport || !firstPax.nationality)) errs.push('Passport and Nationality are required for at least the first passenger.');
+  (data.flights || []).forEach((f, i) => { if (!f.pnr) errs.push(`Flight ${i + 1}: PNR is required.`); });
+  if (!data.emergencyContact.name || !data.emergencyContact.relation || !data.emergencyContact.phone) {
+    errs.push('Emergency Contact (Name, Relation, Phone) is required.');
+  }
+  return errs;
+}
+
+// ===== Build voucher document =====
+function buildVoucherDoc(data, status) {
+  const now = new Date().toISOString();
+  const agent = JSON.parse(localStorage.getItem('loggedInAgent') || 'null') || { name: 'Unknown', id: 'demo' };
+  const existing = voucherData || {};
+  const version = (existing.version || 0) + 1;
+
+  return {
+    id: voucherId,
+    version,
+    status,
+    quotationId,
+    quotationType: 'umrah',
+    agentData: agent,
+    clientData: quotation.clientData || {},
+    flights: data.flights,
+    hotelsMakkah: data.hotelsMakkah,
+    hotelsMadina: data.hotelsMadina,
+    transfers: data.transfers,
+    ziyarah: data.ziyarah,
+    visa: data.visa,
+    passengers: data.passengers,
+    emergencyContact: data.emergencyContact,
+    agentNote: getVal('agentNote'),
+    createdAt: existing.createdAt || now,
+    publishedAt: (status === 'published') ? now : (existing.publishedAt || ''),
+    updatedAt: now,
+    viewedAt: existing.viewedAt || '',
+    viewCount: existing.viewCount || 0
+  };
+}
+
+// ===== Update status bar =====
+function updateStatusBar() {
+  if (!voucherData) return;
+  const bar = document.getElementById('statusBar');
+  bar.style.display = 'flex';
+  document.getElementById('sbVoucherId').textContent = voucherId || '';
+  const badge = document.getElementById('sbBadge');
+  badge.textContent = voucherData.status || 'draft';
+  badge.className = 'badge badge-' + (voucherData.status || 'draft');
+  document.getElementById('sbVersion').textContent = 'v' + (voucherData.version || 1);
+  document.getElementById('sbViewCount').textContent = '👁 Views: ' + (voucherData.viewCount || 0);
+  if (voucherData.viewedAt) {
+    document.getElementById('sbLastViewed').textContent = 'Last viewed: ' + fmtDate(voucherData.viewedAt);
+  }
+  if (voucherData.status === 'published') {
+    document.getElementById('voucherLinkArea').style.display = 'block';
+    document.getElementById('qrArea').style.display = 'block';
+    const url = getVoucherUrl(voucherId);
+    document.getElementById('voucherLinkInput').value = url;
+    generateQR(url);
+  }
+  // Show/hide cancel button
+  const showCancel = voucherData.status !== 'cancelled';
+  document.getElementById('btnCancelVoucher').style.display = showCancel ? 'inline-block' : 'none';
+  document.getElementById('btnCancelVoucher2').style.display = showCancel ? 'inline-block' : 'none';
+}
+
+// ===== QR Code =====
+function generateQR(url) {
+  const qrEl = document.getElementById('qrcode');
+  qrEl.innerHTML = '';
+  new QRCode(qrEl, { text: url, width: 128, height: 128, correctLevel: QRCode.CorrectLevel.M });
+}
+
+// ===== Save draft =====
+async function saveDraft() {
+  const data = collectFormData();
+  const doc = buildVoucherDoc(data, voucherData?.status === 'published' ? 'published' : 'draft');
+  try {
+    await window.firebaseDB.save('vouchers', voucherId, doc);
+    voucherData = doc;
+    updateStatusBar();
+    showNotif('✅ Draft saved!', 'success');
+  } catch (e) {
+    console.error(e);
+    showNotif('❌ Failed to save: ' + e.message, 'error');
+  }
+}
+
+// ===== Publish =====
+async function publishVoucher() {
+  const data = collectFormData();
+  const errs = validateForPublish(data);
+  if (errs.length) {
+    alert('Please fix the following:\n\n' + errs.join('\n'));
+    return;
+  }
+  const ok = await confirm('Publish this voucher? The customer link will become active.', 'Publish Voucher');
+  if (!ok) return;
+  const doc = buildVoucherDoc(data, 'published');
+  try {
+    await window.firebaseDB.save('vouchers', voucherId, doc);
+    voucherData = doc;
+    updateStatusBar();
+    showNotif('🎉 Voucher published! Share the link with the customer.', 'success', 5000);
+  } catch (e) {
+    console.error(e);
+    showNotif('❌ Failed to publish: ' + e.message, 'error');
+  }
+}
+
+// ===== Cancel voucher =====
+async function cancelVoucher() {
+  const ok = await confirm('Cancel this voucher? The customer will see a cancellation message.', 'Cancel Voucher');
+  if (!ok) return;
+  const data = collectFormData();
+  const doc = buildVoucherDoc(data, 'cancelled');
+  try {
+    await window.firebaseDB.save('vouchers', voucherId, doc);
+    voucherData = doc;
+    updateStatusBar();
+    showNotif('Voucher cancelled.', 'info');
+  } catch (e) {
+    showNotif('❌ Failed: ' + e.message, 'error');
+  }
+}
+
+// ===== PDF Download =====
+async function downloadPDF() {
+  showNotif('Generating PDF...', 'info', 60000);
+  try {
+    const url = getVoucherUrl(voucherId);
+    const win = window.open(url + '&pdf=1', '_blank');
+    if (!win) showNotif('Please allow popups to open the voucher for printing.', 'error');
+    else showNotif('Voucher opened. Use browser print to save as PDF.', 'success');
+  } catch (e) {
+    showNotif('Failed to open PDF: ' + e.message, 'error');
+  }
+}
+
+// ===== WhatsApp Share =====
+function shareWhatsApp() {
+  if (!voucherData || voucherData.status !== 'published') {
+    showNotif('Please publish the voucher first.', 'error');
+    return;
+  }
+  const phone = (quotation.clientData?.phone || '').replace(/\D/g, '').replace(/^0/, '');
+  const url = getVoucherUrl(voucherId);
+  const msg = `Dear ${quotation.clientData?.name || 'Customer'},\n\nYour Umrah travel voucher is ready. Please view it here:\n${url}\n\nRegards,\nFlight Connection Travel`;
+  const waUrl = 'https://wa.me/92' + phone + '?text=' + encodeURIComponent(msg);
+  window.open(waUrl, '_blank');
+}
+
+// ===== Load existing voucher into form =====
+function loadVoucherIntoForm(vc) {
+  setVal('agentNote', vc.agentNote || '');
+  setVal('emergName', vc.emergencyContact?.name || '');
+  setVal('emergRelation', vc.emergencyContact?.relation || '');
+  setVal('emergPhone', vc.emergencyContact?.phone || '');
+}
+
+// ===== Populate form slots from quotation =====
+function populateFromQuotation(q, existing) {
+  const cd = q.clientData || {};
+  const totalPax = (cd.adults || 0) + (cd.childBed || 0) + (cd.childNoBed || 0) + (cd.infants || 0);
+
+  // Passengers — use existing if available, else create empty slots
+  const savedPax = (existing && existing.passengers) || [];
+  const slots = Math.max(totalPax || 1, savedPax.length || 0, 1);
+  for (let i = 0; i < slots; i++) {
+    addPassengerSlot(savedPax[i] || {});
+  }
+
+  // Services
+  buildFlightOps(q.flights, existing?.flights);
+  buildHotelOps(q.hotelsMakkah, existing?.hotelsMakkah, 'Makkah', 'hotelMOpsList', 'hotelMSection');
+  buildHotelOps(q.hotelsMadina, existing?.hotelsMadina, 'Madina', 'hotelAOpsList', 'hotelASection');
+  buildTransferOps(q.transfers, existing?.transfers);
+  buildZiyarahOps((q.addons && q.addons.ziyarah) || [], existing?.ziyarah);
+
+  // Build visa ops with passenger names
+  const paxList = savedPax.length ? savedPax : Array.from({ length: totalPax }, (_, i) => ({ name: '' }));
+  buildVisaOps(q.visa, existing?.visa, paxList);
+
+  // Load existing form values
+  if (existing) loadVoucherIntoForm(existing);
+}
+
+// ===== INIT =====
+async function init() {
+  quotationId = getUrlParam('quotationId');
+  if (!quotationId) {
+    document.getElementById('pageSubtitle').textContent = 'Error: No quotation ID in URL';
+    return;
+  }
+
+  // Load quotation from localStorage
+  const all = JSON.parse(localStorage.getItem('savedQuotations') || '[]');
+  quotation = all.find(q => q.id === quotationId);
+
+  if (!quotation) {
+    document.getElementById('pageSubtitle').textContent = 'Error: Quotation not found in localStorage. Please open from the Umrah Tool.';
+    return;
+  }
+
+  document.getElementById('pageSubtitle').textContent = quotation.clientData?.name + ' · ' + quotationId;
+  document.title = 'Voucher — ' + quotation.clientData?.name;
+
+  // Check if voucher already exists for this quotation
+  let existing = null;
+  try {
+    const results = await window.firebaseDB.findByField('vouchers', 'quotationId', quotationId);
+    if (results && results.length) {
+      existing = results[0];
+      voucherId = existing.id;
+      voucherData = existing;
+    }
+  } catch (e) {
+    console.warn('Could not check existing vouchers:', e);
+  }
+
+  if (!voucherId) {
+    voucherId = generateVoucherId();
+  }
+
+  renderOverview();
+  populateFromQuotation(quotation, existing);
+  if (existing) updateStatusBar();
+
+  showNotif('Quotation loaded: ' + quotationId, 'info', 2500);
+}
+
+// ===== Event listeners =====
+document.getElementById('btnSaveDraft').addEventListener('click', saveDraft);
+document.getElementById('btnSaveDraft2').addEventListener('click', saveDraft);
+document.getElementById('btnPublish').addEventListener('click', publishVoucher);
+document.getElementById('btnPublish2').addEventListener('click', publishVoucher);
+document.getElementById('btnCancelVoucher').addEventListener('click', cancelVoucher);
+document.getElementById('btnCancelVoucher2').addEventListener('click', cancelVoucher);
+document.getElementById('btnCopyLink').addEventListener('click', () => {
+  const input = document.getElementById('voucherLinkInput');
+  input.select();
+  document.execCommand('copy');
+  showNotif('Link copied!', 'success', 2000);
+});
+document.getElementById('btnWhatsApp').addEventListener('click', shareWhatsApp);
+document.getElementById('btnDownloadPDF').addEventListener('click', downloadPDF);
+
+// Wait for Firebase to be ready, then init
+window.addEventListener('load', () => {
+  const wait = setInterval(() => {
+    if (window.firebaseDB) { clearInterval(wait); init(); }
+  }, 100);
+  setTimeout(() => clearInterval(wait), 5000);
+});
+</script>
+</body>
+</html>

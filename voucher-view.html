@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Travel Voucher — Flight Connection</title>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+  import { getFirestore, doc, getDoc, updateDoc, increment } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+  const firebaseConfig = {
+    apiKey: "AIzaSyDx3Qxt84vJlz_-mXuxiC0W2flaLadr9Ws",
+    authDomain: "fc-quotation-tool.firebaseapp.com",
+    projectId: "fc-quotation-tool",
+    storageBucket: "fc-quotation-tool.firebasestorage.app",
+    messagingSenderId: "370566945624",
+    appId: "1:370566945624:web:a84b20d5a8f99d20a6e32d"
+  };
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  window.firebaseDB = {
+    async get(id) {
+      const s = await getDoc(doc(db, 'vouchers', id));
+      return s.exists() ? { id: s.id, ...s.data() } : null;
+    },
+    async logView(id) {
+      try {
+        await updateDoc(doc(db, 'vouchers', id), {
+          viewedAt: new Date().toISOString(),
+          viewCount: increment(1)
+        });
+      } catch (e) { console.warn('View log failed:', e); }
+    }
+  };
+</script>
+<style>
+:root{--accent:#0b76d1;--muted:#555;--green:#28a745;--red:#dc3545;--gold:#b8860b;--brand:#0b76d1}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Calibri,Arial,sans-serif;font-size:14px;background:#f0f4fa;color:#222;min-height:100vh}
+.wrap{max-width:820px;margin:0 auto;padding:16px}
+.card{background:#fff;border:1px solid #dde8f6;border-radius:10px;padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(11,118,209,.06)}
+.card h3{color:var(--accent);margin-bottom:12px;font-size:15px;display:flex;align-items:center;gap:6px;border-bottom:1px solid #e8f0fb;padding-bottom:8px}
+.card h4{color:#333;margin-bottom:8px;font-size:13px;font-weight:700}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid-3{grid-template-columns:1fr 1fr 1fr}
+.full{grid-column:1/-1}
+.field{margin-bottom:6px}
+.field-label{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-bottom:2px}
+.field-value{font-size:13px;color:#222;font-weight:500}
+.field-value.tba{color:#999;font-style:italic}
+.badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:700}
+.badge-published{background:#d4edda;color:#155724}
+.badge-cancelled{background:#f8d7da;color:#721c24}
+.badge-draft{background:#fff3cd;color:#856404}
+.section-divider{border:none;border-top:1px solid #e8f0fb;margin:10px 0}
+.maps-link{display:inline-flex;align-items:center;gap:4px;color:var(--accent);text-decoration:none;font-size:12px;font-weight:600;padding:2px 0}
+.maps-link:hover{text-decoration:underline}
+.checklist li{padding:4px 0;border-bottom:1px solid #f0f0f0;display:flex;align-items:flex-start;gap:8px}
+.checklist li:last-child{border-bottom:none}
+.checklist li::before{content:"☐";font-size:15px;color:var(--accent);flex-shrink:0}
+.pax-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}
+.pax-table th{background:#0b76d1;color:#fff;padding:6px 8px;text-align:left;font-weight:700;font-size:11px}
+.pax-table td{padding:5px 8px;border-bottom:1px solid #e8f0fb}
+.pax-table tr:nth-child(even) td{background:#f5f9ff}
+.agent-note{background:linear-gradient(135deg,#fff8e1,#fffde7);border:2px solid #f39c12;border-radius:8px;padding:14px;margin-bottom:14px}
+.agent-note h3{color:#f39c12;border-color:#f7d57a}
+.agent-note-text{font-size:14px;line-height:1.6;color:#444;white-space:pre-wrap;margin-top:8px}
+.cancelled-banner{background:linear-gradient(135deg,#f8d7da,#fce8e8);border:2px solid #dc3545;border-radius:10px;padding:20px;text-align:center;margin-bottom:16px}
+.cancelled-banner h2{color:#dc3545;margin-bottom:6px}
+.cancelled-banner p{color:#721c24}
+.header-card{background:linear-gradient(135deg,#0b76d1,#1a8fec);color:#fff;border-radius:10px;padding:20px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+.header-card h1{font-size:22px;margin:0}
+.header-card .sub{font-size:13px;opacity:.85;margin-top:4px}
+.header-card .meta{text-align:right}
+.header-card .meta .vid{font-size:16px;font-weight:700}
+.header-card .meta .vdate{font-size:11px;opacity:.8;margin-top:2px}
+.update-badge{display:inline-block;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);border-radius:6px;padding:3px 10px;font-size:11px;margin-top:4px}
+.actions-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+button{padding:8px 16px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-family:inherit;transition:background .2s}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:#085ea3}
+.btn-green{background:var(--green);color:#fff}
+.btn-green:hover{background:#218838}
+.btn-whatsapp{background:#25D366;color:#fff}
+.btn-whatsapp:hover{background:#128C7E}
+.btn-ghost{background:#f0f4fa;color:var(--accent);border:1px solid #cde}
+.btn-ghost:hover{background:#d6e8fb}
+.qr-area{text-align:center;padding:10px}
+.qr-area .qr-box{display:inline-block;padding:8px;background:#fff;border:1px solid #dde8f6;border-radius:8px}
+.qr-area p{font-size:11px;color:var(--muted);margin-top:6px}
+.company-footer{text-align:center;padding:16px;color:var(--muted);font-size:12px;border-top:1px solid #e8f0fb;margin-top:14px}
+@media(max-width:600px){.grid{grid-template-columns:1fr}.grid-3{grid-template-columns:1fr}.header-card{flex-direction:column}.header-card .meta{text-align:left}}
+@media print{
+  .actions-bar,.no-print{display:none!important}
+  body{background:#fff}
+  .wrap{padding:8px;max-width:100%}
+  .card{box-shadow:none;break-inside:avoid}
+  .header-card{background:#0b76d1!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+}
+</style>
+</head>
+<body>
+
+<div class="wrap" id="voucherWrap">
+
+  <!-- Loading state -->
+  <div id="loadingState" class="card" style="text-align:center;padding:40px">
+    <div style="font-size:32px;margin-bottom:12px">✈️</div>
+    <div style="font-size:16px;color:var(--muted)">Loading your voucher...</div>
+  </div>
+
+  <!-- Error state -->
+  <div id="errorState" class="card" style="text-align:center;padding:40px;display:none">
+    <div style="font-size:32px;margin-bottom:12px">⚠️</div>
+    <div style="font-size:16px;color:#c00" id="errorMsg">Voucher not found.</div>
+    <div class="small" style="margin-top:8px">Please check the link or contact your travel agent.</div>
+  </div>
+
+  <!-- Main voucher content (hidden until loaded) -->
+  <div id="voucherContent" style="display:none">
+
+    <!-- Actions bar (no-print) -->
+    <div class="actions-bar no-print">
+      <button class="btn-primary" onclick="downloadPDF()">🖨️ Download PDF</button>
+      <button class="btn-whatsapp" id="btnWAShare">📱 Share on WhatsApp</button>
+    </div>
+
+    <!-- Cancelled banner -->
+    <div id="cancelledBanner" class="cancelled-banner" style="display:none">
+      <h2>🚫 Voucher Cancelled</h2>
+      <p id="cancelledMsg">This voucher has been cancelled. Please contact your travel agent for assistance.</p>
+    </div>
+
+    <!-- Header -->
+    <div class="header-card">
+      <div>
+        <h1>🕋 Umrah Travel Voucher</h1>
+        <div class="sub" id="hdrClientName"></div>
+        <div class="sub" id="hdrDates"></div>
+      </div>
+      <div class="meta">
+        <div class="vid" id="hdrVoucherId"></div>
+        <div class="vdate" id="hdrVersion"></div>
+        <div class="update-badge" id="hdrUpdated"></div>
+      </div>
+    </div>
+
+    <!-- Agent note (shown if set) -->
+    <div id="agentNoteCard" class="agent-note" style="display:none">
+      <h3>📌 Message from Your Travel Agent</h3>
+      <div class="agent-note-text" id="agentNoteText"></div>
+    </div>
+
+    <!-- Client Info -->
+    <div class="card">
+      <h3>👤 Traveller Information</h3>
+      <div class="grid">
+        <div class="field"><div class="field-label">Client Name</div><div class="field-value" id="cdName"></div></div>
+        <div class="field"><div class="field-label">Phone</div><div class="field-value" id="cdPhone"></div></div>
+        <div class="field"><div class="field-label">Departure City</div><div class="field-value" id="cdCity"></div></div>
+        <div class="field"><div class="field-label">Travel Dates</div><div class="field-value" id="cdDates"></div></div>
+        <div class="field"><div class="field-label">Duration</div><div class="field-value" id="cdDuration"></div></div>
+      </div>
+    </div>
+
+    <!-- Passengers -->
+    <div class="card" id="paxCard" style="display:none">
+      <h3>🛂 Passengers</h3>
+      <table class="pax-table">
+        <thead>
+          <tr>
+            <th>#</th><th>Name</th><th>Passport</th><th>Nationality</th><th>DOB</th><th>Expiry</th><th>Ticket No</th>
+          </tr>
+        </thead>
+        <tbody id="paxTableBody"></tbody>
+      </table>
+    </div>
+
+    <!-- Emergency Contact -->
+    <div class="card" id="emergCard" style="display:none">
+      <h3>🆘 Emergency Contact</h3>
+      <div class="grid grid-3">
+        <div class="field"><div class="field-label">Name</div><div class="field-value" id="emergName"></div></div>
+        <div class="field"><div class="field-label">Relation</div><div class="field-value" id="emergRelation"></div></div>
+        <div class="field"><div class="field-label">Phone</div><div class="field-value" id="emergPhone"></div></div>
+      </div>
+    </div>
+
+    <!-- Flights -->
+    <div class="card" id="flightsCard" style="display:none">
+      <h3>✈️ Flight Details</h3>
+      <div id="flightsBody"></div>
+    </div>
+
+    <!-- Hotels Makkah -->
+    <div class="card" id="hotelMCard" style="display:none">
+      <h3>🕋 Makkah Hotel</h3>
+      <div id="hotelMBody"></div>
+    </div>
+
+    <!-- Hotels Madina -->
+    <div class="card" id="hotelACard" style="display:none">
+      <h3>🕌 Madina Hotel</h3>
+      <div id="hotelABody"></div>
+    </div>
+
+    <!-- Transfers -->
+    <div class="card" id="transfersCard" style="display:none">
+      <h3>🚌 Transfers</h3>
+      <div id="transfersBody"></div>
+    </div>
+
+    <!-- Ziyarah -->
+    <div class="card" id="ziyarahCard" style="display:none">
+      <h3>🕌 Ziyarah</h3>
+      <div id="ziyarahBody"></div>
+    </div>
+
+    <!-- Visa -->
+    <div class="card" id="visaCard" style="display:none">
+      <h3>🛂 Visa Details</h3>
+      <div id="visaBody"></div>
+    </div>
+
+    <!-- Umrah Travel Checklist -->
+    <div class="card">
+      <h3>✅ Umrah Travel Checklist</h3>
+      <p class="small" style="margin-bottom:10px">Please ensure you have the following before departure:</p>
+      <ul class="checklist" style="list-style:none;padding:0">
+        <li>Valid passport (at least 6 months validity, 2 blank pages)</li>
+        <li>Umrah visa (check expiry date and conditions)</li>
+        <li>CNIC copy (1 original + 2 photocopies)</li>
+        <li>Passport-sized photographs (white background, at least 6 copies)</li>
+        <li>Flight tickets (printed copy + digital copy)</li>
+        <li>Hotel confirmation letters</li>
+        <li>Travel insurance documents</li>
+        <li>All required vaccinations (consult your doctor)</li>
+        <li>Sufficient local currency (Saudi Riyals)</li>
+        <li>International debit/credit card</li>
+        <li>Ihram clothing (2 sets for men)</li>
+        <li>Comfortable prayer clothes</li>
+        <li>Prayer mat, Quran, tasbih</li>
+        <li>Personal medication with doctor's prescription</li>
+        <li>Mobile phone and universal charger/adapter</li>
+        <li>Emergency contact numbers saved on phone</li>
+        <li>Photocopy of all documents (stored separately)</li>
+        <li>This voucher (printed or saved offline)</li>
+      </ul>
+    </div>
+
+    <!-- QR Code -->
+    <div class="card no-print" id="qrCard">
+      <h3>📱 Share This Voucher</h3>
+      <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+        <div class="qr-area">
+          <div class="qr-box"><div id="qrcode"></div></div>
+          <p>Scan to open</p>
+        </div>
+        <div style="flex:1">
+          <div class="field-label" style="margin-bottom:4px">Voucher Link</div>
+          <input type="text" id="voucherUrlDisplay" readonly style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:12px;background:#f8f9fa;color:#444">
+        </div>
+      </div>
+    </div>
+
+    <!-- Company Footer -->
+    <div class="company-footer">
+      <img src="https://flightconnection.net.pk/wp-content/uploads/2018/09/cropped-cropped-Flight-Connection-Travel-1.png" alt="Flight Connection" style="height:40px;margin-bottom:6px;display:block;margin:0 auto 8px"><br>
+      <strong>Flight Connection Travel &amp; Tours</strong><br>
+      Email: muhammad.atif@flightconnection.net.pk &bull; Website: www.flightconnection.net.pk<br>
+      <span class="small" id="voucherIdFooter"></span>
+    </div>
+
+  </div><!-- /#voucherContent -->
+</div><!-- /.wrap -->
+
+<script>
+// ===== Helpers =====
+function sanitize(s) {
+  const d = document.createElement('div');
+  d.textContent = String(s || '');
+  return d.innerHTML;
+}
+
+function fmtDate(ds) {
+  if (!ds) return '';
+  const d = new Date(ds);
+  if (isNaN(d.getTime())) return ds;
+  return d.toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function fmtDateTime(ds) {
+  if (!ds) return '';
+  const d = new Date(ds);
+  if (isNaN(d.getTime())) return ds;
+  return d.toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' +
+    d.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' });
+}
+
+function orTba(v) {
+  const s = String(v || '').trim();
+  return s ? sanitize(s) : '<span class="tba">TBA</span>';
+}
+
+function setEl(id, html) { const e = document.getElementById(id); if (e) e.innerHTML = html; }
+function showCard(id) { const e = document.getElementById(id); if (e) e.style.display = 'block'; }
+
+function field(label, value, tba = false) {
+  const val = String(value || '').trim();
+  return `<div class="field"><div class="field-label">${sanitize(label)}</div><div class="field-value${!val ? ' tba' : ''}">${val ? sanitize(val) : 'TBA'}</div></div>`;
+}
+
+function fieldHtml(label, html) {
+  return `<div class="field"><div class="field-label">${sanitize(label)}</div><div class="field-value">${html}</div></div>`;
+}
+
+// ===== Render sections =====
+function renderClientInfo(vc) {
+  const cd = vc.clientData || {};
+  const d1 = fmtDate(cd.dateFrom);
+  const d2 = fmtDate(cd.dateTo);
+  setEl('cdName', sanitize(cd.name || '—'));
+  setEl('cdPhone', sanitize(cd.phone || '—'));
+  setEl('cdCity', sanitize(cd.depCity || '—'));
+  setEl('cdDates', sanitize(d1 + (d2 ? ' — ' + d2 : '')));
+  const nights = (cd.nightsMakkah || 0) + (cd.nightsMadina || 0);
+  setEl('cdDuration', nights + ' nights (' + (cd.nightsMakkah || 0) + ' Makkah + ' + (cd.nightsMadina || 0) + ' Madina)');
+}
+
+function renderPassengers(vc) {
+  const pax = vc.passengers || [];
+  if (!pax.length) return;
+  showCard('paxCard');
+  const tbody = document.getElementById('paxTableBody');
+  tbody.innerHTML = pax.map((p, i) => `
+    <tr>
+      <td>${i + 1}</td>
+      <td><strong>${sanitize(p.name || '—')}</strong></td>
+      <td>${sanitize(p.passport || '—')}</td>
+      <td>${sanitize(p.nationality || '—')}</td>
+      <td>${fmtDate(p.dob) || '—'}</td>
+      <td>${fmtDate(p.expiry) || '—'}</td>
+      <td>${sanitize(p.ticketNo || '—')}</td>
+    </tr>
+  `).join('');
+}
+
+function renderEmergency(vc) {
+  const ec = vc.emergencyContact || {};
+  if (!ec.name) return;
+  showCard('emergCard');
+  setEl('emergName', sanitize(ec.name));
+  setEl('emergRelation', sanitize(ec.relation || '—'));
+  setEl('emergPhone', sanitize(ec.phone || '—'));
+}
+
+function renderFlights(vc) {
+  const flights = vc.flights || [];
+  if (!flights.length) return;
+  showCard('flightsCard');
+  document.getElementById('flightsBody').innerHTML = flights.map((f, i) => `
+    <div style="border:1px solid #e8f0fb;border-radius:7px;padding:12px;margin-bottom:10px;background:#f9fbff">
+      <h4>Flight ${i + 1}: ${sanitize(f.airline || 'Unknown')} · ${sanitize(f.direct || '')}</h4>
+      <hr class="section-divider">
+      <div class="grid">
+        ${field('PNR / Booking Reference', f.pnr || '')}
+        ${field('Meal', f.meal?.included ? ('Yes — ' + (f.meal.type || 'Standard')) : 'Not Included')}
+        ${f.itinerary ? `<div class="field full"><div class="field-label">Itinerary</div><div class="field-value" style="white-space:pre-wrap;font-size:12px">${sanitize(f.itinerary)}</div></div>` : ''}
+      </div>
+      ${f.ticketNumbers && Object.keys(f.ticketNumbers).length ? `
+        <div style="margin-top:8px">
+          <div class="field-label">Ticket Numbers</div>
+          ${Object.entries(f.ticketNumbers).map(([name, no]) => `
+            <div style="font-size:13px;padding:3px 0;border-bottom:1px solid #f0f4fa">${sanitize(name)}: <strong>${sanitize(no)}</strong></div>
+          `).join('')}
+        </div>
+      ` : ''}
+    </div>
+  `).join('');
+}
+
+function renderHotels(hotels, bodyId, cardId) {
+  if (!hotels || !hotels.length) return;
+  showCard(cardId);
+  document.getElementById(bodyId).innerHTML = hotels.map((h, i) => {
+    const mapsHtml = h.address
+      ? `<a class="maps-link" href="https://www.google.com/maps/search/${encodeURIComponent(h.address)}" target="_blank">📍 View on Google Maps</a>`
+      : '';
+    return `
+      <div style="border:1px solid #e8f0fb;border-radius:7px;padding:12px;margin-bottom:10px;background:#f9fbff">
+        <h4>${sanitize(h.name || 'Hotel ' + (i + 1))}${h.distance ? ' <span style="color:var(--muted);font-weight:400;font-size:12px">· ' + sanitize(h.distance) + ' from Haram</span>' : ''}</h4>
+        <hr class="section-divider">
+        <div class="grid">
+          ${fieldHtml('Confirmation No', orTba(h.confirmationNo))}
+          ${field('Lead Guest', h.leadGuest || '')}
+          ${h.checkIn ? field('Check-in', fmtDate(h.checkIn)) : ''}
+          ${h.checkOut ? field('Check-out', fmtDate(h.checkOut)) : ''}
+          ${h.nights ? field('Nights', h.nights) : ''}
+          ${h.roomType ? field('Room Type', h.roomType) : ''}
+          ${mapsHtml ? `<div class="field full">${mapsHtml}</div>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderTransfers(vc) {
+  const transfers = vc.transfers || [];
+  if (!transfers.length) return;
+  showCard('transfersCard');
+  document.getElementById('transfersBody').innerHTML = transfers.map((t, i) => `
+    <div style="border:1px solid #e8f0fb;border-radius:7px;padding:12px;margin-bottom:10px;background:#f9fbff">
+      <h4>Transfer ${i + 1}: ${sanitize(t.from || '')} → ${sanitize(t.to || '')}</h4>
+      <hr class="section-divider">
+      <div class="grid">
+        ${t.date ? field('Date', fmtDate(t.date)) : ''}
+        ${field('Vehicle', t.vehicle || '')}
+        ${field('Type', t.type || '')}
+        ${fieldHtml('Driver Name', orTba(t.driverName))}
+        ${fieldHtml('Driver Phone', orTba(t.driverPhone))}
+        ${t.vehicleNo ? field('Vehicle No', t.vehicleNo) : ''}
+        ${t.pickupNotes ? field('Pickup Notes', t.pickupNotes) : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderZiyarah(vc) {
+  const ziyarah = vc.ziyarah || [];
+  if (!ziyarah.length) return;
+  showCard('ziyarahCard');
+  document.getElementById('ziyarahBody').innerHTML = ziyarah.map((z, i) => `
+    <div style="border:1px solid #e8f0fb;border-radius:7px;padding:12px;margin-bottom:10px;background:#f9fbff">
+      <h4>Ziyarah ${i + 1}: ${sanitize(z.city || '')} · ${sanitize(z.vehicle || '')}</h4>
+      <hr class="section-divider">
+      <div class="grid">
+        ${z.duration ? field('Duration', z.duration) : ''}
+        ${field('Mode', z.mode || 'Private')}
+        ${fieldHtml('Driver Phone', orTba(z.driverPhone))}
+        ${z.guideName ? field('Guide Name', z.guideName) : ''}
+        ${z.notes ? field('Notes', z.notes) : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderVisa(vc) {
+  const visa = vc.visa;
+  if (!visa) return;
+  showCard('visaCard');
+  const visaNumbers = visa.visaNumbers || {};
+  const hasNumbers = Object.keys(visaNumbers).some(k => visaNumbers[k]);
+  document.getElementById('visaBody').innerHTML = `
+    <div class="grid">
+      ${field('Visa Count', visa.count || 0)}
+    </div>
+    ${hasNumbers ? `
+      <div style="margin-top:10px">
+        <div class="field-label" style="margin-bottom:6px">Visa Numbers</div>
+        ${Object.entries(visaNumbers).map(([name, no]) => `
+          <div style="font-size:13px;padding:3px 0;border-bottom:1px solid #f0f4fa">${sanitize(name)}: <strong>${no ? sanitize(no) : '<span class="tba">TBA</span>'}</strong></div>
+        `).join('')}
+      </div>
+    ` : `<p class="small" style="margin-top:8px;color:var(--muted)">Visa numbers will be updated once processed.</p>`}
+  `;
+}
+
+// ===== QR Code =====
+function generateQR(url) {
+  const el = document.getElementById('qrcode');
+  if (!el) return;
+  el.innerHTML = '';
+  new QRCode(el, { text: url, width: 120, height: 120, correctLevel: QRCode.CorrectLevel.M });
+  const urlDisplay = document.getElementById('voucherUrlDisplay');
+  if (urlDisplay) urlDisplay.value = url;
+}
+
+// ===== WhatsApp share =====
+function setupWhatsApp(vc) {
+  const btn = document.getElementById('btnWAShare');
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    const phone = (vc.clientData?.phone || '').replace(/\D/g, '').replace(/^0/, '');
+    const url = window.location.href.split('?')[0] + '?id=' + encodeURIComponent(vc.id);
+    const msg = `Dear ${vc.clientData?.name || 'Customer'},\n\nYour Umrah travel voucher is ready:\n${url}\n\nRegards,\n${vc.agentData?.name || 'Flight Connection'}\n${vc.agentData?.phone || ''}`;
+    window.open('https://wa.me/92' + phone + '?text=' + encodeURIComponent(msg), '_blank');
+  });
+}
+
+// ===== PDF Download =====
+async function downloadPDF() {
+  const { jsPDF } = window.jspdf;
+  const el = document.getElementById('voucherWrap');
+  const bar = document.querySelector('.actions-bar');
+  if (bar) bar.style.display = 'none';
+
+  try {
+    const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#fff' });
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const imgData = canvas.toDataURL('image/jpeg', 0.92);
+    const pW = pdf.internal.pageSize.getWidth() - 10;
+    const pH = pdf.internal.pageSize.getHeight() - 14;
+    const cW = canvas.width;
+    const cH = canvas.height;
+    const pxPerMm = cW / pW;
+    const pageH = pH * pxPerMm;
+    let pages = 0;
+    for (let y = 0; y < cH; y += pageH) {
+      const h = Math.min(pageH, cH - y);
+      const pg = document.createElement('canvas');
+      pg.width = cW;
+      pg.height = h;
+      const ctx = pg.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, cW, h);
+      ctx.drawImage(canvas, 0, y, cW, h, 0, 0, cW, h);
+      if (pages > 0) pdf.addPage();
+      pdf.addImage(pg.toDataURL('image/jpeg', 0.92), 'JPEG', 5, 7, pW, (h / pxPerMm));
+      pages++;
+    }
+    const vId = document.getElementById('hdrVoucherId')?.textContent || 'voucher';
+    pdf.save('Voucher-' + vId + '.pdf');
+  } catch (e) {
+    console.error('PDF error:', e);
+    alert('Failed to generate PDF. Please try printing from browser (Ctrl+P).');
+  } finally {
+    if (bar) bar.style.display = '';
+  }
+}
+
+window.downloadPDF = downloadPDF;
+
+// ===== Main render =====
+function renderVoucher(vc) {
+  const isPublished = vc.status === 'published';
+  const isCancelled = vc.status === 'cancelled';
+
+  // Header
+  setEl('hdrClientName', sanitize(vc.clientData?.name || ''));
+  const d1 = fmtDate(vc.clientData?.dateFrom);
+  const d2 = fmtDate(vc.clientData?.dateTo);
+  setEl('hdrDates', sanitize(d1 && d2 ? d1 + ' — ' + d2 : ''));
+  setEl('hdrVoucherId', sanitize(vc.id || ''));
+  setEl('hdrVersion', 'Version ' + (vc.version || 1));
+  setEl('hdrUpdated', vc.updatedAt ? 'Updated: ' + fmtDateTime(vc.updatedAt) : '');
+  setEl('voucherIdFooter', 'Voucher ID: ' + sanitize(vc.id || '') + ' · v' + (vc.version || 1));
+
+  // Page title
+  document.title = 'Voucher ' + vc.id + ' — ' + (vc.clientData?.name || 'Flight Connection');
+
+  // Cancelled
+  if (isCancelled) {
+    document.getElementById('cancelledBanner').style.display = 'block';
+    setEl('cancelledMsg', 'This voucher has been cancelled. Contact your travel agent for assistance.');
+    // Still show basic info but hide sensitive details
+  }
+
+  // Agent note
+  if (vc.agentNote && vc.agentNote.trim()) {
+    document.getElementById('agentNoteCard').style.display = 'block';
+    setEl('agentNoteText', sanitize(vc.agentNote));
+  }
+
+  renderClientInfo(vc);
+  if (!isCancelled) {
+    renderPassengers(vc);
+    renderEmergency(vc);
+    renderFlights(vc);
+    renderHotels(vc.hotelsMakkah, 'hotelMBody', 'hotelMCard');
+    renderHotels(vc.hotelsMadina, 'hotelABody', 'hotelACard');
+    renderTransfers(vc);
+    renderZiyarah(vc);
+    renderVisa(vc);
+  }
+
+  // QR code
+  const url = window.location.href.split('?')[0] + '?id=' + encodeURIComponent(vc.id);
+  generateQR(url);
+
+  setupWhatsApp(vc);
+}
+
+// ===== Load & init =====
+async function init() {
+  const params = new URLSearchParams(window.location.search);
+  const id = params.get('id');
+
+  if (!id) {
+    document.getElementById('loadingState').style.display = 'none';
+    document.getElementById('errorState').style.display = 'block';
+    document.getElementById('errorMsg').textContent = 'No voucher ID in URL.';
+    return;
+  }
+
+  try {
+    const vc = await window.firebaseDB.get(id);
+    if (!vc) {
+      document.getElementById('loadingState').style.display = 'none';
+      document.getElementById('errorState').style.display = 'block';
+      document.getElementById('errorMsg').textContent = 'Voucher not found. Please check the link.';
+      return;
+    }
+
+    // Log view (async, non-blocking)
+    window.firebaseDB.logView(id).catch(() => {});
+
+    // Show content
+    document.getElementById('loadingState').style.display = 'none';
+    document.getElementById('voucherContent').style.display = 'block';
+
+    renderVoucher(vc);
+  } catch (e) {
+    console.error('Load error:', e);
+    document.getElementById('loadingState').style.display = 'none';
+    document.getElementById('errorState').style.display = 'block';
+    document.getElementById('errorMsg').textContent = 'Failed to load voucher. Please try again.';
+  }
+}
+
+// Wait for Firebase, then init
+window.addEventListener('load', () => {
+  const wait = setInterval(() => {
+    if (window.firebaseDB) { clearInterval(wait); init(); }
+  }, 100);
+  setTimeout(() => clearInterval(wait), 8000);
+});
+</script>
+</body>
+</html>
