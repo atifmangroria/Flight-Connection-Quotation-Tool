@@ -1761,6 +1761,87 @@ function getSelectedPeriodLabel() {
   return 'Maximum (All Quotations)';
 }
 
+function getUmrahQuotationPaxCounts(quotation) {
+  const clientData = quotation?.clientData || {};
+  const adults = Number(clientData.adults) || 0;
+  const childBed = Number(clientData.childBed) || 0;
+  const childNoBed = Number(clientData.childNoBed) || 0;
+  const infants = Number(clientData.infants) || 0;
+
+  return {
+    adults,
+    childBed,
+    childNoBed,
+    infants,
+    children: childBed + childNoBed,
+    total: adults + childBed + childNoBed + infants
+  };
+}
+
+function calculateUmrahPackageTotalAmount(quotation) {
+  if (!quotation || typeof quotation !== 'object') return 0;
+
+  const pax = getUmrahQuotationPaxCounts(quotation);
+  const roe = Number(quotation?.pricingSettings?.roe) || 0;
+  let packageCostPKR = 0;
+  let packageServicePKR = 0;
+
+  (quotation.flights || []).forEach((flight) => {
+    const costs = flight?.costs || {};
+    packageCostPKR += (Number(costs?.adult?.cost) || 0) * pax.adults;
+    packageCostPKR += (Number(costs?.childBed?.cost) || 0) * pax.childBed;
+    packageCostPKR += (Number(costs?.childNoBed?.cost) || 0) * pax.childNoBed;
+    packageCostPKR += (Number(costs?.infant?.cost) || 0) * pax.infants;
+
+    packageServicePKR += (Number(costs?.adult?.service) || 0) * pax.adults;
+    packageServicePKR += (Number(costs?.childBed?.service) || 0) * pax.childBed;
+    packageServicePKR += (Number(costs?.childNoBed?.service) || 0) * pax.childNoBed;
+    packageServicePKR += (Number(costs?.infant?.service) || 0) * pax.infants;
+  });
+
+  [...(quotation.hotelsMakkah || []), ...(quotation.hotelsMadina || [])].forEach((hotel) => {
+    const roomEntries = Array.isArray(hotel?.roomEntries) && hotel.roomEntries.length
+      ? hotel.roomEntries
+      : [hotel];
+
+    roomEntries.forEach((room) => {
+      const rooms = Number(room?.rooms) || 0;
+      const nights = Number(hotel?.nights ?? room?.nights) || 0;
+      const costNight = Number(room?.costNight) || 0;
+      const svcNight = Number(room?.svcNight) || 0;
+
+      packageCostPKR += costNight * rooms * nights * roe;
+      packageServicePKR += svcNight * rooms * nights * roe;
+    });
+  });
+
+  (quotation.transfers || []).forEach((transfer) => {
+    const mode = String(transfer?.mode || transfer?.type || 'Private').toLowerCase();
+
+    if (mode === 'sharing') {
+      packageCostPKR += (((Number(transfer?.shareAdultCost) || 0) * pax.adults) + ((Number(transfer?.shareChildCost) || 0) * pax.children) + ((Number(transfer?.shareInfCost) || 0) * pax.infants)) * roe;
+      packageServicePKR += (((Number(transfer?.shareAdultService) || 0) * pax.adults) + ((Number(transfer?.shareChildService) || 0) * pax.children) + ((Number(transfer?.shareInfService) || 0) * pax.infants)) * roe;
+    } else {
+      packageCostPKR += (Number(transfer?.cost) || 0) * roe;
+      packageServicePKR += (Number(transfer?.service) || 0) * roe;
+    }
+  });
+
+  if (quotation.visa) {
+    const visaCount = Number(quotation.visa.count) || pax.total;
+    packageCostPKR += (Number(quotation.visa.cost) || 0) * visaCount * roe;
+    packageServicePKR += (Number(quotation.visa.service) || 0) * visaCount * roe;
+  }
+
+  if (quotation?.pricingSettings?.svcOption === 'perPerson') {
+    packageServicePKR += (Number(quotation.pricingSettings.svcPerAdult) || 0) * pax.adults;
+    packageServicePKR += (Number(quotation.pricingSettings.svcPerChild) || 0) * pax.children;
+    packageServicePKR += (Number(quotation.pricingSettings.svcPerInfant) || 0) * pax.infants;
+  }
+
+  return packageCostPKR + packageServicePKR;
+}
+
 function toNumberSafe(value) {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
@@ -1822,6 +1903,9 @@ function getExpectedSalesAmount(quotation) {
       if (n > 0) return n;
     }
   }
+
+  const umrahFallback = calculateUmrahPackageTotalAmount(quotation);
+  if (umrahFallback > 0) return umrahFallback;
 
   return 0;
 }

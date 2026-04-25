@@ -6773,6 +6773,131 @@ async function upsertCustomerFromQuotation(clientData, quotationMeta) {
   }
 }
 
+function getUmrahQuotationPaxCounts(quotation) {
+  const clientData = quotation?.clientData || {};
+  const adults = Number(clientData.adults) || 0;
+  const childBed = Number(clientData.childBed) || 0;
+  const childNoBed = Number(clientData.childNoBed) || 0;
+  const infants = Number(clientData.infants) || 0;
+
+  return {
+    adults,
+    childBed,
+    childNoBed,
+    infants,
+    children: childBed + childNoBed,
+    total: adults + childBed + childNoBed + infants
+  };
+}
+
+function calculateUmrahPackageTotalAmount(quotation) {
+  if (!quotation || typeof quotation !== 'object') return 0;
+
+  const pax = getUmrahQuotationPaxCounts(quotation);
+  const roe = Number(quotation?.pricingSettings?.roe) || 0;
+  let packageCostPKR = 0;
+  let packageServicePKR = 0;
+
+  (quotation.flights || []).forEach((flight) => {
+    const costs = flight?.costs || {};
+    packageCostPKR += (Number(costs?.adult?.cost) || 0) * pax.adults;
+    packageCostPKR += (Number(costs?.childBed?.cost) || 0) * pax.childBed;
+    packageCostPKR += (Number(costs?.childNoBed?.cost) || 0) * pax.childNoBed;
+    packageCostPKR += (Number(costs?.infant?.cost) || 0) * pax.infants;
+
+    packageServicePKR += (Number(costs?.adult?.service) || 0) * pax.adults;
+    packageServicePKR += (Number(costs?.childBed?.service) || 0) * pax.childBed;
+    packageServicePKR += (Number(costs?.childNoBed?.service) || 0) * pax.childNoBed;
+    packageServicePKR += (Number(costs?.infant?.service) || 0) * pax.infants;
+  });
+
+  [...(quotation.hotelsMakkah || []), ...(quotation.hotelsMadina || [])].forEach((hotel) => {
+    const roomEntries = Array.isArray(hotel?.roomEntries) && hotel.roomEntries.length
+      ? hotel.roomEntries
+      : [hotel];
+
+    roomEntries.forEach((room) => {
+      const rooms = Number(room?.rooms) || 0;
+      const nights = Number(hotel?.nights ?? room?.nights) || 0;
+      const costNight = Number(room?.costNight) || 0;
+      const svcNight = Number(room?.svcNight) || 0;
+
+      packageCostPKR += costNight * rooms * nights * roe;
+      packageServicePKR += svcNight * rooms * nights * roe;
+    });
+  });
+
+  (quotation.transfers || []).forEach((transfer) => {
+    const mode = String(transfer?.mode || transfer?.type || 'Private').toLowerCase();
+
+    if (mode === 'sharing') {
+      packageCostPKR += (((Number(transfer?.shareAdultCost) || 0) * pax.adults) + ((Number(transfer?.shareChildCost) || 0) * pax.children) + ((Number(transfer?.shareInfCost) || 0) * pax.infants)) * roe;
+      packageServicePKR += (((Number(transfer?.shareAdultService) || 0) * pax.adults) + ((Number(transfer?.shareChildService) || 0) * pax.children) + ((Number(transfer?.shareInfService) || 0) * pax.infants)) * roe;
+    } else {
+      packageCostPKR += (Number(transfer?.cost) || 0) * roe;
+      packageServicePKR += (Number(transfer?.service) || 0) * roe;
+    }
+  });
+
+  if (quotation.visa) {
+    const visaCount = Number(quotation.visa.count) || pax.total;
+    packageCostPKR += (Number(quotation.visa.cost) || 0) * visaCount * roe;
+    packageServicePKR += (Number(quotation.visa.service) || 0) * visaCount * roe;
+  }
+
+  if (quotation?.pricingSettings?.svcOption === 'perPerson') {
+    packageServicePKR += (Number(quotation.pricingSettings.svcPerAdult) || 0) * pax.adults;
+    packageServicePKR += (Number(quotation.pricingSettings.svcPerChild) || 0) * pax.children;
+    packageServicePKR += (Number(quotation.pricingSettings.svcPerInfant) || 0) * pax.infants;
+  }
+
+  return packageCostPKR + packageServicePKR;
+}
+
+function calculateUmrahAddonTotalAmount(quotation) {
+  if (!quotation || typeof quotation !== 'object') return 0;
+
+  const pax = getUmrahQuotationPaxCounts(quotation);
+  const roe = Number(quotation?.pricingSettings?.roe) || 0;
+  let addonTotalPKR = 0;
+
+  (quotation?.addons?.directFlights || []).forEach((flightAddon) => {
+    const costs = flightAddon?.costs || {};
+    addonTotalPKR += ((Number(costs?.adult?.cost) || 0) + (Number(costs?.adult?.service) || 0)) * pax.adults;
+    addonTotalPKR += ((Number(costs?.childBed?.cost) || 0) + (Number(costs?.childBed?.service) || 0)) * pax.childBed;
+    addonTotalPKR += ((Number(costs?.childNoBed?.cost) || 0) + (Number(costs?.childNoBed?.service) || 0)) * pax.childNoBed;
+    addonTotalPKR += ((Number(costs?.infant?.cost) || 0) + (Number(costs?.infant?.service) || 0)) * pax.infants;
+  });
+
+  (quotation?.addons?.meals || []).forEach((mealAddon) => {
+    const payingPax = pax.adults + pax.childBed;
+    if (payingPax <= 0) return;
+
+    const hotelLabel = String(mealAddon?.hotel || '').toLowerCase();
+    const cityNights = hotelLabel.includes('madina')
+      ? (Number(quotation?.clientData?.nightsMadina) || 0)
+      : hotelLabel.includes('makkah')
+        ? (Number(quotation?.clientData?.nightsMakkah) || 0)
+        : 0;
+
+    addonTotalPKR += (((Number(mealAddon?.cost) || 0) + (Number(mealAddon?.service) || 0)) * payingPax * cityNights) * roe;
+  });
+
+  (quotation?.addons?.ziyarah || []).forEach((ziyarahAddon) => {
+    const mode = String(ziyarahAddon?.mode || 'Private').toLowerCase();
+
+    if (mode === 'sharing') {
+      addonTotalPKR += (((Number(ziyarahAddon?.shareAdultCost) || 0) + (Number(ziyarahAddon?.shareAdultService) || 0)) * pax.adults) * roe;
+      addonTotalPKR += (((Number(ziyarahAddon?.shareChildCost) || 0) + (Number(ziyarahAddon?.shareChildService) || 0)) * pax.children) * roe;
+      addonTotalPKR += (((Number(ziyarahAddon?.shareInfCost) || 0) + (Number(ziyarahAddon?.shareInfService) || 0)) * pax.infants) * roe;
+    } else {
+      addonTotalPKR += ((Number(ziyarahAddon?.cost) || 0) + (Number(ziyarahAddon?.service) || 0)) * roe;
+    }
+  });
+
+  return addonTotalPKR;
+}
+
 function saveQuotation() {
   try {
     // Check if client data is saved
@@ -7071,6 +7196,14 @@ function saveQuotation() {
       visa: visaData,
       addons: addonsData
     };
+
+    const packageTotalAmount = calculateUmrahPackageTotalAmount(quotationData);
+    const addonTotalAmount = calculateUmrahAddonTotalAmount(quotationData);
+    quotationData.totalAmount = packageTotalAmount;
+    quotationData.finalTotalSellPKR = packageTotalAmount;
+    quotationData.packageTotalPKR = packageTotalAmount;
+    quotationData.addonsTotalPKR = addonTotalAmount;
+    quotationData.grandTotalPKR = packageTotalAmount + addonTotalAmount;
 
     upsertCustomerFromQuotation(quotationData.clientData, {
       id: quotationData.id,
