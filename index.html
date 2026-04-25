@@ -4820,7 +4820,7 @@ async function performCalculation() {
 
   // Build per person text for PACKAGE TOTALS row
   let packagePricingText = [];
-  if (hotelPriceMode === 'actual' && hotelRoomBreakdown.length > 0) {
+  if (getHotelPriceMode() === 'actual' && hotelRoomBreakdown.length > 0) {
     const hotelPayingPaxCount = numAdult + numChildBed;
     const totalHotelCostPKRCalc = hotelRoomBreakdown.reduce((sum, room) => sum + (room.totalRoomCostPKR || 0), 0);
     const avgHotelCostPerPerson = hotelPayingPaxCount > 0 ? (totalHotelCostPKRCalc / hotelPayingPaxCount) : 0;
