@@ -172,7 +172,7 @@ button{padding:8px 16px;border:none;border-radius:6px;cursor:pointer;font-size:1
       <table class="pax-table">
         <thead>
           <tr>
-            <th>#</th><th>Name</th><th>Passport</th><th>Nationality</th><th>DOB</th><th>Expiry</th><th>Ticket No</th>
+            <th>#</th><th>Name</th><th>Passport</th><th>Nationality</th><th>DOB</th><th>Expiry</th>
           </tr>
         </thead>
         <tbody id="paxTableBody"></tbody>
@@ -343,7 +343,6 @@ function renderPassengers(vc) {
       <td>${sanitize(p.nationality || '—')}</td>
       <td>${fmtDate(p.dob) || '—'}</td>
       <td>${fmtDate(p.expiry) || '—'}</td>
-      <td>${sanitize(p.ticketNo || '—')}</td>
     </tr>
   `).join('');
 }
@@ -370,12 +369,17 @@ function renderFlights(vc) {
         ${field('Meal', f.meal?.included ? ('Yes — ' + (f.meal.type || 'Standard')) : 'Not Included')}
         ${f.itinerary ? `<div class="field full"><div class="field-label">Itinerary</div><div class="field-value" style="white-space:pre-wrap;font-size:12px">${sanitize(f.itinerary)}</div></div>` : ''}
       </div>
-      ${f.ticketNumbers && Object.keys(f.ticketNumbers).length ? `
-        <div style="margin-top:8px">
-          <div class="field-label">Ticket Numbers</div>
-          ${Object.entries(f.ticketNumbers).map(([name, no]) => `
-            <div style="font-size:13px;padding:3px 0;border-bottom:1px solid #f0f4fa">${sanitize(name)}: <strong>${sanitize(no)}</strong></div>
-          `).join('')}
+      ${(f.ticketNumbers && Object.keys(f.ticketNumbers).length) || (f.seatNumbers && Object.keys(f.seatNumbers).length) ? `
+        <div style="margin-top:10px">
+          <div class="field-label" style="margin-bottom:6px">Ticket &amp; Seat Numbers</div>
+          <table style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead><tr><th style="text-align:left;padding:4px 6px;background:#f0f4fa;border:1px solid #e8f0fb">Passenger</th><th style="text-align:left;padding:4px 6px;background:#f0f4fa;border:1px solid #e8f0fb">Ticket No</th><th style="text-align:left;padding:4px 6px;background:#f0f4fa;border:1px solid #e8f0fb">Seat No</th></tr></thead>
+            <tbody>
+              ${[...new Set([...Object.keys(f.ticketNumbers || {}), ...Object.keys(f.seatNumbers || {})])].map(name => `
+                <tr><td style="padding:4px 6px;border:1px solid #e8f0fb">${sanitize(name)}</td><td style="padding:4px 6px;border:1px solid #e8f0fb">${sanitize((f.ticketNumbers || {})[name] || '—')}</td><td style="padding:4px 6px;border:1px solid #e8f0fb">${sanitize((f.seatNumbers || {})[name] || '—')}</td></tr>
+              `).join('')}
+            </tbody>
+          </table>
         </div>
       ` : ''}
     </div>
@@ -386,9 +390,11 @@ function renderHotels(hotels, bodyId, cardId) {
   if (!hotels || !hotels.length) return;
   showCard(cardId);
   document.getElementById(bodyId).innerHTML = hotels.map((h, i) => {
-    const mapsHtml = h.address
-      ? `<a class="maps-link" href="https://www.google.com/maps/search/${encodeURIComponent(h.address)}" target="_blank">📍 View on Google Maps</a>`
-      : '';
+    const mapsHtml = h.mapUrl
+      ? `<a class="maps-link" href="${sanitize(h.mapUrl)}" target="_blank" rel="noopener noreferrer">📍 View on Google Maps</a>`
+      : (h.address
+        ? `<a class="maps-link" href="https://www.google.com/maps/search/${encodeURIComponent(h.address)}" target="_blank" rel="noopener noreferrer">📍 View on Google Maps</a>`
+        : '');
     return `
       <div style="border:1px solid #e8f0fb;border-radius:7px;padding:12px;margin-bottom:10px;background:#f9fbff">
         <h4>${sanitize(h.name || 'Hotel ' + (i + 1))}${h.distance ? ' <span style="color:var(--muted);font-weight:400;font-size:12px">· ' + sanitize(h.distance) + ' from Haram</span>' : ''}</h4>
@@ -400,6 +406,7 @@ function renderHotels(hotels, bodyId, cardId) {
           ${h.checkOut ? field('Check-out', fmtDate(h.checkOut)) : ''}
           ${h.nights ? field('Nights', h.nights) : ''}
           ${h.roomType ? field('Room Type', h.roomType) : ''}
+          ${h.address ? `<div class="field full">${field('Address', h.address)}</div>` : ''}
           ${mapsHtml ? `<div class="field full">${mapsHtml}</div>` : ''}
         </div>
       </div>

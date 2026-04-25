@@ -356,10 +356,28 @@ function getUrlParam(name) {
   return new URLSearchParams(window.location.search).get(name);
 }
 
+// ===== Get live passenger list from form =====
+function getLivePassengers() {
+  const list = [];
+  document.querySelectorAll('[id^="pax_"]').forEach(card => {
+    const idx = card.id.split('_')[1];
+    if (!idx) return;
+    const given = (document.getElementById('paxGiven_' + idx)?.value || '').trim();
+    const sur = (document.getElementById('paxSurname_' + idx)?.value || '').trim();
+    const name = [given, sur].filter(Boolean).join(' ');
+    if (!name) return;
+    list.push({ idx, name, givenName: given, surname: sur });
+  });
+  return list;
+}
+
 // ===== Build passenger slots from quotation pax data =====
 function addPassengerSlot(data = {}) {
   passengerCount++;
   const idx = passengerCount;
+  // Support old saved docs that stored combined name
+  const givenName = data.givenName || (data.name ? data.name.split(' ').slice(0, -1).join(' ') || data.name : '');
+  const surname = data.surname || (data.name ? data.name.split(' ').slice(-1)[0] || '' : '');
   const div = document.createElement('div');
   div.className = 'card';
   div.id = 'pax_' + idx;
@@ -369,13 +387,12 @@ function addPassengerSlot(data = {}) {
       ${idx > 1 ? `<button class="remove-btn" onclick="removePax(${idx})">Remove</button>` : ''}
     </div>
     <div class="grid grid-3">
-      <div class="full"><label>Full Name (as on passport)</label><input type="text" id="paxName_${idx}" value="${sanitize(data.name || '')}" placeholder="Full name"></div>
+      <div><label>Given Name (as on passport)</label><input type="text" id="paxGiven_${idx}" value="${sanitize(givenName)}" placeholder="e.g. Ahmed"></div>
+      <div><label>Surname (as on passport)</label><input type="text" id="paxSurname_${idx}" value="${sanitize(surname)}" placeholder="e.g. Khan"></div>
       <div><label>Passport No</label><input type="text" id="paxPassport_${idx}" value="${sanitize(data.passport || '')}" placeholder="AB1234567"></div>
       <div><label>Nationality</label><input type="text" id="paxNationality_${idx}" value="${sanitize(data.nationality || 'Pakistani')}" placeholder="Pakistani"></div>
       <div><label>Date of Birth</label><input type="date" id="paxDob_${idx}" value="${sanitize(data.dob || '')}"></div>
       <div><label>Passport Expiry</label><input type="date" id="paxExpiry_${idx}" value="${sanitize(data.expiry || '')}"></div>
-      <div><label>Ticket No (optional)</label><input type="text" id="paxTicket_${idx}" value="${sanitize(data.ticketNo || '')}" placeholder="e.g. 083-1234567890"></div>
-      <div><label>Seat No (optional)</label><input type="text" id="paxSeat_${idx}" value="${sanitize(data.seatNo || '')}" placeholder="e.g. 24A"></div>
     </div>
   `;
   document.getElementById('passengerList').appendChild(div);
@@ -387,6 +404,22 @@ function removePax(idx) {
 }
 
 document.getElementById('btnAddPassenger').addEventListener('click', () => addPassengerSlot());
+
+// ===== Build per-passenger ticket+seat rows inside a flight box =====
+function buildFlightPaxRows(flightIdx, savedTickets, savedSeats) {
+  const pax = getLivePassengers();
+  if (!pax.length) return '<p class="small" style="color:#999;margin-top:6px">No passengers added yet — add passengers above then click ↺ Sync.</p>';
+  return pax.map(p => {
+    const tVal = sanitize((savedTickets && savedTickets[p.name]) || '');
+    const sVal = sanitize((savedSeats && savedSeats[p.name]) || '');
+    return `
+      <div style="display:grid;grid-template-columns:2fr 2fr 2fr;gap:8px;align-items:end;margin-bottom:8px">
+        <div><label style="font-weight:700">${sanitize(p.name)}</label></div>
+        <div><label>Ticket No (optional)</label><input type="text" id="fTicket_${flightIdx}_${p.idx}" value="${tVal}" placeholder="e.g. 083-1234567890"></div>
+        <div><label>Seat No (optional)</label><input type="text" id="fSeat_${flightIdx}_${p.idx}" value="${sVal}" placeholder="e.g. 24A"></div>
+      </div>`;
+  }).join('');
+}
 
 // ===== Build flight ops fields =====
 function buildFlightOps(flights, savedFlights) {
@@ -402,8 +435,14 @@ function buildFlightOps(flights, savedFlights) {
     const idx = flightOpsCount;
     const div = document.createElement('div');
     div.className = 'service-box';
+    div.id = 'flightBox_' + idx;
+    const savedTickets = saved.ticketNumbers || {};
+    const savedSeats = saved.seatNumbers || {};
     div.innerHTML = `
-      <h5>Flight ${idx}: ${sanitize(f.airline || 'Unknown')} — ${sanitize(f.itinerary || '').substring(0, 60)}</h5>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <h5 style="margin:0">Flight ${idx}: ${sanitize(f.airline || 'Unknown')} — ${sanitize(f.itinerary || '').substring(0, 60)}</h5>
+        <button type="button" class="ghost" style="font-size:11px;padding:3px 8px" onclick="syncFlightPax(${idx})">↺ Sync Passengers</button>
+      </div>
       <div class="grid">
         <div><label>PNR / Booking Reference *</label><input type="text" id="fPnr_${idx}" value="${sanitize(saved.pnr || '')}" placeholder="e.g. ABCDEF"></div>
         <div><label>Meal Included?</label>
@@ -413,11 +452,31 @@ function buildFlightOps(flights, savedFlights) {
           </select>
         </div>
         <div><label>Meal Type (if included)</label><input type="text" id="fMealType_${idx}" value="${sanitize(saved.meal?.type || '')}" placeholder="e.g. Veg, Halal"></div>
-        <div class="full"><label>Ticket Numbers (one per line: Name: TicketNo)</label><textarea id="fTickets_${idx}" placeholder="Ahmed Ali: 083-1234567890\nFatima Ahmed: 083-0987654321">${sanitize(Object.entries(saved.ticketNumbers || {}).map(([k,v]) => k + ': ' + v).join('\n'))}</textarea></div>
+      </div>
+      <div style="margin-top:10px">
+        <label style="margin-bottom:6px;display:block">Ticket &amp; Seat Numbers (per passenger)</label>
+        <div id="fPaxRows_${idx}">${buildFlightPaxRows(idx, savedTickets, savedSeats)}</div>
       </div>
     `;
     list.appendChild(div);
   });
+}
+
+// ===== Sync passenger rows inside a flight card =====
+function syncFlightPax(flightIdx) {
+  const saved = {}; // preserve existing values before re-render
+  const pax = getLivePassengers();
+  const tickets = {};
+  const seats = {};
+  pax.forEach(p => {
+    const t = document.getElementById('fTicket_' + flightIdx + '_' + p.idx);
+    const s = document.getElementById('fSeat_' + flightIdx + '_' + p.idx);
+    if (t) tickets[p.name] = t.value;
+    if (s) seats[p.name] = s.value;
+  });
+  const container = document.getElementById('fPaxRows_' + flightIdx);
+  if (container) container.innerHTML = buildFlightPaxRows(flightIdx, tickets, seats);
+  showNotif('Passengers synced for Flight ' + flightIdx, 'success', 2000);
 }
 
 // ===== Build hotel ops fields =====
@@ -438,7 +497,8 @@ function buildHotelOps(hotels, savedHotels, city, listId, sectionId) {
         <div><label>Confirmation Number</label><input type="text" id="${listId}Conf_${i}" value="${sanitize(saved.confirmationNo || '')}" placeholder="TBA if not yet confirmed"></div>
         <div><label>Lead Guest Name</label><input type="text" id="${listId}Lead_${i}" value="${sanitize(saved.leadGuest || '')}" placeholder="Name on booking"></div>
         <div><label>Hotel Phone (optional)</label><input type="text" id="${listId}Phone_${i}" value="${sanitize(saved.phone || '')}" placeholder="+966..."></div>
-        <div class="full"><label>Hotel Address (optional — enables Google Maps link)</label><input type="text" id="${listId}Addr_${i}" value="${sanitize(saved.address || '')}" placeholder="e.g. Ibrahim Al Khalil Rd, Makkah"></div>
+        <div class="full"><label>Hotel Address (optional — shown on voucher)</label><input type="text" id="${listId}Addr_${i}" value="${sanitize(saved.address || '')}" placeholder="e.g. Ibrahim Al Khalil Rd, Makkah"></div>
+        <div class="full"><label>Google Maps Link (optional — paste full URL)</label><input type="url" id="${listId}MapUrl_${i}" value="${sanitize(saved.mapUrl || '')}" placeholder="https://maps.app.goo.gl/..."></div>
       </div>
     `;
     list.appendChild(div);
@@ -495,7 +555,7 @@ function buildZiyarahOps(ziyarahs, savedZiyarahs) {
 }
 
 // ===== Build visa ops fields =====
-function buildVisaOps(visa, savedVisa, passengers) {
+function buildVisaOps(visa, savedVisa) {
   const section = document.getElementById('visaSection');
   const list = document.getElementById('visaOpsList');
   if (!visa) return;
@@ -507,22 +567,32 @@ function buildVisaOps(visa, savedVisa, passengers) {
   div.className = 'service-box';
   div.innerHTML = `
     <h5>Visa Numbers (${visa.count || 0} visa(s))</h5>
-    <p class="small" style="margin-bottom:8px">Enter visa number for each passenger (optional, fill as available)</p>
+    <p class="small" style="margin-bottom:8px">Passenger names are auto-filled from Passenger Details above. Enter visa number as available.</p>
     <div id="visaNumbersList"></div>
   `;
   list.appendChild(div);
 
+  renderVisaRows(savedNos);
+}
+
+function renderVisaRows(savedNos) {
   const vList = document.getElementById('visaNumbersList');
-  for (let i = 1; i <= (visa.count || 1); i++) {
-    const pName = (passengers && passengers[i - 1]) ? passengers[i - 1].name || '' : '';
+  if (!vList) return;
+  vList.innerHTML = '';
+  const pax = getLivePassengers();
+  if (!pax.length) {
+    vList.innerHTML = '<p class="small" style="color:#999">No passengers added yet — add passengers above.</p>';
+    return;
+  }
+  pax.forEach((p, i) => {
     const row = document.createElement('div');
-    row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:6px';
+    row.style.cssText = 'display:grid;grid-template-columns:2fr 2fr;gap:8px;align-items:end;margin-bottom:8px';
     row.innerHTML = `
-      <input type="text" id="visaPaxName_${i}" value="${sanitize(pName)}" placeholder="Passenger name" style="flex:1">
-      <input type="text" id="visaNo_${i}" value="${sanitize(savedNos[pName] || '')}" placeholder="Visa number" style="flex:1">
+      <div><label>Passenger</label><input type="text" value="${sanitize(p.name)}" readonly style="background:#f0f4fa;color:#444;cursor:default"></div>
+      <div><label>Visa Number (optional)</label><input type="text" id="visaNo_${p.idx}" value="${sanitize(savedNos[p.name] || '')}" placeholder="Visa number"></div>
     `;
     vList.appendChild(row);
-  }
+  });
 }
 
 // ===== Render overview =====
@@ -548,16 +618,18 @@ function collectFormData() {
   document.querySelectorAll('[id^="pax_"]').forEach(card => {
     const idx = card.id.split('_')[1];
     if (!idx) return;
-    const name = getVal('paxName_' + idx);
+    const given = (document.getElementById('paxGiven_' + idx)?.value || '').trim();
+    const sur = (document.getElementById('paxSurname_' + idx)?.value || '').trim();
+    const name = [given, sur].filter(Boolean).join(' ');
     if (!name) return;
     passengers.push({
       name,
+      givenName: given,
+      surname: sur,
       passport: getVal('paxPassport_' + idx),
       nationality: getVal('paxNationality_' + idx),
       dob: getVal('paxDob_' + idx),
-      expiry: getVal('paxExpiry_' + idx),
-      ticketNo: getVal('paxTicket_' + idx),
-      seatNo: getVal('paxSeat_' + idx)
+      expiry: getVal('paxExpiry_' + idx)
     });
   });
 
@@ -568,18 +640,17 @@ function collectFormData() {
     phone: getVal('emergPhone')
   };
 
-  // Flights
+  // Flights — collect per-passenger ticket & seat numbers
+  const paxLive = getLivePassengers();
   const flights = (quotation.flights || []).map((f, i) => {
     const idx = i + 1;
-    const ticketText = getVal('fTickets_' + idx);
     const ticketNumbers = {};
-    ticketText.split('\n').forEach(line => {
-      const parts = line.split(':');
-      if (parts.length >= 2) {
-        const k = parts[0].trim();
-        const v = parts.slice(1).join(':').trim();
-        if (k) ticketNumbers[k] = v;
-      }
+    const seatNumbers = {};
+    paxLive.forEach(p => {
+      const t = (document.getElementById('fTicket_' + idx + '_' + p.idx)?.value || '').trim();
+      const s = (document.getElementById('fSeat_' + idx + '_' + p.idx)?.value || '').trim();
+      if (t) ticketNumbers[p.name] = t;
+      if (s) seatNumbers[p.name] = s;
     });
     return {
       ...f,
@@ -588,7 +659,8 @@ function collectFormData() {
         included: getVal('fMealIncl_' + idx) === 'yes',
         type: getVal('fMealType_' + idx)
       },
-      ticketNumbers
+      ticketNumbers,
+      seatNumbers
     };
   });
 
@@ -598,7 +670,8 @@ function collectFormData() {
     confirmationNo: getVal('hotelMOpsListConf_' + i),
     leadGuest: getVal('hotelMOpsListLead_' + i),
     phone: getVal('hotelMOpsListPhone_' + i),
-    address: getVal('hotelMOpsListAddr_' + i)
+    address: getVal('hotelMOpsListAddr_' + i),
+    mapUrl: getVal('hotelMOpsListMapUrl_' + i)
   }));
 
   // Hotels Madina
@@ -607,7 +680,8 @@ function collectFormData() {
     confirmationNo: getVal('hotelAOpsListConf_' + i),
     leadGuest: getVal('hotelAOpsListLead_' + i),
     phone: getVal('hotelAOpsListPhone_' + i),
-    address: getVal('hotelAOpsListAddr_' + i)
+    address: getVal('hotelAOpsListAddr_' + i),
+    mapUrl: getVal('hotelAOpsListMapUrl_' + i)
   }));
 
   // Transfers
@@ -627,16 +701,14 @@ function collectFormData() {
     notes: getVal('zyNotes_' + i)
   }));
 
-  // Visa
+  // Visa — keyed by passenger name from live passenger list
   let visa = quotation.visa ? { ...quotation.visa } : null;
   if (visa) {
     const visaNumbers = {};
-    const total = visa.count || 1;
-    for (let i = 1; i <= total; i++) {
-      const name = getVal('visaPaxName_' + i);
-      const no = getVal('visaNo_' + i);
-      if (name) visaNumbers[name] = no;
-    }
+    paxLive.forEach(p => {
+      const no = (document.getElementById('visaNo_' + p.idx)?.value || '').trim();
+      if (no) visaNumbers[p.name] = no;
+    });
     visa.visaNumbers = visaNumbers;
   }
 
@@ -725,6 +797,9 @@ function generateQR(url) {
 // ===== Save draft =====
 async function saveDraft() {
   if (!(await ensureSignedInForWrite())) return;
+  // Auto-sync passengers into flight pax rows and visa rows before saving
+  for (let i = 1; i <= flightOpsCount; i++) syncFlightPax(i);
+  renderVisaRows(voucherData?.visa?.visaNumbers || {});
   const data = collectFormData();
   const doc = buildVoucherDoc(data, voucherData?.status === 'published' ? 'published' : 'draft');
   try {
@@ -742,6 +817,9 @@ async function saveDraft() {
 // ===== Publish =====
 async function publishVoucher() {
   if (!(await ensureSignedInForWrite())) return;
+  // Auto-sync passengers into flight pax rows and visa rows before publishing
+  for (let i = 1; i <= flightOpsCount; i++) syncFlightPax(i);
+  renderVisaRows(voucherData?.visa?.visaNumbers || {});
   const data = collectFormData();
   const errs = validateForPublish(data);
   if (errs.length) {
@@ -834,9 +912,8 @@ function populateFromQuotation(q, existing) {
   buildTransferOps(q.transfers, existing?.transfers);
   buildZiyarahOps((q.addons && q.addons.ziyarah) || [], existing?.ziyarah);
 
-  // Build visa ops with passenger names
-  const paxList = savedPax.length ? savedPax : Array.from({ length: totalPax }, (_, i) => ({ name: '' }));
-  buildVisaOps(q.visa, existing?.visa, paxList);
+  // Visa — no need to pass passengers; buildVisaOps now reads live passenger DOM
+  buildVisaOps(q.visa, existing?.visa);
 
   // Load existing form values
   if (existing) loadVoucherIntoForm(existing);
