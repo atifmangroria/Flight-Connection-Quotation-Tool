@@ -429,6 +429,7 @@ function renderTransfers(vc) {
         ${fieldHtml('Driver Name', orTba(t.driverName))}
         ${fieldHtml('Driver Phone', orTba(t.driverPhone))}
         ${t.vehicleNo ? field('Vehicle No', t.vehicleNo) : ''}
+        ${t.pickupTime ? field('Pickup Time', t.pickupTime) : ''}
         ${t.pickupNotes ? field('Pickup Notes', t.pickupNotes) : ''}
       </div>
     </div>

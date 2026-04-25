@@ -175,14 +175,17 @@ button.whatsapp:hover{background:#128C7E}
 
 <!-- Passenger Details -->
 <div class="section">
-  <h3>Passenger Details</h3>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <h3 style="margin:0">Passenger Details</h3>
+    <button type="button" class="ghost" style="font-size:12px;padding:5px 12px" onclick="syncAllPassengerData()">↺ Sync Details</button>
+  </div>
   <div id="passengerList"></div>
   <button class="add-small" id="btnAddPassenger">+ Add Passenger</button>
 </div>
 
 <!-- Emergency Contact -->
 <div class="section">
-  <h3>Emergency Contact</h3>
+  <h3>Emergency Contact <span style="font-size:11px;font-weight:400;color:var(--muted)">(optional)</span></h3>
   <div class="grid grid-3">
     <div>
       <label>Contact Name</label>
@@ -405,6 +408,42 @@ function removePax(idx) {
 
 document.getElementById('btnAddPassenger').addEventListener('click', () => addPassengerSlot());
 
+// ===== Sync ALL passenger-dependent fields across flights, hotels, visa =====
+function syncAllPassengerData() {
+  // 1. Sync each flight's pax rows
+  for (let i = 1; i <= flightOpsCount; i++) syncFlightPax(i);
+  // 2. Sync visa rows
+  renderVisaRows(collectCurrentVisaNumbers());
+  // 3. Sync hotel lead-guest dropdowns
+  syncHotelLeadDropdowns();
+  showNotif('Passenger details synced across flights, hotels and visa.', 'success', 3000);
+}
+
+function collectCurrentVisaNumbers() {
+  const nos = {};
+  getLivePassengers().forEach(p => {
+    const el = document.getElementById('visaNo_' + p.idx);
+    if (el && el.value.trim()) nos[p.name] = el.value.trim();
+  });
+  return nos;
+}
+
+function syncHotelLeadDropdowns() {
+  const pax = getLivePassengers();
+  ['hotelMOpsList', 'hotelAOpsList'].forEach(listId => {
+    let i = 0;
+    while (document.getElementById(listId + 'Lead_' + i) !== null) {
+      const sel = document.getElementById(listId + 'Lead_' + i);
+      if (sel && sel.tagName === 'SELECT') {
+        const cur = sel.value;
+        sel.innerHTML = '<option value="">-- Select passenger --</option>' +
+          pax.map(p => `<option value="${sanitize(p.name)}" ${cur === p.name ? 'selected' : ''}>${sanitize(p.name)}</option>`).join('');
+      }
+      i++;
+    }
+  });
+}
+
 // ===== Build per-passenger ticket+seat rows inside a flight box =====
 function buildFlightPaxRows(flightIdx, savedTickets, savedSeats) {
   const pax = getLivePassengers();
@@ -439,10 +478,7 @@ function buildFlightOps(flights, savedFlights) {
     const savedTickets = saved.ticketNumbers || {};
     const savedSeats = saved.seatNumbers || {};
     div.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <h5 style="margin:0">Flight ${idx}: ${sanitize(f.airline || 'Unknown')} — ${sanitize(f.itinerary || '').substring(0, 60)}</h5>
-        <button type="button" class="ghost" style="font-size:11px;padding:3px 8px" onclick="syncFlightPax(${idx})">↺ Sync Passengers</button>
-      </div>
+      <h5>Flight ${idx}: ${sanitize(f.airline || 'Unknown')} — ${sanitize(f.itinerary || '').substring(0, 60)}</h5>
       <div class="grid">
         <div><label>PNR / Booking Reference *</label><input type="text" id="fPnr_${idx}" value="${sanitize(saved.pnr || '')}" placeholder="e.g. ABCDEF"></div>
         <div><label>Meal Included?</label>
@@ -464,7 +500,6 @@ function buildFlightOps(flights, savedFlights) {
 
 // ===== Sync passenger rows inside a flight card =====
 function syncFlightPax(flightIdx) {
-  const saved = {}; // preserve existing values before re-render
   const pax = getLivePassengers();
   const tickets = {};
   const seats = {};
@@ -476,7 +511,6 @@ function syncFlightPax(flightIdx) {
   });
   const container = document.getElementById('fPaxRows_' + flightIdx);
   if (container) container.innerHTML = buildFlightPaxRows(flightIdx, tickets, seats);
-  showNotif('Passengers synced for Flight ' + flightIdx, 'success', 2000);
 }
 
 // ===== Build hotel ops fields =====
@@ -491,11 +525,14 @@ function buildHotelOps(hotels, savedHotels, city, listId, sectionId) {
     const saved = (savedHotels && savedHotels[i]) || {};
     const div = document.createElement('div');
     div.className = 'service-box';
+    const paxOptions = getLivePassengers();
+    const leadOptions = '<option value="">-- Select passenger --</option>' +
+      paxOptions.map(p => `<option value="${sanitize(p.name)}" ${saved.leadGuest === p.name ? 'selected' : ''}>${sanitize(p.name)}</option>`).join('');
     div.innerHTML = `
       <h5>Hotel ${i + 1}: ${sanitize(h.name || 'Unknown')} (${city})</h5>
       <div class="grid">
         <div><label>Confirmation Number</label><input type="text" id="${listId}Conf_${i}" value="${sanitize(saved.confirmationNo || '')}" placeholder="TBA if not yet confirmed"></div>
-        <div><label>Lead Guest Name</label><input type="text" id="${listId}Lead_${i}" value="${sanitize(saved.leadGuest || '')}" placeholder="Name on booking"></div>
+        <div><label>Lead Guest Name</label><select id="${listId}Lead_${i}">${leadOptions}</select></div>
         <div><label>Hotel Phone (optional)</label><input type="text" id="${listId}Phone_${i}" value="${sanitize(saved.phone || '')}" placeholder="+966..."></div>
         <div class="full"><label>Hotel Address (optional — shown on voucher)</label><input type="text" id="${listId}Addr_${i}" value="${sanitize(saved.address || '')}" placeholder="e.g. Ibrahim Al Khalil Rd, Makkah"></div>
         <div class="full"><label>Google Maps Link (optional — paste full URL)</label><input type="url" id="${listId}MapUrl_${i}" value="${sanitize(saved.mapUrl || '')}" placeholder="https://maps.app.goo.gl/..."></div>
@@ -523,7 +560,8 @@ function buildTransferOps(transfers, savedTransfers) {
         <div><label>Driver Name</label><input type="text" id="trDriver_${i}" value="${sanitize(saved.driverName || '')}" placeholder="TBA if not yet assigned"></div>
         <div><label>Driver Phone</label><input type="text" id="trPhone_${i}" value="${sanitize(saved.driverPhone || '')}" placeholder="TBA if not yet assigned"></div>
         <div><label>Vehicle Number</label><input type="text" id="trVehicle_${i}" value="${sanitize(saved.vehicleNo || '')}" placeholder="e.g. ABC-123"></div>
-        <div><label>Pickup Notes</label><input type="text" id="trNotes_${i}" value="${sanitize(saved.pickupNotes || '')}" placeholder="e.g. Meet at Gate 5"></div>
+        <div><label>Pickup Time (optional)</label><input type="text" id="trPickupTime_${i}" value="${sanitize(saved.pickupTime || '')}" placeholder="e.g. 14:30 or As per flight arrival"></div>
+        <div class="full"><label>Pickup Notes (optional)</label><input type="text" id="trNotes_${i}" value="${sanitize(saved.pickupNotes || '')}" placeholder="e.g. Meet at Gate 5, carry sign with name"></div>
       </div>
     `;
     list.appendChild(div);
@@ -690,6 +728,7 @@ function collectFormData() {
     driverName: getVal('trDriver_' + i),
     driverPhone: getVal('trPhone_' + i),
     vehicleNo: getVal('trVehicle_' + i),
+    pickupTime: getVal('trPickupTime_' + i),
     pickupNotes: getVal('trNotes_' + i)
   }));
 
@@ -722,9 +761,7 @@ function validateForPublish(data) {
   const firstPax = data.passengers[0];
   if (firstPax && (!firstPax.passport || !firstPax.nationality)) errs.push('Passport and Nationality are required for at least the first passenger.');
   (data.flights || []).forEach((f, i) => { if (!f.pnr) errs.push(`Flight ${i + 1}: PNR is required.`); });
-  if (!data.emergencyContact.name || !data.emergencyContact.relation || !data.emergencyContact.phone) {
-    errs.push('Emergency Contact (Name, Relation, Phone) is required.');
-  }
+  // Emergency contact is optional — no validation required
   return errs;
 }
 
@@ -797,9 +834,8 @@ function generateQR(url) {
 // ===== Save draft =====
 async function saveDraft() {
   if (!(await ensureSignedInForWrite())) return;
-  // Auto-sync passengers into flight pax rows and visa rows before saving
-  for (let i = 1; i <= flightOpsCount; i++) syncFlightPax(i);
-  renderVisaRows(voucherData?.visa?.visaNumbers || {});
+  // Auto-sync all passenger-dependent fields before saving
+  syncAllPassengerData();
   const data = collectFormData();
   const doc = buildVoucherDoc(data, voucherData?.status === 'published' ? 'published' : 'draft');
   try {
@@ -817,9 +853,8 @@ async function saveDraft() {
 // ===== Publish =====
 async function publishVoucher() {
   if (!(await ensureSignedInForWrite())) return;
-  // Auto-sync passengers into flight pax rows and visa rows before publishing
-  for (let i = 1; i <= flightOpsCount; i++) syncFlightPax(i);
-  renderVisaRows(voucherData?.visa?.visaNumbers || {});
+  // Auto-sync all passenger-dependent fields before publishing
+  syncAllPassengerData();
   const data = collectFormData();
   const errs = validateForPublish(data);
   if (errs.length) {
