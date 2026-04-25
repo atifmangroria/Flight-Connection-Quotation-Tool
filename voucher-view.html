@@ -136,7 +136,7 @@ button{padding:8px 16px;border:none;border-radius:6px;cursor:pointer;font-size:1
 
     <!-- Company name banner -->
     <div style="text-align:center;padding:10px 0 4px;margin-bottom:10px">
-      <img src="https://flightconnection.net.pk/wp-content/uploads/2018/09/cropped-cropped-Flight-Connection-Travel-1.png" alt="Flight Connection" style="height:38px;display:block;margin:0 auto 6px">
+      <img src="https://flightconnection.net.pk/wp-content/uploads/2018/09/cropped-cropped-Flight-Connection-Travel-1.png" crossorigin="anonymous" alt="Flight Connection" style="height:38px;display:block;margin:0 auto 6px">
       <div style="font-size:18px;font-weight:700;color:var(--accent);letter-spacing:.3px">Flight Connection Travel &amp; Tours</div>
       <div style="font-size:11px;color:var(--muted)">www.flightconnection.net.pk</div>
     </div>
@@ -514,6 +514,16 @@ function generateQR(url) {
   if (urlDisplay) urlDisplay.value = url;
 }
 
+async function waitForImages(container) {
+  const imgs = Array.from(container.querySelectorAll('img'));
+  if (!imgs.length) return;
+  await Promise.all(imgs.map(img => new Promise(resolve => {
+    if (img.complete) return resolve();
+    img.addEventListener('load', resolve, { once: true });
+    img.addEventListener('error', resolve, { once: true });
+  })));
+}
+
 // ===== WhatsApp share =====
 function setupWhatsApp(vc) {
   const btn = document.getElementById('btnWAShare');
@@ -531,12 +541,27 @@ async function downloadPDF() {
   const { jsPDF } = window.jspdf;
   const el = document.getElementById('voucherWrap');
   const bar = document.querySelector('.actions-bar');
+  const qrCard = document.getElementById('qrCard');
   if (bar) bar.style.display = 'none';
+  if (qrCard) qrCard.style.display = 'block';
 
   try {
-    const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#fff' });
+    await waitForImages(el);
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+    const canvas = await html2canvas(el, {
+      scale: Math.min(4, Math.max(2, window.devicePixelRatio || 2)),
+      useCORS: true,
+      imageTimeout: 15000,
+      backgroundColor: '#fff',
+      logging: false,
+      scrollX: 0,
+      scrollY: -window.scrollY,
+      windowWidth: document.documentElement.scrollWidth,
+      windowHeight: document.documentElement.scrollHeight
+    });
+
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const imgData = canvas.toDataURL('image/jpeg', 0.92);
     const pW = pdf.internal.pageSize.getWidth() - 10;
     const pH = pdf.internal.pageSize.getHeight() - 14;
     const cW = canvas.width;
@@ -554,7 +579,7 @@ async function downloadPDF() {
       ctx.fillRect(0, 0, cW, h);
       ctx.drawImage(canvas, 0, y, cW, h, 0, 0, cW, h);
       if (pages > 0) pdf.addPage();
-      pdf.addImage(pg.toDataURL('image/jpeg', 0.92), 'JPEG', 5, 7, pW, (h / pxPerMm));
+      pdf.addImage(pg.toDataURL('image/png'), 'PNG', 5, 7, pW, (h / pxPerMm));
       pages++;
     }
     const vId = document.getElementById('hdrVoucherId')?.textContent || 'voucher';
