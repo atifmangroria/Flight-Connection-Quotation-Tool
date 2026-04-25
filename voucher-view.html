@@ -460,19 +460,34 @@ function renderVisa(vc) {
   if (!visa) return;
   showCard('visaCard');
   const visaNumbers = visa.visaNumbers || {};
-  const hasNumbers = Object.keys(visaNumbers).some(k => visaNumbers[k]);
+  const hasNumbers = Object.values(visaNumbers).some(v => String(v || '').trim());
+  const paxNames = (vc.passengers || []).map(p => String(p.name || '').trim()).filter(Boolean);
+  const fallbackNames = Object.keys(visaNumbers).map(n => String(n || '').trim()).filter(Boolean);
+  const names = paxNames.length ? paxNames : fallbackNames;
+  const tableHead = hasNumbers
+    ? '<tr><th style="text-align:left;padding:6px 8px;background:#f0f4fa;border:1px solid #e8f0fb">Name</th><th style="text-align:left;padding:6px 8px;background:#f0f4fa;border:1px solid #e8f0fb">Visa Type</th><th style="text-align:left;padding:6px 8px;background:#f0f4fa;border:1px solid #e8f0fb">Visa Number</th></tr>'
+    : '<tr><th style="text-align:left;padding:6px 8px;background:#f0f4fa;border:1px solid #e8f0fb">Name</th><th style="text-align:left;padding:6px 8px;background:#f0f4fa;border:1px solid #e8f0fb">Visa Type</th></tr>';
+  const emptyColspan = hasNumbers ? 3 : 2;
+  const tableRows = names.length
+    ? names.map(name => {
+        const no = String((visaNumbers && visaNumbers[name]) || '').trim();
+        if (hasNumbers) {
+          return `<tr><td style="padding:6px 8px;border:1px solid #e8f0fb">${sanitize(name)}</td><td style="padding:6px 8px;border:1px solid #e8f0fb">Umrah</td><td style="padding:6px 8px;border:1px solid #e8f0fb">${no ? sanitize(no) : '<span class="tba">Pending</span>'}</td></tr>`;
+        }
+        return `<tr><td style="padding:6px 8px;border:1px solid #e8f0fb">${sanitize(name)}</td><td style="padding:6px 8px;border:1px solid #e8f0fb">Umrah</td></tr>`;
+      }).join('')
+    : `<tr><td colspan="${emptyColspan}" style="padding:6px 8px;border:1px solid #e8f0fb"><span class="tba">Passenger details not available</span></td></tr>`;
   document.getElementById('visaBody').innerHTML = `
     <div class="grid">
       ${field('Visa Count', visa.count || 0)}
     </div>
-    ${hasNumbers ? `
-      <div style="margin-top:10px">
-        <div class="field-label" style="margin-bottom:6px">Visa Numbers</div>
-        ${Object.entries(visaNumbers).map(([name, no]) => `
-          <div style="font-size:13px;padding:3px 0;border-bottom:1px solid #f0f4fa">${sanitize(name)}: <strong>${no ? sanitize(no) : '<span class="tba">TBA</span>'}</strong></div>
-        `).join('')}
-      </div>
-    ` : `<p class="small" style="margin-top:8px;color:var(--muted)">Visa numbers will be updated once processed.</p>`}
+    <div style="margin-top:10px">
+      <div class="field-label" style="margin-bottom:6px">Visa Details</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead>${tableHead}</thead>
+        <tbody>${tableRows}</tbody>
+      </table>
+    </div>
   `;
 }
 
