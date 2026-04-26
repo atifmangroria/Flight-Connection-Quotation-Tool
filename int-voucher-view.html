@@ -278,6 +278,33 @@ function fmtDateTime(ds) {
     d.toLocaleTimeString("en-PK", { hour: "2-digit", minute: "2-digit" });
 }
 
+function getHotelMealType(hotel) {
+  const raw = hotel?.mealType ?? hotel?.mealPlan ?? hotel?.meal ?? hotel?.boardType ?? hotel?.board ?? hotel?.mealOption ?? hotel?.mealBasis ?? hotel?.meals;
+  const meal = String(raw || "").trim();
+  if (!meal) return "";
+  const key = meal.toLowerCase();
+  if (key === "bb" || key === "bed & breakfast" || key === "bed and breakfast") return "Breakfast";
+  if (key === "hb" || key === "half-board" || key === "half board") return "Half Board";
+  if (key === "fb" || key === "full-board" || key === "full board") return "Full Board";
+  if (key === "ro" || key === "room only" || key === "no breakfast") return "Without Breakfast";
+  return meal;
+}
+
+function hasReturnTransfer(transfer) {
+  const tripHint = String(transfer?.type || transfer?.direction || transfer?.tripType || '').toLowerCase();
+  const hinted = tripHint.includes('return') || tripHint.includes('round') || tripHint.includes('two way') || tripHint.includes('both ways');
+  return !!(hinted || transfer?.returnTransfer || transfer?.isReturnTransfer || transfer?.roundTrip || transfer?.isRoundTrip || transfer?.returnDate || transfer?.returnTime || transfer?.returnFrom || transfer?.returnTo);
+}
+
+function getTransferRouteLabel(transfer) {
+  const from = String(transfer?.from || "").trim();
+  const to = String(transfer?.to || "").trim();
+  if (!from && !to) return "";
+  if (!hasReturnTransfer(transfer)) return [from, to].filter(Boolean).join(" → ");
+  const returnTo = String(transfer?.returnTo || from).trim() || from;
+  return [from, to, returnTo].filter(Boolean).join(" → ");
+}
+
 function orTba(v) {
   const s = String(v || "").trim();
   return s ? sanitize(s) : '<span class="tba">TBA</span>';
@@ -384,6 +411,7 @@ function renderHotels(hotels, bodyId, cardId) {
   if (!hotels || !hotels.length) return;
   showCard(cardId);
   document.getElementById(bodyId).innerHTML = hotels.map((h, i) => {
+    const mealType = getHotelMealType(h);
     const mapsHtml = h.mapUrl
       ? `<a class="maps-link" href="${sanitize(h.mapUrl)}" target="_blank" rel="noopener noreferrer">📍 View on Google Maps</a>`
       : (h.address
@@ -400,7 +428,7 @@ function renderHotels(hotels, bodyId, cardId) {
           ${h.checkOut ? field("Check-out", fmtDate(h.checkOut)) : ""}
           ${h.nights ? field("Nights", h.nights) : ""}
           ${h.roomType ? field("Room Type", h.roomType) : ""}
-          ${h.mealType ? field("Meal Type", h.mealType) : ""}
+          ${mealType ? field("Meal Type", mealType) : ""}
           ${h.rooms ? field("Rooms", h.rooms) : ""}
           ${h.address ? `<div class="field full">${field("Address", h.address)}</div>` : ""}
           ${mapsHtml ? `<div class="field full">${mapsHtml}</div>` : ""}
@@ -438,7 +466,7 @@ function renderTransfers(vc) {
   showCard("transfersCard");
   document.getElementById("transfersBody").innerHTML = transfers.map((t, i) => `
     <div style="border:1px solid #e8f0fb;border-radius:7px;padding:12px;margin-bottom:10px;background:#f9fbff">
-      <h4>Transfer ${i + 1}: ${sanitize(t.from || "")} → ${sanitize(t.to || "")}</h4>
+      <h4>Transfer ${i + 1}: ${sanitize(getTransferRouteLabel(t))}</h4>
       <hr class="section-divider">
       <div class="grid">
         ${t.date ? field("Date", fmtDate(t.date)) : ""}

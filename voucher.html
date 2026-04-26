@@ -307,6 +307,18 @@ function fmtDate(ds) {
   return d.toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+function getHotelMealType(hotel) {
+  const raw = hotel?.mealType ?? hotel?.mealPlan ?? hotel?.meal ?? hotel?.boardType ?? hotel?.board ?? hotel?.mealOption ?? hotel?.mealBasis ?? hotel?.meals;
+  const meal = String(raw || '').trim();
+  if (!meal) return '';
+  const key = meal.toLowerCase();
+  if (key === 'bb' || key === 'bed & breakfast' || key === 'bed and breakfast') return 'Breakfast';
+  if (key === 'hb' || key === 'half-board' || key === 'half board') return 'Half Board';
+  if (key === 'fb' || key === 'full-board' || key === 'full board') return 'Full Board';
+  if (key === 'ro' || key === 'room only' || key === 'no breakfast') return 'Without Breakfast';
+  return meal;
+}
+
 function getVal(id) { return (document.getElementById(id)?.value || '').trim(); }
 function setVal(id, v) { const e = document.getElementById(id); if (e) e.value = v || ''; }
 
@@ -533,7 +545,7 @@ function buildHotelOps(hotels, savedHotels, city, listId, sectionId) {
       <div class="grid">
         <div><label>Confirmation Number</label><input type="text" id="${listId}Conf_${i}" value="${sanitize(saved.confirmationNo || '')}" placeholder="TBA if not yet confirmed"></div>
         <div><label>Lead Guest Name</label><select id="${listId}Lead_${i}">${leadOptions}</select></div>
-        <div><label>Meal Type</label><input type="text" value="${sanitize(h.mealType || 'Not Included')}" readonly style="background:#f0f4fa;color:#444;cursor:default"></div>
+        <div><label>Meal Type</label><input type="text" value="${sanitize(getHotelMealType(h) || '-')}" readonly style="background:#f0f4fa;color:#444;cursor:default"></div>
         <div><label>Rooms</label><input type="text" value="${sanitize(String(h.rooms || 1))}" readonly style="background:#f0f4fa;color:#444;cursor:default"></div>
         <div><label>Hotel Phone (optional)</label><input type="text" id="${listId}Phone_${i}" value="${sanitize(saved.phone || '')}" placeholder="+966..."></div>
         <div class="full"><label>Hotel Address (optional — shown on voucher)</label><input type="text" id="${listId}Addr_${i}" value="${sanitize(saved.address || '')}" placeholder="e.g. Ibrahim Al Khalil Rd, Makkah"></div>
