@@ -504,8 +504,6 @@ function buildHotelOps(hotels, savedHotels) {
       <div class="grid">
         <div><label>Confirmation Number</label><input type="text" id="hotelOpsListConf_${i}" value="${sanitize(saved.confirmationNo || '')}" placeholder="TBA if not yet confirmed"></div>
         <div><label>Lead Guest Name</label><select id="hotelOpsListLead_${i}">${leadOptions}</select></div>
-        <div><label>Meal Type</label><input type="text" value="${sanitize(getHotelMealType(h) || '-')}" readonly style="background:#f0f4fa;color:#444;cursor:default"></div>
-        <div><label>Rooms</label><input type="text" value="${sanitize(String(h.rooms || 1))}" readonly style="background:#f0f4fa;color:#444;cursor:default"></div>
         <div><label>Hotel Phone (optional)</label><input type="text" id="hotelOpsListPhone_${i}" value="${sanitize(saved.phone || '')}" placeholder="+90..."></div>
         <div class="full"><label>Hotel Address (optional - shown on voucher)</label><input type="text" id="hotelOpsListAddr_${i}" value="${sanitize(saved.address || '')}" placeholder="e.g. Taksim Square, Istanbul"></div>
         <div class="full"><label>Google Maps Link (optional)</label><input type="url" id="hotelOpsListMapUrl_${i}" value="${sanitize(saved.mapUrl || '')}" placeholder="https://maps.app.goo.gl/..."></div>

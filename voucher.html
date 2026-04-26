@@ -545,8 +545,6 @@ function buildHotelOps(hotels, savedHotels, city, listId, sectionId) {
       <div class="grid">
         <div><label>Confirmation Number</label><input type="text" id="${listId}Conf_${i}" value="${sanitize(saved.confirmationNo || '')}" placeholder="TBA if not yet confirmed"></div>
         <div><label>Lead Guest Name</label><select id="${listId}Lead_${i}">${leadOptions}</select></div>
-        <div><label>Meal Type</label><input type="text" value="${sanitize(getHotelMealType(h) || '-')}" readonly style="background:#f0f4fa;color:#444;cursor:default"></div>
-        <div><label>Rooms</label><input type="text" value="${sanitize(String(h.rooms || 1))}" readonly style="background:#f0f4fa;color:#444;cursor:default"></div>
         <div><label>Hotel Phone (optional)</label><input type="text" id="${listId}Phone_${i}" value="${sanitize(saved.phone || '')}" placeholder="+966..."></div>
         <div class="full"><label>Hotel Address (optional — shown on voucher)</label><input type="text" id="${listId}Addr_${i}" value="${sanitize(saved.address || '')}" placeholder="e.g. Ibrahim Al Khalil Rd, Makkah"></div>
         <div class="full"><label>Google Maps Link (optional — paste full URL)</label><input type="url" id="${listId}MapUrl_${i}" value="${sanitize(saved.mapUrl || '')}" placeholder="https://maps.app.goo.gl/..."></div>
