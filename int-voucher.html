@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>International Voucher — Agent Editor</title>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    body{font-family:Arial,Helvetica,sans-serif;background:#f4f7fb;color:#222;padding:20px}
+    .wrap{max-width:980px;margin:0 auto}
+    .card{background:#fff;border-radius:8px;padding:14px;margin-bottom:12px;border:1px solid #e6eef9}
+    .row{display:flex;gap:10px}
+    .col{flex:1}
+    label{font-weight:700;font-size:12px;color:#333;display:block;margin-bottom:6px}
+    input[type=text],textarea,select{width:100%;padding:8px;border:1px solid #d6e6fb;border-radius:6px}
+    textarea{min-height:80px}
+    .actions{display:flex;gap:8px;flex-wrap:wrap}
+    button{padding:8px 12px;border-radius:6px;border:0;background:#0b76d1;color:#fff;cursor:pointer}
+    button.ghost{background:#f5f7fb;color:#333;border:1px solid #d6e6fb}
+    .muted{color:#666;font-size:13px}
+    .small{font-size:12px;color:#666}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h2>International Voucher — Agent Editor</h2>
+    <div class="small muted">This page creates/edits docs in <strong>int_vouchers</strong>.</div>
+  </div>
+
+  <div id="status" class="card small muted">Loading...</div>
+
+  <div id="editor" style="display:none">
+
+    <div class="card">
+      <h3>Quotation Reference</h3>
+      <div class="row">
+        <div class="col">
+          <label for="quotationId">Quotation ID</label>
+          <input id="quotationId" type="text" placeholder="e.g. INT-121949" />
+        </div>
+        <div class="col">
+          <label for="voucherId">Voucher ID (auto)</label>
+          <input id="voucherId" type="text" readonly />
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Client & Travel</h3>
+      <div class="row">
+        <div class="col"><label>Name</label><input id="clientName" type="text"/></div>
+        <div class="col"><label>Phone</label><input id="clientPhone" type="text"/></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <div class="col"><label>Departure City</label><input id="depCity" type="text"/></div>
+        <div class="col"><label>Tour Destination</label><input id="tourDestination" type="text"/></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <div class="col"><label>From Date</label><input id="dateFrom" type="date"/></div>
+        <div class="col"><label>To Date</label><input id="dateTo" type="date"/></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Flights (JSON)</h3>
+      <div class="small muted">Provide flights as JSON array. Example: [{"airline":"Emirates","pnr":"XYZ","itinerary":"KHI→DXB"}]</div>
+      <textarea id="flightsJson"></textarea>
+    </div>
+
+    <div class="card">
+      <h3>Hotels (JSON)</h3>
+      <div class="small muted">Example: [{"name":"Hotel ABC","city":"Istanbul","checkIn":"2026-05-10","checkOut":"2026-05-13","nights":3}]</div>
+      <textarea id="hotelsJson"></textarea>
+    </div>
+
+    <div class="card">
+      <h3>Tours (JSON)</h3>
+      <textarea id="toursJson"></textarea>
+    </div>
+
+    <div class="card">
+      <h3>Visa (JSON)</h3>
+      <div class="small muted">Example: {"type":"eVisa","country":"Turkey","count":2}</div>
+      <textarea id="visaJson"></textarea>
+    </div>
+
+    <div class="card">
+      <h3>Passengers (JSON)</h3>
+      <div class="small muted">Example: [{"name":"John Doe","passport":"A1234567","nationality":"PAK","dob":"1990-01-01","expiry":"2028-04-01"}]</div>
+      <textarea id="paxJson"></textarea>
+    </div>
+
+    <div class="card">
+      <h3>Agent Info & Notes</h3>
+      <div class="row">
+        <div class="col"><label>Agent Name</label><input id="agentName" type="text"/></div>
+        <div class="col"><label>Agent Phone</label><input id="agentPhone" type="text"/></div>
+      </div>
+      <div style="margin-top:10px"><label>Agent Note</label><textarea id="agentNote"></textarea></div>
+    </div>
+
+    <div class="card">
+      <div class="actions">
+        <button id="btnSave">Save Draft</button>
+        <button id="btnPublish">Publish Voucher</button>
+        <button id="btnCancel" class="ghost">Cancel Voucher</button>
+        <button id="btnDownload" class="ghost">Download PDF</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js';
+  import { getFirestore, doc, setDoc, getDoc, updateDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js';
+  import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js';
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDx3Qxt84vJlz_-mXuxiC0W2flaLadr9Ws",
+    authDomain: "fc-quotation-tool.firebaseapp.com",
+    projectId: "fc-quotation-tool",
+    storageBucket: "fc-quotation-tool.firebasestorage.app",
+    messagingSenderId: "370566945624",
+    appId: "1:370566945624:web:a84b20d5a8f99d20a6e32d"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const auth = getAuth(app);
+
+  const savedKey = 'savedQuotations_international';
+  const voucherMapKey = 'voucherIdByQuotation_int';
+
+  function getDeterministicVoucherId(qId){ if(!qId) return 'VCHR-INT-' + Math.random().toString(36).slice(2,8).toUpperCase(); return 'VCHR-' + String(qId).toUpperCase(); }
+
+  function el(id){ return document.getElementById(id); }
+
+  function tryParseJSON(txt){ try{ return JSON.parse(txt || 'null'); }catch(e){ return null; } }
+
+  function collectForm(){
+    const qid = el('quotationId').value.trim();
+    const voucherId = el('voucherId').value.trim() || getDeterministicVoucherId(qid);
+    const vc = {
+      id: voucherId,
+      quotationId: qid,
+      quotationType: 'international',
+      status: 'draft',
+      version: 1,
+      clientData: { name: el('clientName').value.trim(), phone: el('clientPhone').value.trim(), depCity: el('depCity').value.trim(), tourDestination: el('tourDestination').value.trim(), dateFrom: el('dateFrom').value || null, dateTo: el('dateTo').value || null },
+      flights: tryParseJSON(el('flightsJson').value) || [],
+      hotels: tryParseJSON(el('hotelsJson').value) || [],
+      tours: tryParseJSON(el('toursJson').value) || [],
+      visa: tryParseJSON(el('visaJson').value) || null,
+      passengers: tryParseJSON(el('paxJson').value) || [],
+      agentData: { name: el('agentName').value.trim(), phone: el('agentPhone').value.trim() },
+      agentNote: el('agentNote').value.trim(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
+    return vc;
+  }
+
+  async function saveDraft(asPublish=false){
+    const vc = collectForm();
+    if(asPublish) vc.status = 'published';
+    try{
+      await setDoc(doc(db, 'int_vouchers', vc.id), vc, { merge: true });
+      // localStorage mapping
+      try{ const map = JSON.parse(localStorage.getItem(voucherMapKey) || '{}'); if(vc.quotationId) map[vc.quotationId] = vc.id; localStorage.setItem(voucherMapKey, JSON.stringify(map)); }catch(e){}
+      setStatus('Saved' + (asPublish? ' & Published':'') + ' — ' + vc.id);
+    }catch(e){ console.error(e); setStatus('Save failed: '+ e.message); }
+  }
+
+  async function cancelVoucher(){ const id = el('voucherId').value.trim(); if(!id) return alert('Voucher ID missing'); try{ await updateDoc(doc(db,'int_vouchers',id), { status: 'cancelled', updatedAt: serverTimestamp() }); setStatus('Voucher cancelled: '+id); }catch(e){ console.error(e); setStatus('Cancel failed: '+ e.message); }}
+
+  async function loadFromQuotation(){ const qid = el('quotationId').value.trim(); if(!qid) return; // try local saved quotations
+    try{ const saved = JSON.parse(localStorage.getItem(savedKey) || '[]'); const found = saved.find(s=>s.id === qid); if(found){ // pre-fill few fields
+        el('clientName').value = found.clientName || found.name || el('clientName').value;
+        el('clientPhone').value = found.clientPhone || el('clientPhone').value;
+        el('depCity').value = found.depCity || el('depCity').value;
+        el('tourDestination').value = found.destination || el('tourDestination').value;
+      }
+    }catch(e){}
+    // if voucher exists for this quotation, fill from voucher
+    try{ const map = JSON.parse(localStorage.getItem(voucherMapKey)||'{}'); const vId = map[qid]; if(vId){ const snap = await getDoc(doc(db,'int_vouchers',vId)); if(snap.exists()){ fillForm(snap.data()); setStatus('Loaded existing voucher '+vId); return; } }
+    }catch(e){}
+    // set voucherId deterministically
+    el('voucherId').value = getDeterministicVoucherId(qid);
+  }
+
+  function fillForm(vc){ if(!vc) return; el('voucherId').value = vc.id || el('voucherId').value; el('clientName').value = vc.clientData?.name || ''; el('clientPhone').value = vc.clientData?.phone || ''; el('depCity').value = vc.clientData?.depCity || ''; el('tourDestination').value = vc.clientData?.tourDestination || ''; el('dateFrom').value = vc.clientData?.dateFrom || ''; el('dateTo').value = vc.clientData?.dateTo || ''; el('flightsJson').value = JSON.stringify(vc.flights||[], null, 2); el('hotelsJson').value = JSON.stringify(vc.hotels||[], null,2); el('toursJson').value = JSON.stringify(vc.tours||[], null,2); el('visaJson').value = JSON.stringify(vc.visa||{}, null,2); el('paxJson').value = JSON.stringify(vc.passengers||[], null,2); el('agentName').value = vc.agentData?.name||''; el('agentPhone').value = vc.agentData?.phone||''; el('agentNote').value = vc.agentNote||''; }
+
+  function setStatus(s){ el('status').textContent = s; }
+
+  // PDF helper uses same technique as view
+  async function downloadPDF(){ const { jsPDF } = window.jspdf; const elWrap = document.querySelector('.wrap'); try{ const canvas = await html2canvas(elWrap, { useCORS:true, scale: 2 }); const pdf = new jsPDF('p','mm','a4'); const img=canvas.toDataURL('image/png'); const pw = pdf.internal.pageSize.getWidth() - 10; const ph = (canvas.height * pw) / canvas.width; pdf.addImage(img,'PNG',5,5,pw,ph); const name = 'Voucher-' + (el('voucherId').value || 'export') + '.pdf'; pdf.save(name); }catch(e){ console.error(e); alert('PDF export failed'); } }
+
+  // Event wiring
+  el('quotationId').addEventListener('blur', ()=> loadFromQuotation());
+  el('btnSave').addEventListener('click', ()=> saveDraft(false));
+  el('btnPublish').addEventListener('click', ()=> { if(!confirm('Publish voucher publicly?')) return; saveDraft(true); });
+  el('btnCancel').addEventListener('click', ()=> { if(!confirm('Cancel this voucher?')) return; cancelVoucher(); });
+  el('btnDownload').addEventListener('click', ()=> downloadPDF());
+
+  // Show editor when authenticated (agents should be signed-in). If not signed-in, still allow local editing but block save until auth.
+  let currentUser = null;
+  onAuthStateChanged(auth, user=>{ currentUser = user; document.getElementById('editor').style.display = 'block'; setStatus(user ? ('Signed in as '+(user.email||user.uid)) : 'Not signed in — saving may be blocked.'); });
+
+  // Quick auto-fill by query param ?quotationId=...
+  (function initFromQuery(){ const p = new URLSearchParams(window.location.search); const q = p.get('quotationId') || p.get('qid') || p.get('q'); if(q){ el('quotationId').value = q; loadFromQuotation(); } else { el('voucherId').value = getDeterministicVoucherId('TEMP'); el('editor').style.display='block'; setStatus('Ready'); } })();
+
+</script>
+</body>
+</html>
