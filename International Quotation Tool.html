@@ -736,7 +736,6 @@
     <div id="agentInfoDisplay" class="small"></div>
     <button id="btnSaveQuotation" class="ghost">Save Quotation</button>
     <button id="btnLoadQuotation" class="ghost">Load Quotation</button>
-    <button id="btnCreateVoucher" class="ghost">Create Voucher</button>
     <button id="btnDashboard" class="ghost">Dashboard</button>
   </div>
 </div>
@@ -876,21 +875,73 @@ function updateAgentUI() {
   }
 }
 
-// ===== Create Voucher Button Handler (opens int-voucher editor) =====
-function openIntVoucherForQuotation() {
-  // prefer in-page `quotationId`, then URL params, otherwise prompt
-  const qFromVar = typeof quotationId !== 'undefined' && quotationId ? quotationId : null;
-  const params = new URLSearchParams(window.location.search);
-  const qFromUrl = params.get('quotationId') || params.get('qid') || params.get('q');
-  const q = qFromVar || qFromUrl || prompt('Enter quotation ID to create/open voucher for:');
-  if (!q) return;
-  const url = 'int-voucher.html?quotationId=' + encodeURIComponent(q);
-  window.open(url, '_blank');
+function showStatusSection() {
+  const statusSection = document.getElementById('statusSection');
+  const quotationStatus = document.getElementById('quotationStatus');
+  const btnCreateVoucher = document.getElementById('btnCreateVoucher');
+  const allSavedQuotations = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
+  if (currentQuotationId) {
+    statusSection.style.display = 'block';
+    const quotation = allSavedQuotations.find(q => q.id === currentQuotationId);
+    if (quotation && quotation.status) quotationStatus.value = quotation.status;
+    if (btnCreateVoucher) {
+      btnCreateVoucher.style.display = (quotationStatus.value === 'booked') ? 'inline-block' : 'none';
+    }
+  } else {
+    statusSection.style.display = 'none';
+    if (btnCreateVoucher) btnCreateVoucher.style.display = 'none';
+  }
+}
+
+async function updateQuotationStatus() {
+  if (!currentQuotationId) {
+    showAlert('No quotation selected. Please save or load a quotation first.');
+    return;
+  }
+  const newStatus = document.getElementById('quotationStatus')?.value;
+  if (!newStatus) return;
+
+  const allQuotations = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
+  const idx = allQuotations.findIndex(q => q.id === currentQuotationId);
+  if (idx === -1) {
+    showAlert('Quotation not found.');
+    return;
+  }
+  allQuotations[idx].status = newStatus;
+  localStorage.setItem('savedQuotations_international', JSON.stringify(allQuotations));
+
+  const agent = getCurrentAgent();
+  const ownerDocId = allQuotations[idx]?.agentData?.id || allQuotations[idx]?.agentData?.uid || agent?.id;
+  if (ownerDocId && window.firebaseDB) {
+    const ownerQuotations = allQuotations.filter(q => ((q?.agentData?.id || q?.agentData?.uid) === ownerDocId));
+    window.firebaseDB.saveData('international_quotations', ownerDocId, {
+      quotations: ownerQuotations,
+      updatedAt: new Date(),
+      agentId: ownerDocId
+    }).catch(err => console.error('Firebase status update error:', err));
+  }
+
+  showNotification('Status updated to: ' + newStatus, 'success');
+  showStatusSection();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  const btn = document.getElementById('btnCreateVoucher');
-  if (btn) btn.addEventListener('click', openIntVoucherForQuotation);
+  document.getElementById('btnUpdateStatus')?.addEventListener('click', updateQuotationStatus);
+
+  document.getElementById('btnCreateVoucher')?.addEventListener('click', () => {
+    if (!currentQuotationId) {
+      showAlert('No quotation selected. Please save or load a quotation first.');
+      return;
+    }
+    window.location.href = 'int-voucher.html?quotationId=' + encodeURIComponent(currentQuotationId);
+  });
+
+  document.getElementById('quotationStatus')?.addEventListener('change', () => {
+    const btn = document.getElementById('btnCreateVoucher');
+    if (btn) {
+      btn.style.display = (document.getElementById('quotationStatus').value === 'booked') ? 'inline-block' : 'none';
+    }
+  });
 });
 
 let availablePackages = [];
@@ -3870,6 +3921,7 @@ function removeAddon(id){
   </div>
   <div class="actions" style="margin-top:10px">
     <button id="btnUpdateStatus" type="button">Update Status</button>
+    <button id="btnCreateVoucher" type="button" class="green-btn" style="display:none;">🎫 Create Voucher</button>
   </div>
 </div>
 
