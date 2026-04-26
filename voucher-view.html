@@ -419,6 +419,8 @@ function renderHotels(hotels, bodyId, cardId) {
           ${h.checkOut ? field('Check-out', fmtDate(h.checkOut)) : ''}
           ${h.nights ? field('Nights', h.nights) : ''}
           ${h.roomType ? field('Room Type', h.roomType) : ''}
+          ${h.mealType ? field('Meal Type', h.mealType) : ''}
+          ${h.rooms ? field('Rooms', h.rooms) : ''}
           ${h.address ? `<div class="field full">${field('Address', h.address)}</div>` : ''}
           ${mapsHtml ? `<div class="field full">${mapsHtml}</div>` : ''}
         </div>
@@ -491,9 +493,6 @@ function renderVisa(vc) {
       }).join('')
     : `<tr><td colspan="${emptyColspan}" style="padding:6px 8px;border:1px solid #e8f0fb"><span class="tba">Passenger details not available</span></td></tr>`;
   document.getElementById('visaBody').innerHTML = `
-    <div class="grid">
-      ${field('Visa Count', visa.count || 0)}
-    </div>
     <div style="margin-top:10px">
       <div class="field-label" style="margin-bottom:6px">Visa Details</div>
       <table style="width:100%;border-collapse:collapse;font-size:12px">

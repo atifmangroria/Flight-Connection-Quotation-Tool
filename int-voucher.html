@@ -477,6 +477,8 @@ function buildHotelOps(hotels, savedHotels) {
       <div class="grid">
         <div><label>Confirmation Number</label><input type="text" id="hotelOpsListConf_${i}" value="${sanitize(saved.confirmationNo || '')}" placeholder="TBA if not yet confirmed"></div>
         <div><label>Lead Guest Name</label><select id="hotelOpsListLead_${i}">${leadOptions}</select></div>
+        <div><label>Meal Type</label><input type="text" value="${sanitize(h.mealType || 'Not Included')}" readonly style="background:#f0f4fa;color:#444;cursor:default"></div>
+        <div><label>Rooms</label><input type="text" value="${sanitize(String(h.rooms || 1))}" readonly style="background:#f0f4fa;color:#444;cursor:default"></div>
         <div><label>Hotel Phone (optional)</label><input type="text" id="hotelOpsListPhone_${i}" value="${sanitize(saved.phone || '')}" placeholder="+90..."></div>
         <div class="full"><label>Hotel Address (optional - shown on voucher)</label><input type="text" id="hotelOpsListAddr_${i}" value="${sanitize(saved.address || '')}" placeholder="e.g. Taksim Square, Istanbul"></div>
         <div class="full"><label>Google Maps Link (optional)</label><input type="url" id="hotelOpsListMapUrl_${i}" value="${sanitize(saved.mapUrl || '')}" placeholder="https://maps.app.goo.gl/..."></div>
@@ -504,6 +506,8 @@ function buildTransferOps(transfers, savedTransfers) {
         <div><label>Vehicle Number</label><input type="text" id="trVehicle_${i}" value="${sanitize(saved.vehicleNo || '')}" placeholder="e.g. ABC-123"></div>
         <div><label>Pickup Time (optional)</label><input type="text" id="trPickupTime_${i}" value="${sanitize(saved.pickupTime || '')}" placeholder="e.g. 14:30 or As per flight arrival"></div>
         <div class="full"><label>Pickup Notes (optional)</label><input type="text" id="trNotes_${i}" value="${sanitize(saved.pickupNotes || '')}" placeholder="e.g. Meet at Gate 5, carry sign with name"></div>
+        ${t.returnDate ? `<div><label>Return Date</label><input type="text" value="${sanitize(fmtDate(t.returnDate))}" readonly style="background:#f0f4fa;color:#444;cursor:default"></div>` : ''}
+        <div><label>Return Time (optional)</label><input type="text" id="trReturnTime_${i}" value="${sanitize(saved.returnTime || '')}" placeholder="e.g. 14:30 or TBA"></div>
       </div>
     `;
     list.appendChild(div);
@@ -544,7 +548,7 @@ function buildVisaOps(visa, savedVisa) {
   const div = document.createElement('div');
   div.className = 'service-box';
   div.innerHTML = `
-    <h5>Visa Numbers (${visa.count || 0} visa(s))</h5>
+    <h5>Visa Numbers</h5>
     <p class="small" style="margin-bottom:8px">Passenger names are auto-filled from Passenger Details above. Enter visa number as available.</p>
     <div id="visaNumbersList"></div>
   `;
@@ -646,7 +650,8 @@ function collectFormData() {
     driverPhone: getVal('trPhone_' + i),
     vehicleNo: getVal('trVehicle_' + i),
     pickupTime: getVal('trPickupTime_' + i),
-    pickupNotes: getVal('trNotes_' + i)
+    pickupNotes: getVal('trNotes_' + i),
+    returnTime: getVal('trReturnTime_' + i)
   }));
 
   const tours = allQuotationTours.map((t, i) => ({
