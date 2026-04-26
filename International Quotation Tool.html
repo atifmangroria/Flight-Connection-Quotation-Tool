@@ -736,6 +736,7 @@
     <div id="agentInfoDisplay" class="small"></div>
     <button id="btnSaveQuotation" class="ghost">Save Quotation</button>
     <button id="btnLoadQuotation" class="ghost">Load Quotation</button>
+    <button id="btnCreateVoucher" class="ghost">Create Voucher</button>
     <button id="btnDashboard" class="ghost">Dashboard</button>
   </div>
 </div>
@@ -874,6 +875,23 @@ function updateAgentUI() {
     if (btnSaveQuotation) btnSaveQuotation.style.display = "none";
   }
 }
+
+// ===== Create Voucher Button Handler (opens int-voucher editor) =====
+function openIntVoucherForQuotation() {
+  // prefer in-page `quotationId`, then URL params, otherwise prompt
+  const qFromVar = typeof quotationId !== 'undefined' && quotationId ? quotationId : null;
+  const params = new URLSearchParams(window.location.search);
+  const qFromUrl = params.get('quotationId') || params.get('qid') || params.get('q');
+  const q = qFromVar || qFromUrl || prompt('Enter quotation ID to create/open voucher for:');
+  if (!q) return;
+  const url = 'int-voucher.html?quotationId=' + encodeURIComponent(q);
+  window.open(url, '_blank');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('btnCreateVoucher');
+  if (btn) btn.addEventListener('click', openIntVoucherForQuotation);
+});
 
 let availablePackages = [];
 let loadPackagesPromise = null;
