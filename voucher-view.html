@@ -412,37 +412,34 @@ function renderFlights(vc) {
 }
 
 function renderHotels(hotels, bodyId, cardId) {
-  const body = document.getElementById(bodyId);
-  const card = document.getElementById(cardId);
-  if (!Array.isArray(hotels) || !hotels.length) {
-    card.style.display = 'none';
-    return;
-  }
-  body.innerHTML = hotels.map((h, i) => `
-    <div style="border:1px solid #e8f0fb;border-radius:7px;padding:12px;margin-bottom:10px;background:#f9fbff">
-      <h4>${sanitize(h.name || 'Hotel ' + (i + 1))}${h.distance ? ' <span style="color:var(--muted);font-weight:400;font-size:12px">· ' + sanitize(h.distance) + ' from Haram</span>' : ''}</h4>
-      <hr class="section-divider">
-      <div class="grid">
-        <div class="field">
-          <div class="field-label">Check-in</div>
-          <div class="field-value">${orTba(fmtDate(h.checkIn))}</div>
-        </div>
-        <div class="field">
-          <div class="field-label">Check-out</div>
-          <div class="field-value">${orTba(fmtDate(h.checkOut))}</div>
-        </div>
-        <div class="field">
-          <div class="field-label">Nights</div>
-          <div class="field-value">${orTba(h.nights)}</div>
-        </div>
-        <div class="field">
-          <div class="field-label">Service Type / Meal Type</div>
-          <div class="field-value">${orTba(getHotelMealType(h))}</div>
+  if (!hotels || !hotels.length) return;
+  showCard(cardId);
+  document.getElementById(bodyId).innerHTML = hotels.map((h, i) => {
+    const mealType = getHotelMealType(h);
+    const mapsHtml = h.mapUrl
+      ? `<a class="maps-link" href="${sanitize(h.mapUrl)}" target="_blank" rel="noopener noreferrer">📍 View on Google Maps</a>`
+      : (h.address
+        ? `<a class="maps-link" href="https://www.google.com/maps/search/${encodeURIComponent(h.address)}" target="_blank" rel="noopener noreferrer">📍 View on Google Maps</a>`
+        : '');
+    return `
+      <div style="border:1px solid #e8f0fb;border-radius:7px;padding:12px;margin-bottom:10px;background:#f9fbff">
+        <h4>${sanitize(h.name || 'Hotel ' + (i + 1))}${h.distance ? ' <span style="color:var(--muted);font-weight:400;font-size:12px">· ' + sanitize(h.distance) + ' from Haram</span>' : ''}</h4>
+        <hr class="section-divider">
+        <div class="grid">
+          ${fieldHtml('Confirmation No', orTba(h.confirmationNo))}
+          ${field('Lead Guest', h.leadGuest || '')}
+          ${h.checkIn ? field('Check-in', fmtDate(h.checkIn)) : ''}
+          ${h.checkOut ? field('Check-out', fmtDate(h.checkOut)) : ''}
+          ${h.nights ? field('Nights', h.nights) : ''}
+          ${h.roomType ? field('Room Type', h.roomType) : ''}
+          ${mealType ? field('Meal Type', mealType) : ''}
+          ${h.rooms ? field('Rooms', h.rooms) : ''}
+          ${h.address ? `<div class="field full">${field('Address', h.address)}</div>` : ''}
+          ${mapsHtml ? `<div class="field full">${mapsHtml}</div>` : ''}
         </div>
       </div>
-    </div>
-  `).join('');
-  card.style.display = '';
+    `;
+  }).join('');
 }
 
 function renderTransfers(vc) {
