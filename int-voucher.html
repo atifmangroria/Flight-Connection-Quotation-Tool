@@ -1,123 +1,16 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>International Voucher — Agent Editor</title>
-  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <style>
-    body{font-family:Arial,Helvetica,sans-serif;background:#f4f7fb;color:#222;padding:20px}
-    .wrap{max-width:980px;margin:0 auto}
-    .card{background:#fff;border-radius:8px;padding:14px;margin-bottom:12px;border:1px solid #e6eef9}
-    .row{display:flex;gap:10px}
-    .col{flex:1}
-    label{font-weight:700;font-size:12px;color:#333;display:block;margin-bottom:6px}
-    input[type=text],textarea,select{width:100%;padding:8px;border:1px solid #d6e6fb;border-radius:6px}
-    textarea{min-height:80px}
-    .actions{display:flex;gap:8px;flex-wrap:wrap}
-    button{padding:8px 12px;border-radius:6px;border:0;background:#0b76d1;color:#fff;cursor:pointer}
-    button.ghost{background:#f5f7fb;color:#333;border:1px solid #d6e6fb}
-    .muted{color:#666;font-size:13px}
-    .small{font-size:12px;color:#666}
-  </style>
-</head>
-<body>
-<div class="wrap">
-  <div class="card">
-    <h2>International Voucher — Agent Editor</h2>
-    <div class="small muted">This page creates/edits docs in <strong>int_vouchers</strong>.</div>
-  </div>
-
-  <div id="status" class="card small muted">Loading...</div>
-
-  <div id="editor" style="display:none">
-
-    <div class="card">
-      <h3>Quotation Reference</h3>
-      <div class="row">
-        <div class="col">
-          <label for="quotationId">Quotation ID</label>
-          <input id="quotationId" type="text" placeholder="e.g. INT-121949" />
-        </div>
-        <div class="col">
-          <label for="voucherId">Voucher ID (auto)</label>
-          <input id="voucherId" type="text" readonly />
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <h3>Client & Travel</h3>
-      <div class="row">
-        <div class="col"><label>Name</label><input id="clientName" type="text"/></div>
-        <div class="col"><label>Phone</label><input id="clientPhone" type="text"/></div>
-      </div>
-      <div class="row" style="margin-top:10px">
-        <div class="col"><label>Departure City</label><input id="depCity" type="text"/></div>
-        <div class="col"><label>Tour Destination</label><input id="tourDestination" type="text"/></div>
-      </div>
-      <div class="row" style="margin-top:10px">
-        <div class="col"><label>From Date</label><input id="dateFrom" type="date"/></div>
-        <div class="col"><label>To Date</label><input id="dateTo" type="date"/></div>
-      </div>
-    </div>
-
-    <div class="card">
-      <h3>Flights (JSON)</h3>
-      <div class="small muted">Provide flights as JSON array. Example: [{"airline":"Emirates","pnr":"XYZ","itinerary":"KHI→DXB"}]</div>
-      <textarea id="flightsJson"></textarea>
-    </div>
-
-    <div class="card">
-      <h3>Hotels (JSON)</h3>
-      <div class="small muted">Example: [{"name":"Hotel ABC","city":"Istanbul","checkIn":"2026-05-10","checkOut":"2026-05-13","nights":3}]</div>
-      <textarea id="hotelsJson"></textarea>
-    </div>
-
-    <div class="card">
-      <h3>Tours (JSON)</h3>
-      <textarea id="toursJson"></textarea>
-    </div>
-
-    <div class="card">
-      <h3>Visa (JSON)</h3>
-      <div class="small muted">Example: {"type":"eVisa","country":"Turkey","count":2}</div>
-      <textarea id="visaJson"></textarea>
-    </div>
-
-    <div class="card">
-      <h3>Passengers (JSON)</h3>
-      <div class="small muted">Example: [{"name":"John Doe","passport":"A1234567","nationality":"PAK","dob":"1990-01-01","expiry":"2028-04-01"}]</div>
-      <textarea id="paxJson"></textarea>
-    </div>
-
-    <div class="card">
-      <h3>Agent Info & Notes</h3>
-      <div class="row">
-        <div class="col"><label>Agent Name</label><input id="agentName" type="text"/></div>
-        <div class="col"><label>Agent Phone</label><input id="agentPhone" type="text"/></div>
-      </div>
-      <div style="margin-top:10px"><label>Agent Note</label><textarea id="agentNote"></textarea></div>
-    </div>
-
-    <div class="card">
-      <div class="actions">
-        <button id="btnSave">Save Draft</button>
-        <button id="btnPublish">Publish Voucher</button>
-        <button id="btnCancel" class="ghost">Cancel Voucher</button>
-        <button id="btnDownload" class="ghost">Download PDF</button>
-      </div>
-    </div>
-
-  </div>
-</div>
-
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Create Voucher - International - Flight Connection</title>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script type="module">
-  import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js';
-  import { getFirestore, doc, setDoc, getDoc, updateDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js';
-  import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js';
-
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+  import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, query, where } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+  import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
   const firebaseConfig = {
     apiKey: "AIzaSyDx3Qxt84vJlz_-mXuxiC0W2flaLadr9Ws",
     authDomain: "fc-quotation-tool.firebaseapp.com",
@@ -126,92 +19,911 @@
     messagingSenderId: "370566945624",
     appId: "1:370566945624:web:a84b20d5a8f99d20a6e32d"
   };
-
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
   const auth = getAuth(app);
+  window.auth = auth;
+  window.__authReady = new Promise((resolve) => {
+    onAuthStateChanged(auth, () => resolve(), () => resolve());
+  });
+  window.firebaseDB = {
+    async save(col, id, data) { await setDoc(doc(db, col, id), data, { merge: true }); return true; },
+    async get(col, id) { const s = await getDoc(doc(db, col, id)); return s.exists() ? { id: s.id, ...s.data() } : null; },
+    async getAll(col) { const s = await getDocs(collection(db, col)); return s.docs.map(d => ({ id: d.id, ...d.data() })); },
+    async update(col, id, upd) { await updateDoc(doc(db, col, id), upd); return true; },
+    async findByField(col, field, val) {
+      const q = query(collection(db, col), where(field, '==', val));
+      const s = await getDocs(q);
+      return s.docs.map(d => ({ id: d.id, ...d.data() }));
+    }
+  };
+</script>
+<style>
+:root{--accent:#0b76d1;--muted:#666;--green:#28a745;--red:#dc3545;--orange:#f39c12}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Calibri,Arial,sans-serif;font-size:14px;background:#f5f7fa;color:#333}
+.wrap{max-width:960px;margin:0 auto;padding:16px}
+.section{background:#fff;border:1px solid #e4ebf4;border-radius:8px;padding:16px;margin-bottom:14px}
+.section h3{color:var(--accent);margin-bottom:12px;font-size:15px;border-bottom:1px solid #e4ebf4;padding-bottom:8px}
+.section h4{color:#444;margin-bottom:8px;font-size:13px;font-weight:700}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid-3{grid-template-columns:1fr 1fr 1fr}
+.full{grid-column:1/-1}
+label{display:block;font-size:11px;color:var(--muted);margin-bottom:3px;font-weight:700;text-transform:uppercase;letter-spacing:.3px}
+input,select,textarea{width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:13px;font-family:inherit}
+textarea{min-height:70px;resize:vertical}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px rgba(11,118,209,.12)}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+button{padding:8px 16px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-family:inherit;background:var(--accent);color:#fff;transition:background .2s}
+button:hover{background:#085ea3}
+button.ghost{background:#eef5fb;color:var(--accent);border:1px solid #d6e8fb}
+button.ghost:hover{background:#d6e8fb}
+button.green{background:var(--green)}
+button.green:hover{background:#218838}
+button.red{background:var(--red)}
+button.red:hover{background:#c82333}
+button.orange{background:var(--orange)}
+button.orange:hover{background:#d68910}
+button.whatsapp{background:#25D366}
+button.whatsapp:hover{background:#128C7E}
+.card{border:1px solid #e4ebf4;border-radius:7px;padding:13px;margin-bottom:10px;background:#fafcff}
+.card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.card-header h4{margin:0}
+.badge{display:inline-block;padding:2px 9px;border-radius:12px;font-size:11px;font-weight:700}
+.badge-draft{background:#fff3cd;color:#856404}
+.badge-published{background:#d4edda;color:#155724}
+.badge-cancelled{background:#f8d7da;color:#721c24}
+.info-bar{display:flex;align-items:center;gap:12px;padding:10px 14px;background:#fff;border:1px solid #e4ebf4;border-radius:8px;margin-bottom:14px;flex-wrap:wrap}
+.info-bar strong{font-size:15px}
+.small{font-size:12px;color:var(--muted)}
+.link-row{display:flex;gap:8px;align-items:center}
+.link-row input{flex:1;font-size:12px;background:#f8f9fa;color:#444}
+.modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center}
+.modal-overlay.visible{display:flex}
+.modal-box{background:#fff;border-radius:8px;padding:24px;max-width:440px;width:94%}
+.modal-box h3{margin-bottom:10px;font-size:16px}
+.modal-box p{color:#666;margin-bottom:16px;font-size:13px}
+.modal-btns{display:flex;gap:8px;justify-content:flex-end}
+.notif{position:fixed;top:16px;right:16px;padding:11px 18px;border-radius:6px;font-size:13px;z-index:99999;display:none;box-shadow:0 4px 12px rgba(0,0,0,.15)}
+.notif.success{background:#d4edda;color:#155724;border:1px solid #c3e6cb}
+.notif.error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb}
+.notif.info{background:#cce5ff;color:#004085;border:1px solid #b8daff}
+@keyframes slIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.notif.show{display:block;animation:slIn .25s ease}
+.service-box{border:1px solid #e4ebf4;border-radius:6px;padding:11px;margin-bottom:10px;background:#f9fbff}
+.service-box h5{font-size:13px;color:var(--accent);margin-bottom:8px}
+.remove-btn{background:#e74c3c;color:#fff;border:none;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px}
+.remove-btn:hover{background:#c0392b}
+.add-small{background:#4CAF50;color:#fff;border:none;padding:5px 11px;border-radius:5px;cursor:pointer;font-size:12px}
+.add-small:hover{background:#45a049}
+@media(max-width:600px){.grid{grid-template-columns:1fr}.grid-3{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
 
-  const savedKey = 'savedQuotations_international';
-  const voucherMapKey = 'voucherIdByQuotation_int';
+<div id="notif" class="notif"></div>
 
-  function getDeterministicVoucherId(qId){ if(!qId) return 'VCHR-INT-' + Math.random().toString(36).slice(2,8).toUpperCase(); return 'VCHR-' + String(qId).toUpperCase(); }
+<div id="confirmModal" class="modal-overlay">
+  <div class="modal-box">
+    <h3 id="confirmTitle">Confirm</h3>
+    <p id="confirmMsg"></p>
+    <div class="modal-btns">
+      <button id="confirmNo" class="ghost">No</button>
+      <button id="confirmYes">Yes</button>
+    </div>
+  </div>
+</div>
 
-  function el(id){ return document.getElementById(id); }
+<div class="wrap">
 
-  function tryParseJSON(txt){ try{ return JSON.parse(txt || 'null'); }catch(e){ return null; } }
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+  <div>
+    <h2 style="color:var(--accent);margin:0">Create International Voucher</h2>
+    <div class="small" id="pageSubtitle">Loading quotation...</div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <button class="ghost" onclick="window.history.back()">Back</button>
+    <button id="btnSaveDraft" class="orange">Save Draft</button>
+    <button id="btnPublish" class="green">Publish Voucher</button>
+    <button id="btnCancelVoucher" class="red" style="display:none">Cancel Voucher</button>
+  </div>
+</div>
 
-  function collectForm(){
-    const qid = el('quotationId').value.trim();
-    const voucherId = el('voucherId').value.trim() || getDeterministicVoucherId(qid);
-    const vc = {
-      id: voucherId,
-      quotationId: qid,
-      quotationType: 'international',
-      status: 'draft',
-      version: 1,
-      clientData: { name: el('clientName').value.trim(), phone: el('clientPhone').value.trim(), depCity: el('depCity').value.trim(), tourDestination: el('tourDestination').value.trim(), dateFrom: el('dateFrom').value || null, dateTo: el('dateTo').value || null },
-      flights: tryParseJSON(el('flightsJson').value) || [],
-      hotels: tryParseJSON(el('hotelsJson').value) || [],
-      tours: tryParseJSON(el('toursJson').value) || [],
-      visa: tryParseJSON(el('visaJson').value) || null,
-      passengers: tryParseJSON(el('paxJson').value) || [],
-      agentData: { name: el('agentName').value.trim(), phone: el('agentPhone').value.trim() },
-      agentNote: el('agentNote').value.trim(),
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
+<div id="statusBar" class="info-bar" style="display:none">
+  <div>
+    <strong id="sbVoucherId">-</strong>
+    <span id="sbBadge" class="badge badge-draft" style="margin-left:8px">Draft</span>
+  </div>
+  <div class="small" id="sbVersion"></div>
+  <div class="small" id="sbViewCount"></div>
+  <div class="small" id="sbLastViewed"></div>
+  <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+    <div id="voucherLinkArea" style="display:none">
+      <div class="link-row">
+        <input type="text" id="voucherLinkInput" readonly>
+        <button id="btnCopyLink" class="ghost">Copy</button>
+        <button id="btnWhatsApp" class="whatsapp">WhatsApp</button>
+        <button id="btnDownloadPDF">PDF</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="qrArea" style="display:none;margin-bottom:14px">
+  <div class="section">
+    <h3>QR Code</h3>
+    <div id="qrcode" style="display:inline-block;padding:6px;background:#fff;border:1px solid #ddd;border-radius:6px"></div>
+    <div class="small" style="margin-top:6px">Scan to open customer voucher page</div>
+  </div>
+</div>
+
+<div class="section" id="overviewSection" style="display:none">
+  <h3>Quotation Overview</h3>
+  <div id="overviewContent" class="grid"></div>
+</div>
+
+<div class="section">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <h3 style="margin:0">Passenger Details</h3>
+    <button type="button" class="ghost" style="font-size:12px;padding:5px 12px" onclick="syncAllPassengerData()">Sync Details</button>
+  </div>
+  <div id="passengerList"></div>
+  <button class="add-small" id="btnAddPassenger">Add Passenger</button>
+</div>
+
+<div class="section">
+  <h3>Emergency Contact <span style="font-size:11px;font-weight:400;color:var(--muted)">(optional)</span></h3>
+  <div class="grid grid-3">
+    <div>
+      <label>Contact Name</label>
+      <input type="text" id="emergName" placeholder="Full name">
+    </div>
+    <div>
+      <label>Relation</label>
+      <input type="text" id="emergRelation" placeholder="e.g. Father, Spouse">
+    </div>
+    <div>
+      <label>Phone</label>
+      <input type="text" id="emergPhone" placeholder="03xx-xxxxxxx">
+    </div>
+  </div>
+</div>
+
+<div class="section" id="flightsSection" style="display:none">
+  <h3>Flight Details</h3>
+  <div id="flightOpsList"></div>
+</div>
+
+<div class="section" id="hotelsSection" style="display:none">
+  <h3>Hotel Details</h3>
+  <div id="hotelOpsList"></div>
+</div>
+
+<div class="section" id="transfersSection" style="display:none">
+  <h3>Transfer Details</h3>
+  <div id="transferOpsList"></div>
+</div>
+
+<div class="section" id="toursSection" style="display:none">
+  <h3>Tour Details</h3>
+  <div id="tourOpsList"></div>
+</div>
+
+<div class="section" id="visaSection" style="display:none">
+  <h3>Visa Details</h3>
+  <div id="visaOpsList"></div>
+</div>
+
+<div class="section">
+  <h3>Agent Note to Customer</h3>
+  <div>
+    <label>Message (shown prominently on customer voucher)</label>
+    <textarea id="agentNote" placeholder="e.g. Please carry all documents. Hotel check-in is at 3pm. Contact us for any queries."></textarea>
+  </div>
+</div>
+
+<div class="actions" style="margin-bottom:20px">
+  <button id="btnSaveDraft2" class="orange">Save Draft</button>
+  <button id="btnPublish2" class="green">Publish Voucher</button>
+  <button id="btnCancelVoucher2" class="red" style="display:none">Cancel Voucher</button>
+</div>
+
+</div>
+
+<script>
+let quotationId = null;
+let quotation = null;
+let voucherData = null;
+let voucherId = null;
+let passengerCount = 0;
+let flightOpsCount = 0;
+let allQuotationTours = [];
+
+function showNotif(msg, type = 'info', dur = 3500) {
+  const el = document.getElementById('notif');
+  el.textContent = msg;
+  el.className = 'notif show ' + type;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.classList.remove('show'); }, dur);
+}
+
+function confirmAction(msg, title = 'Confirm') {
+  return new Promise(res => {
+    const modal = document.getElementById('confirmModal');
+    document.getElementById('confirmTitle').textContent = title;
+    document.getElementById('confirmMsg').textContent = msg;
+    modal.classList.add('visible');
+    const yes = document.getElementById('confirmYes');
+    const no = document.getElementById('confirmNo');
+    const cleanup = (val) => { modal.classList.remove('visible'); yes.onclick = null; no.onclick = null; res(val); };
+    yes.onclick = () => cleanup(true);
+    no.onclick = () => cleanup(false);
+  });
+}
+
+function sanitize(s) {
+  const d = document.createElement('div');
+  d.textContent = String(s || '');
+  return d.innerHTML;
+}
+
+function fmtDate(ds) {
+  if (!ds) return '';
+  const d = new Date(ds);
+  if (isNaN(d.getTime())) return ds;
+  return d.toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function getVal(id) { return (document.getElementById(id)?.value || '').trim(); }
+function setVal(id, v) { const e = document.getElementById(id); if (e) e.value = v || ''; }
+
+function getDeterministicVoucherId(qId) {
+  return 'VCHR-' + String(qId || '').replace(/[^A-Za-z0-9_-]/g, '').toUpperCase();
+}
+
+function generateVoucherId() {
+  return 'VCHR-INT-' + Math.random().toString(36).substr(2, 6).toUpperCase();
+}
+
+function loadVoucherIdMap() {
+  try { return JSON.parse(localStorage.getItem('voucherIdByQuotation_int') || '{}') || {}; }
+  catch (e) { return {}; }
+}
+
+function saveVoucherIdMap(map) {
+  localStorage.setItem('voucherIdByQuotation_int', JSON.stringify(map || {}));
+}
+
+function linkVoucherToQuotation(qId, vId) {
+  if (!qId || !vId) return;
+  const map = loadVoucherIdMap();
+  map[qId] = vId;
+  saveVoucherIdMap(map);
+}
+
+async function ensureSignedInForWrite() {
+  try { if (window.__authReady) await window.__authReady; } catch (e) {}
+  if (!window.auth || !window.auth.currentUser) {
+    showNotif('You are not signed in. Please login from the International Quotation Tool, then retry.', 'error', 5000);
+    return false;
+  }
+  return true;
+}
+
+function getVoucherUrl(id) {
+  return 'https://atifmangroria.github.io/Flight-Connection-Quotation-Tool/int-voucher-view.html?id=' + encodeURIComponent(id);
+}
+
+function getUrlParam(name) {
+  return new URLSearchParams(window.location.search).get(name);
+}
+
+function getLivePassengers() {
+  const list = [];
+  document.querySelectorAll('[id^="pax_"]').forEach(card => {
+    const idx = card.id.split('_')[1];
+    if (!idx) return;
+    const given = (document.getElementById('paxGiven_' + idx)?.value || '').trim();
+    const sur = (document.getElementById('paxSurname_' + idx)?.value || '').trim();
+    const name = [given, sur].filter(Boolean).join(' ');
+    if (!name) return;
+    list.push({ idx, name, givenName: given, surname: sur });
+  });
+  return list;
+}
+
+function addPassengerSlot(data = {}) {
+  passengerCount++;
+  const idx = passengerCount;
+  const givenName = data.givenName || (data.name ? data.name.split(' ').slice(0, -1).join(' ') || data.name : '');
+  const surname = data.surname || (data.name ? data.name.split(' ').slice(-1)[0] || '' : '');
+  const div = document.createElement('div');
+  div.className = 'card';
+  div.id = 'pax_' + idx;
+  div.innerHTML = `
+    <div class="card-header">
+      <h4>Passenger ${idx}</h4>
+      ${idx > 1 ? `<button class="remove-btn" onclick="removePax(${idx})">Remove</button>` : ''}
+    </div>
+    <div class="grid grid-3">
+      <div><label>Given Name (as on passport)</label><input type="text" id="paxGiven_${idx}" value="${sanitize(givenName)}" placeholder="e.g. Ahmed"></div>
+      <div><label>Surname (as on passport)</label><input type="text" id="paxSurname_${idx}" value="${sanitize(surname)}" placeholder="e.g. Khan"></div>
+      <div><label>Passport No</label><input type="text" id="paxPassport_${idx}" value="${sanitize(data.passport || '')}" placeholder="AB1234567"></div>
+      <div><label>Nationality</label><input type="text" id="paxNationality_${idx}" value="${sanitize(data.nationality || 'Pakistani')}" placeholder="Pakistani"></div>
+      <div><label>Date of Birth</label><input type="date" id="paxDob_${idx}" value="${sanitize(data.dob || '')}"></div>
+      <div><label>Passport Expiry</label><input type="date" id="paxExpiry_${idx}" value="${sanitize(data.expiry || '')}"></div>
+    </div>
+  `;
+  document.getElementById('passengerList').appendChild(div);
+}
+
+function removePax(idx) {
+  const el = document.getElementById('pax_' + idx);
+  if (el) el.remove();
+}
+
+document.getElementById('btnAddPassenger').addEventListener('click', () => addPassengerSlot());
+
+function syncAllPassengerData() {
+  for (let i = 1; i <= flightOpsCount; i++) syncFlightPax(i);
+  renderVisaRows(collectCurrentVisaNumbers());
+  syncHotelLeadDropdowns();
+  showNotif('Passenger details synced across flights, hotels and visa.', 'success', 3000);
+}
+
+function collectCurrentVisaNumbers() {
+  const nos = {};
+  getLivePassengers().forEach(p => {
+    const el = document.getElementById('visaNo_' + p.idx);
+    if (el && el.value.trim()) nos[p.name] = el.value.trim();
+  });
+  return nos;
+}
+
+function syncHotelLeadDropdowns() {
+  const pax = getLivePassengers();
+  let i = 0;
+  while (document.getElementById('hotelOpsListLead_' + i) !== null) {
+    const sel = document.getElementById('hotelOpsListLead_' + i);
+    if (sel && sel.tagName === 'SELECT') {
+      const cur = sel.value;
+      sel.innerHTML = '<option value="">-- Select passenger --</option>' +
+        pax.map(p => `<option value="${sanitize(p.name)}" ${cur === p.name ? 'selected' : ''}>${sanitize(p.name)}</option>`).join('');
+    }
+    i++;
+  }
+}
+
+function buildFlightPaxRows(flightIdx, savedTickets, savedSeats) {
+  const pax = getLivePassengers();
+  if (!pax.length) return '<p class="small" style="color:#999;margin-top:6px">No passengers added yet - add passengers above then click Sync.</p>';
+  return pax.map(p => {
+    const tVal = sanitize((savedTickets && savedTickets[p.name]) || '');
+    const sVal = sanitize((savedSeats && savedSeats[p.name]) || '');
+    return `
+      <div style="display:grid;grid-template-columns:2fr 2fr 2fr;gap:8px;align-items:end;margin-bottom:8px">
+        <div><label style="font-weight:700">${sanitize(p.name)}</label></div>
+        <div><label>Ticket No (optional)</label><input type="text" id="fTicket_${flightIdx}_${p.idx}" value="${tVal}" placeholder="e.g. 083-1234567890"></div>
+        <div><label>Seat No (optional)</label><input type="text" id="fSeat_${flightIdx}_${p.idx}" value="${sVal}" placeholder="e.g. 24A"></div>
+      </div>`;
+  }).join('');
+}
+
+function buildFlightOps(flights, savedFlights) {
+  const section = document.getElementById('flightsSection');
+  const list = document.getElementById('flightOpsList');
+  if (!flights || !flights.length) return;
+  section.style.display = 'block';
+  list.innerHTML = '';
+  flights.forEach((f, i) => {
+    const saved = (savedFlights && savedFlights[i]) || {};
+    flightOpsCount++;
+    const idx = flightOpsCount;
+    const div = document.createElement('div');
+    div.className = 'service-box';
+    div.id = 'flightBox_' + idx;
+    const savedTickets = saved.ticketNumbers || {};
+    const savedSeats = saved.seatNumbers || {};
+    div.innerHTML = `
+      <h5>Flight ${idx}: ${sanitize(f.airline || 'Unknown')} - ${sanitize((f.itinerary || '').substring(0, 60))}</h5>
+      <div class="grid">
+        <div><label>PNR / Booking Reference *</label><input type="text" id="fPnr_${idx}" value="${sanitize(saved.pnr || '')}" placeholder="e.g. ABCDEF"></div>
+        <div><label>Meal Included?</label>
+          <select id="fMealIncl_${idx}">
+            <option value="no" ${saved.meal?.included === false || !saved.meal ? 'selected' : ''}>No</option>
+            <option value="yes" ${saved.meal?.included === true ? 'selected' : ''}>Yes</option>
+          </select>
+        </div>
+        <div><label>Meal Type (if included)</label><input type="text" id="fMealType_${idx}" value="${sanitize(saved.meal?.type || '')}" placeholder="e.g. Veg, Halal"></div>
+      </div>
+      <div style="margin-top:10px">
+        <label style="margin-bottom:6px;display:block">Ticket &amp; Seat Numbers (per passenger)</label>
+        <div id="fPaxRows_${idx}">${buildFlightPaxRows(idx, savedTickets, savedSeats)}</div>
+      </div>
+    `;
+    list.appendChild(div);
+  });
+}
+
+function syncFlightPax(flightIdx) {
+  const pax = getLivePassengers();
+  const tickets = {};
+  const seats = {};
+  pax.forEach(p => {
+    const t = document.getElementById('fTicket_' + flightIdx + '_' + p.idx);
+    const s = document.getElementById('fSeat_' + flightIdx + '_' + p.idx);
+    if (t) tickets[p.name] = t.value;
+    if (s) seats[p.name] = s.value;
+  });
+  const container = document.getElementById('fPaxRows_' + flightIdx);
+  if (container) container.innerHTML = buildFlightPaxRows(flightIdx, tickets, seats);
+}
+
+function buildHotelOps(hotels, savedHotels) {
+  const section = document.getElementById('hotelsSection');
+  const list = document.getElementById('hotelOpsList');
+  if (!hotels || !hotels.length) return;
+  section.style.display = 'block';
+  list.innerHTML = '';
+  hotels.forEach((h, i) => {
+    const saved = (savedHotels && savedHotels[i]) || {};
+    const div = document.createElement('div');
+    div.className = 'service-box';
+    const paxOptions = getLivePassengers();
+    const leadOptions = '<option value="">-- Select passenger --</option>' +
+      paxOptions.map(p => `<option value="${sanitize(p.name)}" ${saved.leadGuest === p.name ? 'selected' : ''}>${sanitize(p.name)}</option>`).join('');
+    div.innerHTML = `
+      <h5>Hotel ${i + 1}: ${sanitize(h.name || 'Unknown')} · ${sanitize(h.city || '')}</h5>
+      <div class="grid">
+        <div><label>Confirmation Number</label><input type="text" id="hotelOpsListConf_${i}" value="${sanitize(saved.confirmationNo || '')}" placeholder="TBA if not yet confirmed"></div>
+        <div><label>Lead Guest Name</label><select id="hotelOpsListLead_${i}">${leadOptions}</select></div>
+        <div><label>Hotel Phone (optional)</label><input type="text" id="hotelOpsListPhone_${i}" value="${sanitize(saved.phone || '')}" placeholder="+90..."></div>
+        <div class="full"><label>Hotel Address (optional - shown on voucher)</label><input type="text" id="hotelOpsListAddr_${i}" value="${sanitize(saved.address || '')}" placeholder="e.g. Taksim Square, Istanbul"></div>
+        <div class="full"><label>Google Maps Link (optional)</label><input type="url" id="hotelOpsListMapUrl_${i}" value="${sanitize(saved.mapUrl || '')}" placeholder="https://maps.app.goo.gl/..."></div>
+      </div>
+    `;
+    list.appendChild(div);
+  });
+}
+
+function buildTransferOps(transfers, savedTransfers) {
+  const section = document.getElementById('transfersSection');
+  const list = document.getElementById('transferOpsList');
+  if (!transfers || !transfers.length) return;
+  section.style.display = 'block';
+  list.innerHTML = '';
+  transfers.forEach((t, i) => {
+    const saved = (savedTransfers && savedTransfers[i]) || {};
+    const div = document.createElement('div');
+    div.className = 'service-box';
+    div.innerHTML = `
+      <h5>Transfer ${i + 1}: ${sanitize(t.from || '')} -> ${sanitize(t.to || '')} (${sanitize(t.vehicle || '')})</h5>
+      <div class="grid">
+        <div><label>Driver Name</label><input type="text" id="trDriver_${i}" value="${sanitize(saved.driverName || '')}" placeholder="TBA if not yet assigned"></div>
+        <div><label>Driver Phone</label><input type="text" id="trPhone_${i}" value="${sanitize(saved.driverPhone || '')}" placeholder="TBA if not yet assigned"></div>
+        <div><label>Vehicle Number</label><input type="text" id="trVehicle_${i}" value="${sanitize(saved.vehicleNo || '')}" placeholder="e.g. ABC-123"></div>
+        <div><label>Pickup Time (optional)</label><input type="text" id="trPickupTime_${i}" value="${sanitize(saved.pickupTime || '')}" placeholder="e.g. 14:30 or As per flight arrival"></div>
+        <div class="full"><label>Pickup Notes (optional)</label><input type="text" id="trNotes_${i}" value="${sanitize(saved.pickupNotes || '')}" placeholder="e.g. Meet at Gate 5, carry sign with name"></div>
+      </div>
+    `;
+    list.appendChild(div);
+  });
+}
+
+function buildTourOps(tours, savedTours) {
+  const section = document.getElementById('toursSection');
+  const list = document.getElementById('tourOpsList');
+  if (!tours || !tours.length) return;
+  section.style.display = 'block';
+  list.innerHTML = '';
+  tours.forEach((t, i) => {
+    const saved = (savedTours && savedTours[i]) || {};
+    const div = document.createElement('div');
+    div.className = 'service-box';
+    div.innerHTML = `
+      <h5>Tour ${i + 1}: ${sanitize(t.name || 'Unknown')} · ${sanitize(t.city || '')}</h5>
+      <div class="grid">
+        <div><label>Driver / Guide Name</label><input type="text" id="tourDriver_${i}" value="${sanitize(saved.driverName || '')}" placeholder="TBA if not yet assigned"></div>
+        <div><label>Driver / Guide Phone</label><input type="text" id="tourPhone_${i}" value="${sanitize(saved.driverPhone || '')}" placeholder="TBA if not yet assigned"></div>
+        <div><label>Vehicle Number (optional)</label><input type="text" id="tourVehicleNo_${i}" value="${sanitize(saved.vehicleNo || '')}" placeholder="e.g. 34 BK 123"></div>
+        <div><label>Pickup Time (optional)</label><input type="text" id="tourPickupTime_${i}" value="${sanitize(saved.pickupTime || '')}" placeholder="e.g. 09:00 AM from hotel lobby"></div>
+        <div class="full"><label>Notes for Customer (optional)</label><input type="text" id="tourNotes_${i}" value="${sanitize(saved.pickupNotes || '')}" placeholder="e.g. Wear comfortable shoes, bring sunscreen"></div>
+      </div>
+    `;
+    list.appendChild(div);
+  });
+}
+
+function buildVisaOps(visa, savedVisa) {
+  const section = document.getElementById('visaSection');
+  const list = document.getElementById('visaOpsList');
+  if (!visa) return;
+  section.style.display = 'block';
+  list.innerHTML = '';
+  const savedNos = savedVisa?.visaNumbers || {};
+  const div = document.createElement('div');
+  div.className = 'service-box';
+  div.innerHTML = `
+    <h5>Visa Numbers (${visa.count || 0} visa(s))</h5>
+    <p class="small" style="margin-bottom:8px">Passenger names are auto-filled from Passenger Details above. Enter visa number as available.</p>
+    <div id="visaNumbersList"></div>
+  `;
+  list.appendChild(div);
+  renderVisaRows(savedNos);
+}
+
+function renderVisaRows(savedNos) {
+  const vList = document.getElementById('visaNumbersList');
+  if (!vList) return;
+  vList.innerHTML = '';
+  const pax = getLivePassengers();
+  if (!pax.length) {
+    vList.innerHTML = '<p class="small" style="color:#999">No passengers added yet - add passengers above.</p>';
+    return;
+  }
+  pax.forEach(p => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:grid;grid-template-columns:2fr 2fr;gap:8px;align-items:end;margin-bottom:8px';
+    row.innerHTML = `
+      <div><label>Passenger</label><input type="text" value="${sanitize(p.name)}" readonly style="background:#f0f4fa;color:#444;cursor:default"></div>
+      <div><label>Visa Number (optional)</label><input type="text" id="visaNo_${p.idx}" value="${sanitize(savedNos[p.name] || '')}" placeholder="Visa number"></div>
+    `;
+    vList.appendChild(row);
+  });
+}
+
+function renderOverview() {
+  if (!quotation) return;
+  const cd = quotation.clientData || {};
+  document.getElementById('overviewSection').style.display = 'block';
+  document.getElementById('overviewContent').innerHTML = `
+    <div><label>Client Name</label><div style="font-weight:700">${sanitize(cd.name || '-')}</div></div>
+    <div><label>Phone</label><div>${sanitize(cd.phone || '-')}</div></div>
+    <div><label>Quotation ID</label><div>${sanitize(quotationId || '-')}</div></div>
+    <div><label>Travel Dates</label><div>${fmtDate(cd.dateFrom)} - ${fmtDate(cd.dateTo)}</div></div>
+    <div><label>Departure City</label><div>${sanitize(cd.depCity || '-')}</div></div>
+    <div><label>Destination</label><div>${sanitize(cd.tourDestination || '-')}</div></div>
+  `;
+}
+
+function collectFormData() {
+  const passengers = [];
+  document.querySelectorAll('[id^="pax_"]').forEach(card => {
+    const idx = card.id.split('_')[1];
+    if (!idx) return;
+    const given = (document.getElementById('paxGiven_' + idx)?.value || '').trim();
+    const sur = (document.getElementById('paxSurname_' + idx)?.value || '').trim();
+    const name = [given, sur].filter(Boolean).join(' ');
+    if (!name) return;
+    passengers.push({
+      name, givenName: given, surname: sur,
+      passport: getVal('paxPassport_' + idx),
+      nationality: getVal('paxNationality_' + idx),
+      dob: getVal('paxDob_' + idx),
+      expiry: getVal('paxExpiry_' + idx)
+    });
+  });
+
+  const emergencyContact = {
+    name: getVal('emergName'),
+    relation: getVal('emergRelation'),
+    phone: getVal('emergPhone')
+  };
+
+  const paxLive = getLivePassengers();
+
+  const flights = (quotation.flights || []).map((f, i) => {
+    const idx = i + 1;
+    const ticketNumbers = {};
+    const seatNumbers = {};
+    paxLive.forEach(p => {
+      const t = (document.getElementById('fTicket_' + idx + '_' + p.idx)?.value || '').trim();
+      const s = (document.getElementById('fSeat_' + idx + '_' + p.idx)?.value || '').trim();
+      if (t) ticketNumbers[p.name] = t;
+      if (s) seatNumbers[p.name] = s;
+    });
+    return {
+      ...f,
+      pnr: getVal('fPnr_' + idx),
+      meal: { included: getVal('fMealIncl_' + idx) === 'yes', type: getVal('fMealType_' + idx) },
+      ticketNumbers,
+      seatNumbers
     };
-    return vc;
+  });
+
+  const hotels = (quotation.hotels || []).map((h, i) => ({
+    ...h,
+    confirmationNo: getVal('hotelOpsListConf_' + i),
+    leadGuest: getVal('hotelOpsListLead_' + i),
+    phone: getVal('hotelOpsListPhone_' + i),
+    address: getVal('hotelOpsListAddr_' + i),
+    mapUrl: getVal('hotelOpsListMapUrl_' + i)
+  }));
+
+  const transfers = (quotation.transfers || []).map((t, i) => ({
+    ...t,
+    driverName: getVal('trDriver_' + i),
+    driverPhone: getVal('trPhone_' + i),
+    vehicleNo: getVal('trVehicle_' + i),
+    pickupTime: getVal('trPickupTime_' + i),
+    pickupNotes: getVal('trNotes_' + i)
+  }));
+
+  const tours = allQuotationTours.map((t, i) => ({
+    ...t,
+    driverName: getVal('tourDriver_' + i),
+    driverPhone: getVal('tourPhone_' + i),
+    vehicleNo: getVal('tourVehicleNo_' + i),
+    pickupTime: getVal('tourPickupTime_' + i),
+    pickupNotes: getVal('tourNotes_' + i)
+  }));
+
+  let visa = quotation.visa ? { ...quotation.visa } : null;
+  if (visa) {
+    const visaNumbers = {};
+    paxLive.forEach(p => {
+      const no = (document.getElementById('visaNo_' + p.idx)?.value || '').trim();
+      if (no) visaNumbers[p.name] = no;
+    });
+    visa.visaNumbers = visaNumbers;
   }
 
-  async function saveDraft(asPublish=false){
-    const vc = collectForm();
-    if(asPublish) vc.status = 'published';
-    try{
-      await setDoc(doc(db, 'int_vouchers', vc.id), vc, { merge: true });
-      // localStorage mapping
-      try{ const map = JSON.parse(localStorage.getItem(voucherMapKey) || '{}'); if(vc.quotationId) map[vc.quotationId] = vc.id; localStorage.setItem(voucherMapKey, JSON.stringify(map)); }catch(e){}
-      setStatus('Saved' + (asPublish? ' & Published':'') + ' — ' + vc.id);
-    }catch(e){ console.error(e); setStatus('Save failed: '+ e.message); }
+  return { passengers, emergencyContact, flights, hotels, transfers, tours, visa };
+}
+
+function validateForPublish(data) {
+  const errs = [];
+  if (!data.passengers.length) errs.push('Add at least one passenger (Name is required).');
+  const firstPax = data.passengers[0];
+  if (firstPax && (!firstPax.passport || !firstPax.nationality)) errs.push('Passport and Nationality are required for at least the first passenger.');
+  (data.flights || []).forEach((f, i) => { if (!f.pnr) errs.push(`Flight ${i + 1}: PNR is required.`); });
+  return errs;
+}
+
+function buildVoucherDoc(data, status) {
+  const now = new Date().toISOString();
+  const agent = JSON.parse(localStorage.getItem('loggedInAgent') || 'null') || { name: 'Unknown', id: 'demo' };
+  const existing = voucherData || {};
+  const version = (existing.version || 0) + 1;
+  return {
+    id: voucherId,
+    version,
+    status,
+    quotationId,
+    quotationType: 'international',
+    agentData: agent,
+    clientData: quotation.clientData || {},
+    flights: data.flights,
+    hotels: data.hotels,
+    transfers: data.transfers,
+    tours: data.tours,
+    visa: data.visa,
+    passengers: data.passengers,
+    emergencyContact: data.emergencyContact,
+    agentNote: getVal('agentNote'),
+    createdAt: existing.createdAt || now,
+    publishedAt: (status === 'published') ? now : (existing.publishedAt || ''),
+    updatedAt: now,
+    viewedAt: existing.viewedAt || '',
+    viewCount: existing.viewCount || 0
+  };
+}
+
+function updateStatusBar() {
+  if (!voucherData) return;
+  const bar = document.getElementById('statusBar');
+  bar.style.display = 'flex';
+  document.getElementById('sbVoucherId').textContent = voucherId || '';
+  const badge = document.getElementById('sbBadge');
+  badge.textContent = voucherData.status || 'draft';
+  badge.className = 'badge badge-' + (voucherData.status || 'draft');
+  document.getElementById('sbVersion').textContent = 'v' + (voucherData.version || 1);
+  document.getElementById('sbViewCount').textContent = 'Views: ' + (voucherData.viewCount || 0);
+  if (voucherData.viewedAt) {
+    document.getElementById('sbLastViewed').textContent = 'Last viewed: ' + fmtDate(voucherData.viewedAt);
+  }
+  if (voucherData.status === 'published') {
+    document.getElementById('voucherLinkArea').style.display = 'block';
+    document.getElementById('qrArea').style.display = 'block';
+    const url = getVoucherUrl(voucherId);
+    document.getElementById('voucherLinkInput').value = url;
+    generateQR(url);
+  }
+  const showCancel = voucherData.status !== 'cancelled';
+  document.getElementById('btnCancelVoucher').style.display = showCancel ? 'inline-block' : 'none';
+  document.getElementById('btnCancelVoucher2').style.display = showCancel ? 'inline-block' : 'none';
+}
+
+function generateQR(url) {
+  const qrEl = document.getElementById('qrcode');
+  qrEl.innerHTML = '';
+  new QRCode(qrEl, { text: url, width: 128, height: 128, correctLevel: QRCode.CorrectLevel.M });
+}
+
+async function saveDraft() {
+  if (!(await ensureSignedInForWrite())) return;
+  syncAllPassengerData();
+  const data = collectFormData();
+  const doc = buildVoucherDoc(data, voucherData?.status === 'published' ? 'published' : 'draft');
+  try {
+    await window.firebaseDB.save('int_vouchers', voucherId, doc);
+    voucherData = doc;
+    linkVoucherToQuotation(quotationId, voucherId);
+    updateStatusBar();
+    showNotif('Draft saved!', 'success');
+  } catch (e) {
+    console.error(e);
+    showNotif('Failed to save: ' + e.message, 'error');
+  }
+}
+
+async function publishVoucher() {
+  if (!(await ensureSignedInForWrite())) return;
+  syncAllPassengerData();
+  const data = collectFormData();
+  const errs = validateForPublish(data);
+  if (errs.length) {
+    alert('Please fix the following:\n\n' + errs.join('\n'));
+    return;
+  }
+  const ok = await confirmAction('Publish this voucher? The customer link will become active.', 'Publish Voucher');
+  if (!ok) return;
+  const doc = buildVoucherDoc(data, 'published');
+  try {
+    await window.firebaseDB.save('int_vouchers', voucherId, doc);
+    voucherData = doc;
+    linkVoucherToQuotation(quotationId, voucherId);
+    updateStatusBar();
+    showNotif('Voucher published! Share the link with the customer.', 'success', 5000);
+  } catch (e) {
+    console.error(e);
+    showNotif('Failed to publish: ' + e.message, 'error');
+  }
+}
+
+async function cancelVoucher() {
+  if (!(await ensureSignedInForWrite())) return;
+  const ok = await confirmAction('Cancel this voucher? The customer will see a cancellation message.', 'Cancel Voucher');
+  if (!ok) return;
+  const data = collectFormData();
+  const doc = buildVoucherDoc(data, 'cancelled');
+  try {
+    await window.firebaseDB.save('int_vouchers', voucherId, doc);
+    voucherData = doc;
+    linkVoucherToQuotation(quotationId, voucherId);
+    updateStatusBar();
+    showNotif('Voucher cancelled.', 'info');
+  } catch (e) {
+    showNotif('Failed: ' + e.message, 'error');
+  }
+}
+
+async function downloadPDF() {
+  showNotif('Opening voucher for PDF...', 'info', 60000);
+  try {
+    const url = getVoucherUrl(voucherId);
+    const win = window.open(url + '&pdf=1', '_blank');
+    if (!win) showNotif('Please allow popups to open the voucher for printing.', 'error');
+    else showNotif('Voucher opened. Use browser print to save as PDF.', 'success');
+  } catch (e) {
+    showNotif('Failed to open PDF: ' + e.message, 'error');
+  }
+}
+
+function shareWhatsApp() {
+  if (!voucherData || voucherData.status !== 'published') {
+    showNotif('Please publish the voucher first.', 'error');
+    return;
+  }
+  const phone = (quotation.clientData?.phone || '').replace(/\D/g, '').replace(/^0/, '');
+  const url = getVoucherUrl(voucherId);
+  const msg = `Dear ${quotation.clientData?.name || 'Customer'},\n\nYour International travel voucher is ready. Please view it here:\n${url}\n\nRegards,\nFlight Connection Travel`;
+  window.open('https://wa.me/92' + phone + '?text=' + encodeURIComponent(msg), '_blank');
+}
+
+function loadVoucherIntoForm(vc) {
+  setVal('agentNote', vc.agentNote || '');
+  setVal('emergName', vc.emergencyContact?.name || '');
+  setVal('emergRelation', vc.emergencyContact?.relation || '');
+  setVal('emergPhone', vc.emergencyContact?.phone || '');
+}
+
+function populateFromQuotation(q, existing) {
+  const cd = q.clientData || {};
+  const totalPax = (cd.adults || 0) + (cd.childBed || 0) + (cd.childNoBed || 0) + (cd.infants || 0);
+  const savedPax = (existing && existing.passengers) || [];
+  const slots = Math.max(totalPax || 1, savedPax.length || 0, 1);
+  for (let i = 0; i < slots; i++) addPassengerSlot(savedPax[i] || {});
+
+  allQuotationTours = [...(q.tours || []), ...((q.addons && q.addons.tours) || [])];
+
+  buildFlightOps(q.flights, existing?.flights);
+  buildHotelOps(q.hotels || [], existing?.hotels);
+  buildTransferOps(q.transfers, existing?.transfers);
+  buildTourOps(allQuotationTours, existing?.tours);
+  buildVisaOps(q.visa, existing?.visa);
+
+  if (existing) loadVoucherIntoForm(existing);
+}
+
+async function init() {
+  quotationId = getUrlParam('quotationId');
+  if (!quotationId) {
+    document.getElementById('pageSubtitle').textContent = 'Error: No quotation ID in URL';
+    return;
   }
 
-  async function cancelVoucher(){ const id = el('voucherId').value.trim(); if(!id) return alert('Voucher ID missing'); try{ await updateDoc(doc(db,'int_vouchers',id), { status: 'cancelled', updatedAt: serverTimestamp() }); setStatus('Voucher cancelled: '+id); }catch(e){ console.error(e); setStatus('Cancel failed: '+ e.message); }}
+  const all = JSON.parse(localStorage.getItem('savedQuotations_international') || '[]');
+  quotation = all.find(q => q.id === quotationId);
 
-  async function loadFromQuotation(){ const qid = el('quotationId').value.trim(); if(!qid) return; // try local saved quotations
-    try{ const saved = JSON.parse(localStorage.getItem(savedKey) || '[]'); const found = saved.find(s=>s.id === qid); if(found){ // pre-fill few fields
-        el('clientName').value = found.clientName || found.name || el('clientName').value;
-        el('clientPhone').value = found.clientPhone || el('clientPhone').value;
-        el('depCity').value = found.depCity || el('depCity').value;
-        el('tourDestination').value = found.destination || el('tourDestination').value;
-      }
-    }catch(e){}
-    // if voucher exists for this quotation, fill from voucher
-    try{ const map = JSON.parse(localStorage.getItem(voucherMapKey)||'{}'); const vId = map[qid]; if(vId){ const snap = await getDoc(doc(db,'int_vouchers',vId)); if(snap.exists()){ fillForm(snap.data()); setStatus('Loaded existing voucher '+vId); return; } }
-    }catch(e){}
-    // set voucherId deterministically
-    el('voucherId').value = getDeterministicVoucherId(qid);
+  if (!quotation) {
+    document.getElementById('pageSubtitle').textContent = 'Error: Quotation not found. Please open from the International Quotation Tool.';
+    return;
   }
 
-  function fillForm(vc){ if(!vc) return; el('voucherId').value = vc.id || el('voucherId').value; el('clientName').value = vc.clientData?.name || ''; el('clientPhone').value = vc.clientData?.phone || ''; el('depCity').value = vc.clientData?.depCity || ''; el('tourDestination').value = vc.clientData?.tourDestination || ''; el('dateFrom').value = vc.clientData?.dateFrom || ''; el('dateTo').value = vc.clientData?.dateTo || ''; el('flightsJson').value = JSON.stringify(vc.flights||[], null, 2); el('hotelsJson').value = JSON.stringify(vc.hotels||[], null,2); el('toursJson').value = JSON.stringify(vc.tours||[], null,2); el('visaJson').value = JSON.stringify(vc.visa||{}, null,2); el('paxJson').value = JSON.stringify(vc.passengers||[], null,2); el('agentName').value = vc.agentData?.name||''; el('agentPhone').value = vc.agentData?.phone||''; el('agentNote').value = vc.agentNote||''; }
+  const clientName = quotation.clientData?.name || '';
+  document.getElementById('pageSubtitle').textContent = clientName + ' · ' + quotationId;
+  document.title = 'Int. Voucher - ' + clientName;
 
-  function setStatus(s){ el('status').textContent = s; }
+  if (window.__authReady) { try { await window.__authReady; } catch (e) {} }
 
-  // PDF helper uses same technique as view
-  async function downloadPDF(){ const { jsPDF } = window.jspdf; const elWrap = document.querySelector('.wrap'); try{ const canvas = await html2canvas(elWrap, { useCORS:true, scale: 2 }); const pdf = new jsPDF('p','mm','a4'); const img=canvas.toDataURL('image/png'); const pw = pdf.internal.pageSize.getWidth() - 10; const ph = (canvas.height * pw) / canvas.width; pdf.addImage(img,'PNG',5,5,pw,ph); const name = 'Voucher-' + (el('voucherId').value || 'export') + '.pdf'; pdf.save(name); }catch(e){ console.error(e); alert('PDF export failed'); } }
+  let existing = null;
+  const idMap = loadVoucherIdMap();
+  const mappedId = idMap[quotationId] || '';
+  const deterministicId = getDeterministicVoucherId(quotationId);
 
-  // Event wiring
-  el('quotationId').addEventListener('blur', ()=> loadFromQuotation());
-  el('btnSave').addEventListener('click', ()=> saveDraft(false));
-  el('btnPublish').addEventListener('click', ()=> { if(!confirm('Publish voucher publicly?')) return; saveDraft(true); });
-  el('btnCancel').addEventListener('click', ()=> { if(!confirm('Cancel this voucher?')) return; cancelVoucher(); });
-  el('btnDownload').addEventListener('click', ()=> downloadPDF());
+  if (mappedId) {
+    try {
+      existing = await window.firebaseDB.get('int_vouchers', mappedId);
+      if (existing) { voucherId = mappedId; voucherData = existing; }
+    } catch (e) { console.warn('Mapped voucher lookup failed:', e); }
+  }
 
-  // Show editor when authenticated (agents should be signed-in). If not signed-in, still allow local editing but block save until auth.
-  let currentUser = null;
-  onAuthStateChanged(auth, user=>{ currentUser = user; document.getElementById('editor').style.display = 'block'; setStatus(user ? ('Signed in as '+(user.email||user.uid)) : 'Not signed in — saving may be blocked.'); });
+  if (!existing) {
+    try {
+      existing = await window.firebaseDB.get('int_vouchers', deterministicId);
+      if (existing) { voucherId = deterministicId; voucherData = existing; }
+    } catch (e) { console.warn('Deterministic voucher lookup failed:', e); }
+  }
 
-  // Quick auto-fill by query param ?quotationId=...
-  (function initFromQuery(){ const p = new URLSearchParams(window.location.search); const q = p.get('quotationId') || p.get('qid') || p.get('q'); if(q){ el('quotationId').value = q; loadFromQuotation(); } else { el('voucherId').value = getDeterministicVoucherId('TEMP'); el('editor').style.display='block'; setStatus('Ready'); } })();
+  try {
+    if (!existing) {
+      const results = await window.firebaseDB.findByField('int_vouchers', 'quotationId', quotationId);
+      if (results && results.length) { existing = results[0]; voucherId = existing.id; voucherData = existing; }
+    }
+  } catch (e) { console.warn('Legacy voucher query lookup skipped:', e); }
 
+  if (!voucherId) voucherId = deterministicId || generateVoucherId();
+  if (voucherId) linkVoucherToQuotation(quotationId, voucherId);
+
+  renderOverview();
+  populateFromQuotation(quotation, existing);
+  if (existing) updateStatusBar();
+
+  showNotif('Quotation loaded: ' + quotationId, 'info', 2500);
+}
+
+document.getElementById('btnSaveDraft').addEventListener('click', saveDraft);
+document.getElementById('btnSaveDraft2').addEventListener('click', saveDraft);
+document.getElementById('btnPublish').addEventListener('click', publishVoucher);
+document.getElementById('btnPublish2').addEventListener('click', publishVoucher);
+document.getElementById('btnCancelVoucher').addEventListener('click', cancelVoucher);
+document.getElementById('btnCancelVoucher2').addEventListener('click', cancelVoucher);
+document.getElementById('btnCopyLink').addEventListener('click', () => {
+  const input = document.getElementById('voucherLinkInput');
+  input.select();
+  document.execCommand('copy');
+  showNotif('Link copied!', 'success', 2000);
+});
+document.getElementById('btnWhatsApp').addEventListener('click', shareWhatsApp);
+document.getElementById('btnDownloadPDF').addEventListener('click', downloadPDF);
+
+window.addEventListener('load', () => {
+  const wait = setInterval(() => {
+    if (window.firebaseDB) { clearInterval(wait); init(); }
+  }, 100);
+  setTimeout(() => clearInterval(wait), 5000);
+});
 </script>
 </body>
 </html>
