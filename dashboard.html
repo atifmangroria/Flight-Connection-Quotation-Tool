@@ -226,6 +226,32 @@
   box-shadow: 0 4px 8px rgba(220, 53, 69, 0.4);
 }
 
+.tools-dropdown { position: relative; display: inline-block; }
+.tools-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  min-width: 180px;
+  z-index: 9999;
+}
+.tools-menu.open { display: block; }
+.tools-item {
+  display: block;
+  padding: 10px 16px;
+  color: #333;
+  text-decoration: none;
+  font-size: 14px;
+  white-space: nowrap;
+  border-bottom: 1px solid #f0f0f0;
+}
+.tools-item:last-child { border-bottom: none; }
+.tools-item:hover { background: #f3f6fb; color: #0b76d1; }
+
 .btn-action {
   padding: 6px 12px;
   border: none;
@@ -391,12 +417,17 @@
     </div>
     <div class="header-right no-print">
       <button onclick="showQuotationTypeModal()" class="btn-primary">Create Quotation</button>
-      <button onclick="window.location.href='customer-list.html'" class="btn-primary">Customers</button>
-      <button onclick="window.location.href='voucher-access.html'" class="btn-primary">Voucher Access</button>
-      <button id="adminBtn" onclick="showPackageModal()" class="btn-primary" style="display:none;">Manage Packages</button>
-      <button id="agentPackageBtn" onclick="showPackageModal()" class="btn-primary" style="display:none;">View Packages</button>
-      <button id="userMgmtBtn" onclick="window.location.href='user-management.html'" class="btn-primary" style="display:none;">User Management</button>
-      <button onclick="window.location.href='reports.html'" class="btn-primary">Reports</button>
+      <div class="tools-dropdown">
+        <button class="btn-primary" onclick="toggleToolsMenu(event)">Tools &#9660;</button>
+        <div class="tools-menu" id="toolsMenu">
+          <a class="tools-item" href="customer-list.html">Customers</a>
+          <a class="tools-item" href="voucher-access.html">Voucher Access</a>
+          <a class="tools-item" id="adminMenuItem" onclick="showPackageModal();closeToolsMenu();return false;" href="#" style="display:none;">Manage Packages</a>
+          <a class="tools-item" id="agentMenuItem" onclick="showPackageModal();closeToolsMenu();return false;" href="#" style="display:none;">View Packages</a>
+          <a class="tools-item" id="userMgmtMenuItem" href="user-management.html" style="display:none;">User Management</a>
+          <a class="tools-item" href="reports.html">Reports</a>
+        </div>
+      </div>
       <button id="btnLogout" class="btn-logout">Logout</button>
     </div>
   </div>
@@ -1480,14 +1511,17 @@ function loadAgentInfo() {
   if (agent) {
     document.getElementById("agentInfo").textContent = `Logged in as: ${agent.name} (${agent.phone})`;
     if (agent.role === 'admin') {
-      document.getElementById("adminBtn").style.display = 'inline-block';
-      document.getElementById("userMgmtBtn").style.display = 'inline-block';
+      const adminMenuItem = document.getElementById('adminMenuItem');
+      const userMgmtMenuItem = document.getElementById('userMgmtMenuItem');
+      if (adminMenuItem) adminMenuItem.style.display = 'block';
+      if (userMgmtMenuItem) userMgmtMenuItem.style.display = 'block';
       const allUsersBtn = document.getElementById('allUsersBtn');
       const userFilter = document.getElementById('userFilter');
       if (allUsersBtn) allUsersBtn.style.display = 'inline-block';
       if (userFilter) userFilter.style.display = 'inline-block';
     } else {
-      document.getElementById("agentPackageBtn").style.display = 'inline-block';
+      const agentMenuItem = document.getElementById('agentMenuItem');
+      if (agentMenuItem) agentMenuItem.style.display = 'block';
     }
   }
 }
