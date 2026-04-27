@@ -279,7 +279,7 @@ function fmtDateTime(ds) {
 }
 
 function getHotelMealType(hotel) {
-  const raw = hotel?.mealType ?? hotel?.mealPlan ?? hotel?.meal ?? hotel?.boardType ?? hotel?.board ?? hotel?.mealOption ?? hotel?.mealBasis ?? hotel?.meals;
+  const raw = hotel?.mealType ?? hotel?.serviceType ?? hotel?.mealPlan ?? hotel?.meal ?? hotel?.boardType ?? hotel?.board ?? hotel?.mealOption ?? hotel?.mealBasis ?? hotel?.meals;
   const meal = String(raw || "").trim();
   if (!meal) return "";
   const key = meal.toLowerCase();
