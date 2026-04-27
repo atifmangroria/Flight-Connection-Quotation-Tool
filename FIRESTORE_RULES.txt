@@ -170,16 +170,20 @@ service cloud.firestore {
     // ==================== VOUCHERS COLLECTION ====================
     // Vouchers - agents create/manage, customers view published/cancelled vouchers
     match /vouchers/{voucherId} {
-      // Logged-in approved users (agents/admins) can read voucher docs.
-      allow read: if isApproved() || isAdmin();
+      // Owner/admin can read voucher docs.
+      allow read: if isAdmin() || (isApproved() && isVoucherOwner(resource.data));
 
       // Public customer access to published/cancelled vouchers by direct ID.
       // (No list rule here; only direct document get is expected by app.)
       allow get: if resource.data.status in ['published', 'cancelled'];
 
-      // Approved users can create/edit vouchers.
-      allow create: if isApproved() || isAdmin();
-      allow update: if isApproved() || isAdmin();
+      // Owners can create/edit their own vouchers, admins can manage all.
+      allow create: if isAdmin() || (isApproved() && isVoucherOwner(request.resource.data));
+      allow update: if isAdmin() || (
+        isApproved()
+        && isVoucherOwner(resource.data)
+        && isVoucherOwner(request.resource.data)
+      );
 
       // Public view logging from voucher-view page (increments viewCount + viewedAt only).
       allow update: if resource.data.status in ['published', 'cancelled']
@@ -193,15 +197,19 @@ service cloud.firestore {
     // ==================== INTERNATIONAL VOUCHERS COLLECTION ====================
     // Int Vouchers - agents create/manage, customers view published/cancelled vouchers
     match /int_vouchers/{voucherId} {
-      // Logged-in approved users (agents/admins) can read voucher docs.
-      allow read: if isApproved() || isAdmin();
+      // Owner/admin can read voucher docs.
+      allow read: if isAdmin() || (isApproved() && isVoucherOwner(resource.data));
 
       // Public customer access to published/cancelled vouchers by direct ID.
       allow get: if resource.data.status in ['published', 'cancelled'];
 
-      // Approved users can create/edit vouchers.
-      allow create: if isApproved() || isAdmin();
-      allow update: if isApproved() || isAdmin();
+      // Owners can create/edit their own vouchers, admins can manage all.
+      allow create: if isAdmin() || (isApproved() && isVoucherOwner(request.resource.data));
+      allow update: if isAdmin() || (
+        isApproved()
+        && isVoucherOwner(resource.data)
+        && isVoucherOwner(request.resource.data)
+      );
 
       // Public view logging from voucher-view page (increments viewCount + viewedAt only).
       allow update: if resource.data.status in ['published', 'cancelled']
@@ -215,15 +223,19 @@ service cloud.firestore {
     // ==================== DOMESTIC VOUCHERS COLLECTION ====================
     // Domestic Vouchers - agents create/manage, customers view published/cancelled vouchers
     match /domestic_vouchers/{voucherId} {
-      // Logged-in approved users (agents/admins) can read voucher docs.
-      allow read: if isApproved() || isAdmin();
+      // Owner/admin can read voucher docs.
+      allow read: if isAdmin() || (isApproved() && isVoucherOwner(resource.data));
 
       // Public customer access to published/cancelled vouchers by direct ID.
       allow get: if resource.data.status in ['published', 'cancelled'];
 
-      // Approved users can create/edit vouchers.
-      allow create: if isApproved() || isAdmin();
-      allow update: if isApproved() || isAdmin();
+      // Owners can create/edit their own vouchers, admins can manage all.
+      allow create: if isAdmin() || (isApproved() && isVoucherOwner(request.resource.data));
+      allow update: if isAdmin() || (
+        isApproved()
+        && isVoucherOwner(resource.data)
+        && isVoucherOwner(request.resource.data)
+      );
 
       // Public view logging from voucher-view page (increments viewCount + viewedAt only).
       allow update: if resource.data.status in ['published', 'cancelled']
@@ -251,6 +263,17 @@ service cloud.firestore {
     // Check if user document exists
     function userExists(userId) {
       return exists(/databases/$(database)/documents/users/$(userId));
+    }
+
+    // Check if voucher belongs to the authenticated user
+    function isVoucherOwner(voucherData) {
+      return request.auth != null
+        && voucherData.agentData != null
+        && (
+          voucherData.agentData.id == request.auth.uid
+          || voucherData.agentData.uid == request.auth.uid
+          || voucherData.agentData.userId == request.auth.uid
+        );
     }
     
   }

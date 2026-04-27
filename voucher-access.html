@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Voucher Access - Flight Connection</title>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+  import { getFirestore, collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+  import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDx3Qxt84vJlz_-mXuxiC0W2flaLadr9Ws",
+    authDomain: "fc-quotation-tool.firebaseapp.com",
+    projectId: "fc-quotation-tool",
+    storageBucket: "fc-quotation-tool.firebasestorage.app",
+    messagingSenderId: "370566945624",
+    appId: "1:370566945624:web:a84b20d5a8f99d20a6e32d"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const auth = getAuth(app);
+
+  window.db = db;
+  window.auth = auth;
+  window.signOut = signOut;
+  window.__authReady = new Promise((resolve) => {
+    onAuthStateChanged(auth, () => resolve(), () => resolve());
+  });
+
+  window.firebaseDB = {
+    async getAll(col) {
+      const snap = await getDocs(collection(db, col));
+      return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    },
+    async findByOwner(col, ownerId) {
+      const q1 = query(collection(db, col), where('agentData.id', '==', ownerId));
+      const q2 = query(collection(db, col), where('agentData.uid', '==', ownerId));
+      const [s1, s2] = await Promise.all([getDocs(q1), getDocs(q2)]);
+      const merged = new Map();
+      s1.docs.forEach(d => merged.set(d.id, { id: d.id, ...d.data() }));
+      s2.docs.forEach(d => merged.set(d.id, { id: d.id, ...d.data() }));
+      return Array.from(merged.values());
+    }
+  };
+</script>
+<style>
+  :root{--accent:#0b76d1;--muted:#637083;--bg:#f3f6fb;--card:#ffffff;--border:#dfe7f3;--ok:#1f9d55;--warn:#d97a00;--danger:#c53232}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);font-family:Arial,Helvetica,sans-serif;color:#102238}
+  .wrap{max-width:1240px;margin:14px auto;padding:0 12px}
+  .header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;box-shadow:0 8px 22px rgba(10,26,48,.06)}
+  .title{margin:0;color:var(--accent);font-size:24px}
+  .sub{margin-top:6px;color:var(--muted);font-size:13px}
+  .btn{border:none;background:var(--accent);color:#fff;padding:9px 13px;border-radius:7px;cursor:pointer;font-weight:700}
+  .btn:hover{background:#085ea3}
+  .btn-secondary{background:#e5eef9;color:#0b4f8f}
+  .btn-secondary:hover{background:#d7e6f8}
+  .btn-danger{background:#dc3545}
+  .btn-danger:hover{background:#bf2d3a}
+  .bar{margin-top:12px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:8px;align-items:end}
+  .bar label{display:block;color:var(--muted);font-size:11px;margin-bottom:4px;text-transform:uppercase;letter-spacing:.3px;font-weight:700}
+  .bar input,.bar select{width:100%;padding:8px;border:1px solid #cfd9ea;border-radius:6px;font-size:14px}
+  .table-wrap{margin-top:12px;background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:auto}
+  table{width:100%;border-collapse:collapse;min-width:980px}
+  th,td{padding:10px 8px;border-bottom:1px solid #edf2fb;text-align:left;font-size:13px;vertical-align:middle}
+  th{background:#eef4ff;color:#0d4f8e;font-size:12px;text-transform:uppercase;letter-spacing:.4px}
+  .badge{display:inline-block;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:700}
+  .badge-published{background:#d8f3e6;color:#0d6b3a}
+  .badge-draft{background:#fff2d8;color:#9a5f00}
+  .badge-cancelled{background:#f9d8d8;color:#8f1f1f}
+  .type{display:inline-block;padding:2px 6px;border-radius:5px;color:#fff;font-size:11px;font-weight:700}
+  .type-umrah{background:#2f7fd4}
+  .type-domestic{background:#e38906}
+  .type-international{background:#1f9d55}
+  .actions{display:flex;gap:6px;flex-wrap:wrap}
+  .actions button{padding:5px 9px;border:none;border-radius:5px;cursor:pointer;font-size:12px}
+  .view-btn{background:#1887b0;color:#fff}
+  .view-btn:hover{background:#136f90}
+  .open-btn{background:#2f7fd4;color:#fff}
+  .open-btn:hover{background:#266fb7}
+  .empty{padding:24px;text-align:center;color:var(--muted)}
+  .pill{display:inline-block;background:#e8f2ff;color:#0c5aa5;padding:4px 9px;border-radius:999px;font-size:11px;font-weight:700;margin-right:6px}
+  .notif{position:fixed;top:14px;right:14px;z-index:9999;display:none;padding:11px 14px;border-radius:8px;font-size:13px;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.15)}
+  .notif.show{display:block}
+  .notif.info{background:#d8ebff;color:#0d4f8e}
+  .notif.error{background:#f8d7da;color:#7a1f27}
+  .notif.success{background:#d4edda;color:#155724}
+  @media (max-width:980px){
+    .bar{grid-template-columns:1fr 1fr}
+  }
+  @media (max-width:620px){
+    .bar{grid-template-columns:1fr}
+    .title{font-size:21px}
+    .btn{width:100%}
+  }
+</style>
+</head>
+<body>
+<div id="notif" class="notif"></div>
+<div class="wrap">
+  <div class="header">
+    <div>
+      <h1 class="title">Voucher Access</h1>
+      <div class="sub" id="whoInfo">Checking session...</div>
+      <div class="sub" id="scopeInfo"></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-secondary" onclick="goDashboard()">Dashboard</button>
+      <button class="btn btn-danger" onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+  <div class="bar">
+    <div>
+      <label>Search</label>
+      <input type="text" id="searchInput" placeholder="Search by voucher ID, quotation ID, or customer">
+    </div>
+    <div>
+      <label>Status</label>
+      <select id="statusFilter">
+        <option value="">Published + Draft</option>
+        <option value="published">Published</option>
+        <option value="draft">Draft</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+    </div>
+    <div>
+      <label>Type</label>
+      <select id="typeFilter">
+        <option value="">All Types</option>
+        <option value="umrah">Umrah</option>
+        <option value="domestic">Domestic</option>
+        <option value="international">International</option>
+      </select>
+    </div>
+    <div>
+      <label>User</label>
+      <select id="userFilter" disabled>
+        <option value="">My Vouchers</option>
+      </select>
+    </div>
+    <div>
+      <button class="btn" onclick="applyFilters()">Apply</button>
+    </div>
+  </div>
+
+  <div style="margin-top:10px;">
+    <span class="pill" id="totalPill">0 vouchers</span>
+    <span class="pill" id="publishedPill">0 published</span>
+    <span class="pill" id="draftPill">0 draft</span>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Voucher #</th>
+          <th>Status</th>
+          <th>Type</th>
+          <th>Quotation #</th>
+          <th>Customer</th>
+          <th>Owner</th>
+          <th>Updated</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="voucherTableBody">
+        <tr><td colspan="8" class="empty">Loading vouchers...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+let currentUser = null;
+let isAdmin = false;
+let allVouchers = [];
+let filteredVouchers = [];
+const ownerNameById = new Map();
+
+function showNotif(msg, type = 'info', dur = 3500) {
+  const el = document.getElementById('notif');
+  el.textContent = msg;
+  el.className = 'notif show ' + type;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.className = 'notif'; }, dur);
+}
+
+function clearSessionStorageKeys() {
+  localStorage.removeItem('loggedInAgent');
+  localStorage.removeItem('loggedInUser');
+  localStorage.removeItem('agentLoggedIn');
+  localStorage.removeItem('loginTime');
+  localStorage.removeItem('sessionExpiresAt');
+}
+
+function isSessionExpired() {
+  const now = Date.now();
+  const explicitExpiry = Number(localStorage.getItem('sessionExpiresAt') || '0');
+  const loginTime = Number(localStorage.getItem('loginTime') || '0');
+  if (explicitExpiry > 0) return now > explicitExpiry;
+  if (loginTime > 0) return now - loginTime > SESSION_TTL_MS;
+  return true;
+}
+
+function getLoggedInAgent() {
+  try {
+    const raw = localStorage.getItem('loggedInAgent');
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function getOwnerIdFromVoucher(v) {
+  return v?.agentData?.uid || v?.agentData?.id || v?.agentData?.userId || '';
+}
+
+function formatDate(dt) {
+  if (!dt) return '-';
+  const d = new Date(dt);
+  if (isNaN(d.getTime())) return '-';
+  return d.toLocaleString('en-PK', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function escapeHtml(v) {
+  return String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function normalizeVoucher(v, type) {
+  const ownerId = getOwnerIdFromVoucher(v);
+  const ownerName = v?.agentData?.name || v?.agentData?.fullName || ownerNameById.get(ownerId) || ownerId || '-';
+  return {
+    id: v.id,
+    status: String(v.status || 'draft').toLowerCase(),
+    type,
+    quotationId: v.quotationId || '-',
+    clientName: v?.clientData?.name || '-',
+    ownerId,
+    ownerName,
+    updatedAt: v.updatedAt || v.createdAt || '',
+    createdAt: v.createdAt || '',
+    publishedAt: v.publishedAt || ''
+  };
+}
+
+function getVoucherViewUrl(v) {
+  if (v.type === 'umrah') return 'voucher-view.html?id=' + encodeURIComponent(v.id);
+  if (v.type === 'domestic') return 'domestic-voucher-view.html?id=' + encodeURIComponent(v.id);
+  return 'int-voucher-view.html?id=' + encodeURIComponent(v.id);
+}
+
+function getQuotationViewUrl(v) {
+  const ownerQuery = v.ownerId ? '&owner=' + encodeURIComponent(v.ownerId) : '';
+  if (v.type === 'umrah') return 'index.html?view=' + encodeURIComponent(v.quotationId) + ownerQuery;
+  if (v.type === 'domestic') return 'Domestic Quotation Tool.html?view=' + encodeURIComponent(v.quotationId) + ownerQuery;
+  return 'International Quotation Tool.html?view=' + encodeURIComponent(v.quotationId) + ownerQuery;
+}
+
+function populateUserFilter() {
+  const el = document.getElementById('userFilter');
+  el.innerHTML = '';
+
+  if (!isAdmin) {
+    const mine = document.createElement('option');
+    mine.value = currentUser.id;
+    mine.textContent = 'My Vouchers';
+    el.appendChild(mine);
+    el.value = currentUser.id;
+    el.disabled = true;
+    return;
+  }
+
+  const all = document.createElement('option');
+  all.value = '';
+  all.textContent = 'All Users';
+  el.appendChild(all);
+
+  const me = document.createElement('option');
+  me.value = currentUser.id;
+  me.textContent = 'My Vouchers';
+  el.appendChild(me);
+
+  const unique = new Map();
+  allVouchers.forEach(v => {
+    if (!v.ownerId) return;
+    if (!unique.has(v.ownerId)) unique.set(v.ownerId, v.ownerName || v.ownerId);
+  });
+
+  Array.from(unique.entries())
+    .sort((a, b) => String(a[1]).localeCompare(String(b[1])))
+    .forEach(([id, name]) => {
+      if (id === currentUser.id) return;
+      const opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = name;
+      el.appendChild(opt);
+    });
+
+  el.disabled = false;
+}
+
+function applyFilters() {
+  const search = (document.getElementById('searchInput').value || '').toLowerCase().trim();
+  const status = (document.getElementById('statusFilter').value || '').toLowerCase();
+  const type = (document.getElementById('typeFilter').value || '').toLowerCase();
+  const ownerFilter = (document.getElementById('userFilter').value || '').trim();
+
+  filteredVouchers = allVouchers.filter(v => {
+    if (!isAdmin && v.ownerId !== currentUser.id) return false;
+    if (isAdmin && ownerFilter && v.ownerId !== ownerFilter) return false;
+
+    if (!status && !['published', 'draft'].includes(v.status)) return false;
+    if (status && v.status !== status) return false;
+    if (type && v.type !== type) return false;
+
+    if (search) {
+      const text = [v.id, v.quotationId, v.clientName, v.ownerName].join(' ').toLowerCase();
+      if (!text.includes(search)) return false;
+    }
+
+    return true;
+  });
+
+  filteredVouchers.sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
+
+  renderStats();
+  renderTable();
+}
+
+function renderStats() {
+  const total = filteredVouchers.length;
+  const published = filteredVouchers.filter(v => v.status === 'published').length;
+  const draft = filteredVouchers.filter(v => v.status === 'draft').length;
+  document.getElementById('totalPill').textContent = total + ' vouchers';
+  document.getElementById('publishedPill').textContent = published + ' published';
+  document.getElementById('draftPill').textContent = draft + ' draft';
+}
+
+function renderTable() {
+  const tbody = document.getElementById('voucherTableBody');
+  if (!filteredVouchers.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty">No vouchers found for this filter.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filteredVouchers.map(v => {
+    const statusClass = v.status === 'published' ? 'badge-published' : (v.status === 'cancelled' ? 'badge-cancelled' : 'badge-draft');
+    const typeClass = v.type === 'umrah' ? 'type-umrah' : (v.type === 'domestic' ? 'type-domestic' : 'type-international');
+    return `
+      <tr>
+        <td>${escapeHtml(v.id)}</td>
+        <td><span class="badge ${statusClass}">${escapeHtml(v.status)}</span></td>
+        <td><span class="type ${typeClass}">${escapeHtml(v.type)}</span></td>
+        <td>${escapeHtml(v.quotationId)}</td>
+        <td>${escapeHtml(v.clientName)}</td>
+        <td>${escapeHtml(v.ownerName || '-')}</td>
+        <td>${escapeHtml(formatDate(v.updatedAt || v.createdAt))}</td>
+        <td>
+          <div class="actions">
+            <button class="view-btn" onclick="openVoucherView('${escapeHtml(v.id)}','${escapeHtml(v.type)}')">Voucher View</button>
+            <button class="open-btn" onclick="openQuotationView('${escapeHtml(v.id)}')">Open Quotation</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function openVoucherView(voucherId, type) {
+  const item = filteredVouchers.find(v => v.id === voucherId && v.type === type);
+  if (!item) return;
+  window.open(getVoucherViewUrl(item), '_blank');
+}
+
+function openQuotationView(voucherId) {
+  const item = filteredVouchers.find(v => v.id === voucherId);
+  if (!item) return;
+  if (item.ownerId) {
+    localStorage.setItem('selectedQuotationOwnerId', item.ownerId);
+  }
+  window.open(getQuotationViewUrl(item), '_blank');
+}
+
+function goDashboard() {
+  window.location.href = 'dashboard.html';
+}
+
+async function logout() {
+  const ok = window.confirm('Are you sure you want to logout?');
+  if (!ok) return;
+  try {
+    if (window.auth && window.auth.currentUser && window.signOut) {
+      await window.signOut(window.auth);
+    }
+  } catch (e) {
+    console.error(e);
+  }
+  clearSessionStorageKeys();
+  window.location.href = 'login.html';
+}
+
+async function loadOwnersMapIfAdmin() {
+  if (!isAdmin) return;
+  try {
+    const users = await window.firebaseDB.getAll('users');
+    users.forEach(u => {
+      const name = u.fullName || u.name || u.email || u.id;
+      ownerNameById.set(u.id, name);
+    });
+  } catch (e) {
+    console.warn('Could not load users for owner filter:', e);
+  }
+}
+
+async function loadAllVouchers() {
+  let umrahRows = [];
+  let domesticRows = [];
+  let intRows = [];
+
+  if (isAdmin) {
+    [umrahRows, domesticRows, intRows] = await Promise.all([
+      window.firebaseDB.getAll('vouchers'),
+      window.firebaseDB.getAll('domestic_vouchers'),
+      window.firebaseDB.getAll('int_vouchers')
+    ]);
+  } else {
+    [umrahRows, domesticRows, intRows] = await Promise.all([
+      window.firebaseDB.findByOwner('vouchers', currentUser.id),
+      window.firebaseDB.findByOwner('domestic_vouchers', currentUser.id),
+      window.firebaseDB.findByOwner('int_vouchers', currentUser.id)
+    ]);
+  }
+
+  const all = [];
+  umrahRows.forEach(v => all.push(normalizeVoucher(v, 'umrah')));
+  domesticRows.forEach(v => all.push(normalizeVoucher(v, 'domestic')));
+  intRows.forEach(v => all.push(normalizeVoucher(v, 'international')));
+  allVouchers = all;
+}
+
+async function init() {
+  await window.__authReady;
+
+  if (isSessionExpired()) {
+    clearSessionStorageKeys();
+    window.location.href = 'login.html';
+    return;
+  }
+
+  const agent = getLoggedInAgent();
+  if (!agent || !agent.id) {
+    window.location.href = 'login.html';
+    return;
+  }
+
+  currentUser = {
+    id: agent.uid || agent.id,
+    name: agent.name || agent.fullName || agent.email || agent.id,
+    role: agent.role || 'user'
+  };
+  isAdmin = currentUser.role === 'admin';
+
+  document.getElementById('whoInfo').textContent = 'Logged in as: ' + currentUser.name + ' (' + currentUser.role + ')';
+  document.getElementById('scopeInfo').textContent = isAdmin
+    ? 'Admin scope: all users vouchers, with user filter.'
+    : 'User scope: only your own vouchers (published + draft).';
+
+  try {
+    await loadOwnersMapIfAdmin();
+    await loadAllVouchers();
+    populateUserFilter();
+    applyFilters();
+    showNotif('Vouchers loaded successfully.', 'success', 2200);
+  } catch (e) {
+    console.error(e);
+    document.getElementById('voucherTableBody').innerHTML = '<tr><td colspan="8" class="empty">Failed to load vouchers. Check Firestore rules/session.</td></tr>';
+    showNotif('Failed to load vouchers: ' + (e.message || e), 'error', 5000);
+  }
+}
+
+document.getElementById('searchInput').addEventListener('input', applyFilters);
+document.getElementById('statusFilter').addEventListener('change', applyFilters);
+document.getElementById('typeFilter').addEventListener('change', applyFilters);
+document.getElementById('userFilter').addEventListener('change', applyFilters);
+
+window.openVoucherView = openVoucherView;
+window.openQuotationView = openQuotationView;
+window.goDashboard = goDashboard;
+window.logout = logout;
+window.applyFilters = applyFilters;
+
+window.addEventListener('load', init);
+</script>
+</body>
+</html>
