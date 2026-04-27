@@ -303,7 +303,8 @@ function generateVoucherId() {
 }
 
 function getDeterministicVoucherId(qId) {
-  return 'VCHR-DOM-' + String(qId || '').replace(/[^A-Za-z0-9_-]/g, '').toUpperCase();
+  const cleaned = String(qId || '').replace(/^DOM-/i, '').replace(/[^A-Za-z0-9_-]/g, '').toUpperCase();
+  return 'VCHR-DOM-' + cleaned;
 }
 
 function loadVoucherIdMap() {
