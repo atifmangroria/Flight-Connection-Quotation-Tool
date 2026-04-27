@@ -308,11 +308,11 @@ function getHotelMealType(hotel) {
   const meal = String(raw || '').trim();
   if (!meal) return '';
   const key = meal.toLowerCase();
-  if (key === 'bb' || key === 'bed & breakfast' || key === 'bed and breakfast') return 'Breakfast';
-  if (key === 'hb' || key === 'half-board' || key === 'half board') return 'Half Board';
-  if (key === 'fb' || key === 'full-board' || key === 'full board') return 'Full Board';
-  if (key === 'ro' || key === 'room only' || key === 'no breakfast') return 'Without Breakfast';
-  return meal;
+    if (key === 'bb' || key === 'bed & breakfast' || key === 'bed and breakfast') return 'Breakfast';
+    if (key === 'hb' || key === 'half-board' || key === 'half board') return 'Half Board';
+    if (key === 'fb' || key === 'full-board' || key === 'full board') return 'Full Board';
+    if (key === 'ro' || key === 'room only' || key === 'no breakfast') return 'Without Breakfast';
+    return meal;
 }
 
 function orTba(v) {
