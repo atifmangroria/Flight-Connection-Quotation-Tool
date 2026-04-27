@@ -4950,6 +4950,61 @@ updateServiceChargeVisibility();
 <script>
 
 // Function to update quotation status
+function getCurrentDomesticQuotation() {
+  const savedQuotations = JSON.parse(localStorage.getItem('savedQuotations_domestic')) || [];
+  return savedQuotations.find(q => q.id === currentQuotationId) || null;
+}
+
+function openDomesticVoucherEditor() {
+  if (!currentQuotationId) {
+    showAlert('No quotation selected. Please save or load a quotation first.');
+    return;
+  }
+
+  const quotation = getCurrentDomesticQuotation();
+  if (!quotation) {
+    showAlert('Quotation not found. Please reload the quotation and try again.');
+    return;
+  }
+
+  if (quotation.status !== 'booked') {
+    showAlert('Create Voucher is available only when quotation status is Booked.');
+    return;
+  }
+
+  const ownerId = getAgentDocId(quotation.agentData) || getAgentDocId(getCurrentAgent()) || '';
+  localStorage.setItem('selectedQuotationId', currentQuotationId);
+  if (ownerId) localStorage.setItem('selectedQuotationOwnerId', ownerId);
+  const ownerQuery = ownerId ? `&owner=${encodeURIComponent(ownerId)}` : '';
+  window.open('domestic-voucher.html?quotationId=' + encodeURIComponent(currentQuotationId) + ownerQuery, '_blank');
+}
+
+function ensureCreateVoucherButton() {
+  const updateBtn = document.getElementById('btnUpdateStatus');
+  if (!updateBtn) return null;
+
+  let voucherBtn = document.getElementById('btnCreateVoucher');
+  if (!voucherBtn) {
+    voucherBtn = document.createElement('button');
+    voucherBtn.id = 'btnCreateVoucher';
+    voucherBtn.type = 'button';
+    voucherBtn.textContent = 'Create Voucher';
+    voucherBtn.className = updateBtn.className || '';
+    voucherBtn.style.marginLeft = '8px';
+    voucherBtn.style.display = 'none';
+    voucherBtn.addEventListener('click', openDomesticVoucherEditor);
+    updateBtn.insertAdjacentElement('afterend', voucherBtn);
+  }
+  return voucherBtn;
+}
+
+function syncCreateVoucherButton(statusValue) {
+  const voucherBtn = ensureCreateVoucherButton();
+  if (!voucherBtn) return;
+  const shouldShow = !!currentQuotationId && String(statusValue || '').toLowerCase() === 'booked';
+  voucherBtn.style.display = shouldShow ? 'inline-block' : 'none';
+}
+
 function updateQuotationStatus(quotationId, newStatus) {
   try {
     // Get all quotations
@@ -4982,6 +5037,7 @@ function updateQuotationStatus(quotationId, newStatus) {
       
       // Add this to ensure status section is visible after update
       showStatusSection();
+      syncCreateVoucherButton(newStatus);
       
       return true;
     }
@@ -4997,6 +5053,7 @@ function updateQuotationStatus(quotationId, newStatus) {
 function showStatusSection() {
   const statusSection = document.getElementById('statusSection');
   const quotationStatus = document.getElementById('quotationStatus');
+  ensureCreateVoucherButton();
   
   // Get all quotations from localStorage
   const allSavedQuotations = JSON.parse(localStorage.getItem('savedQuotations_domestic')) || [];
@@ -5008,11 +5065,14 @@ function showStatusSection() {
     const quotation = allSavedQuotations.find(q => q.id === currentQuotationId);
     if (quotation && quotation.status) {
       quotationStatus.value = quotation.status;
+      syncCreateVoucherButton(quotation.status);
     } else {
       quotationStatus.value = 'pending';
+      syncCreateVoucherButton('pending');
     }
   } else {
       statusSection.style.display = 'none';
+      syncCreateVoucherButton('');
     }
   }
 
@@ -5030,6 +5090,10 @@ document.getElementById('btnUpdateStatus').addEventListener('click', () => {
   
   const newStatus = document.getElementById('quotationStatus').value;
   updateQuotationStatus(currentQuotationId, newStatus);
+});
+
+document.getElementById('quotationStatus')?.addEventListener('change', (event) => {
+  syncCreateVoucherButton(event.target.value);
 });
 </script>
 
