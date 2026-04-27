@@ -5292,108 +5292,6 @@ function showQuotationModal() {
     showNotification(`Hotel price mode selected: ${selectedMode}`, 'info', 3500);
   }
 
-  // --- Day-wise Itinerary Section ---
-  // Helper to auto-generate day-wise itinerary
-  function buildDayWiseItinerary() {
-    // Gather hotel stays, tours, transfers, and flights
-    const hotels = getHotelGroups();
-    const tours = getTourDetails();
-    const transfers = [];
-    document.querySelectorAll("[id^='transferBlock_']").forEach((el) => {
-      const idx = el.id.split("_")[1];
-      transfers.push({
-        date: document.getElementById(`tDate_${idx}`)?.value || "",
-        from: document.getElementById(`tFrom_${idx}`)?.value || "",
-        to: document.getElementById(`tTo_${idx}`)?.value || "",
-        direction: document.getElementById(`tDirection_${idx}`)?.value || "One Way",
-        vehicle: document.getElementById(`tCar_${idx}`)?.value || "",
-        serviceType: document.getElementById(`tType_${idx}`)?.value || "",
-      });
-    });
-    const flights = [];
-    document.querySelectorAll("[id^='flightBlock_']").forEach((el) => {
-      const idx = el.id.split("_")[1];
-      flights.push({
-        airline: document.getElementById(`airline_${idx}`)?.value || "",
-        itinerary: document.getElementById(`flightItinerary_${idx}`)?.value || "",
-        direct: document.getElementById(`flightDirect_${idx}`)?.value || "",
-      });
-    });
-
-    // Build a timeline of days
-    const clientData = JSON.parse(localStorage.getItem("savedClientData_international")) || {};
-    const dateFrom = clientData.dateFrom;
-    const dateTo = clientData.dateTo;
-    if (!dateFrom || !dateTo) return "<div style='color:#b71c1c'>Travel dates not set.</div>";
-    const start = new Date(dateFrom);
-    const end = new Date(dateTo);
-    const days = Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1;
-    if (days < 1) return "<div style='color:#b71c1c'>Invalid travel dates.</div>";
-
-    // Helper to format date
-    function fmtDate(dt) {
-      return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-    }
-
-    // Build per-day itinerary
-    let html = `<div id="itinerarySection" style="margin-bottom:18px;border:1px solid #e3f2fd;padding:14px 18px 10px 18px;border-radius:8px;background:#fafdff;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-        <h3 style="margin:0;color:#0b76d1;font-size:15px;">Day-wise Itinerary</h3>
-        <button id="toggleItineraryBtn" style="background:#0b76d1;color:#fff;border:none;padding:3px 12px;border-radius:4px;font-size:12px;cursor:pointer;">Hide</button>
-      </div>
-      <div id="itineraryDaysWrap">`;
-
-    let currentDate = new Date(start);
-    let currentCity = hotels.length > 0 ? hotels[0].city : (clientData.tourDestination || "");
-    let hotelIdx = 0, tourIdx = 0, transferIdx = 0, flightIdx = 0;
-    for (let d = 1; d <= days; d++) {
-      html += `<div style="margin-bottom:10px;padding:10px 12px;background:#f3f8fd;border-radius:6px;border-left:4px solid #0b76d1;">
-        <div style="font-weight:600;color:#0b76d1;">Day ${d} &mdash; ${fmtDate(currentDate)}</div>`;
-
-      // City/hotel change logic
-      let cityChange = false;
-      let hotel = hotels[hotelIdx];
-      if (hotel && hotel.checkIn === currentDate.toISOString().slice(0,10)) {
-        if (hotel.city !== currentCity) cityChange = true;
-        currentCity = hotel.city;
-        html += `<div style='margin-top:2px;'><b>Hotel:</b> ${sanitizeInput(hotel.name)} (${sanitizeInput(hotel.city)}) - Check-in</div>`;
-      }
-      // Show hotel check-out
-      if (hotel && hotel.checkOut === currentDate.toISOString().slice(0,10)) {
-        html += `<div style='margin-top:2px;'><b>Hotel:</b> ${sanitizeInput(hotel.name)} (${sanitizeInput(hotel.city)}) - Check-out</div>`;
-        hotelIdx++;
-      }
-
-      // Transfers on this day
-      while (transferIdx < transfers.length && transfers[transferIdx].date === currentDate.toISOString().slice(0,10)) {
-        const t = transfers[transferIdx];
-        html += `<div style='margin-top:2px;'><b>Transfer:</b> ${sanitizeInput(t.from)} → ${sanitizeInput(t.to)} (${sanitizeInput(t.vehicle)}, ${sanitizeInput(t.serviceType)})</div>`;
-        transferIdx++;
-      }
-
-      // Tours on this day
-      while (tourIdx < tours.length && tours[tourIdx].date === currentDate.toISOString().slice(0,10)) {
-        const tour = tours[tourIdx];
-        html += `<div style='margin-top:2px;'><b>Tour:</b> ${sanitizeInput(tour.name)} in ${sanitizeInput(tour.city)} (${sanitizeInput(tour.duration)}, ${sanitizeInput(tour.mode)})</div>`;
-        tourIdx++;
-      }
-
-      // If city changes, prompt for flight details
-      if (cityChange && flights[flightIdx]) {
-        const f = flights[flightIdx];
-        html += `<div style='margin-top:2px;'><b>Flight:</b> ${sanitizeInput(f.airline)} &mdash; ${sanitizeInput(f.itinerary)}${f.direct ? ' ('+sanitizeInput(f.direct)+')' : ''}</div>`;
-        flightIdx++;
-      }
-
-      html += `</div>`;
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
-    html += `</div></div>`;
-    return html;
-  }
-
-  // --- End Day-wise Itinerary Section ---
-
 
   function getQuotationPreviewClone() {
   const modalContent = document.getElementById("quotationModalContent");
@@ -5706,14 +5604,7 @@ async function printQuotation() {
   }
 
   // Build the HTML for the quotation preview
-    let quotationHTML = "";
-
-    // Insert Day-wise Itinerary section with toggle
-    let itineraryVisible = true;
-    quotationHTML += `<div id='itinerarySectionWrap'>${buildDayWiseItinerary()}</div>`;
-
-    // Continue with the rest of the quotation as before
-    quotationHTML += `
+  let quotationHTML = `
     <div style="text-align: center; margin-bottom: 12px; border-bottom: 1px solid #dbe6f3; padding-bottom: 8px;">
       <h2 style="margin: 2px 0 4px; color: #0b76d1;">Flight Connection Travel & Tours</h2>
       <div style="font-size: 12px; color: #555; margin-bottom: 6px;">GL No. 3423 &nbsp;|&nbsp; IATA: 27319143</div>
@@ -6269,44 +6160,30 @@ quotationHTML += `
   `;
   
   // Set modal content
-    modalTitle.textContent = "Quotation Preview";
-    modalContent.innerHTML = `
-      <style>
-        .compact-quotation{font-family:Calibri,Arial,sans-serif;font-size:12px;line-height:1.32;color:#111;text-align:left!important}
-        .compact-quotation > div:first-child{text-align:center!important}
-        .compact-quotation h2{font-size:18px!important;margin:4px 0 6px!important;line-height:1.2}
-        .compact-quotation h3{font-size:14px!important;margin:0 0 6px!important;line-height:1.2}
-        .compact-quotation h4,.compact-quotation h5{font-size:12.5px!important;margin:0 0 4px!important;line-height:1.2}
-        .compact-quotation p{margin:3px 0!important}
-        .compact-quotation ul,.compact-quotation ol{margin:4px 0!important;padding-left:18px!important}
-        .compact-quotation li{margin:1px 0!important}
-        .compact-quotation table{width:100%!important;border-collapse:collapse!important;margin:5px 0 8px!important}
-        .compact-quotation th,.compact-quotation td{padding:5px 6px!important;font-size:11.5px!important;vertical-align:top}
-        .compact-quotation div[style*="border: 1px solid #eee"],
-        .compact-quotation div[style*="border: 1px solid #ddd"],
-        .compact-quotation div[style*="border: 1px solid #e3f2fd"],
-        .compact-quotation div[style*="border: 1px solid #f5e6e6"]{margin-bottom:10px!important;padding:8px!important;border-radius:6px!important}
-        .compact-quotation div[style*="text-align: center; margin-bottom: 20px"]{margin-bottom:10px!important}
-        .compact-quotation div[style*="margin-top: 30px"]{margin-top:12px!important}
-        .compact-quotation img{max-width:100%!important;height:auto!important}
-        .compact-quotation img[alt="Flight Connection Travel & Tours"]{box-shadow:none!important;border-radius:6px!important}
-      </style>
-      <div class="compact-quotation">${quotationHTML}</div>
-      <script>
-        // Toggle itinerary section
-        document.getElementById('toggleItineraryBtn')?.addEventListener('click', function() {
-          const wrap = document.getElementById('itineraryDaysWrap');
-          if (!wrap) return;
-          if (wrap.style.display === 'none') {
-            wrap.style.display = '';
-            this.textContent = 'Hide';
-          } else {
-            wrap.style.display = 'none';
-            this.textContent = 'Show';
-          }
-        });
-      <\/script>
-    `;
+  modalTitle.textContent = "Quotation Preview";
+  modalContent.innerHTML = `
+    <style>
+      .compact-quotation{font-family:Calibri,Arial,sans-serif;font-size:12px;line-height:1.32;color:#111;text-align:left!important}
+      .compact-quotation > div:first-child{text-align:center!important}
+      .compact-quotation h2{font-size:18px!important;margin:4px 0 6px!important;line-height:1.2}
+      .compact-quotation h3{font-size:14px!important;margin:0 0 6px!important;line-height:1.2}
+      .compact-quotation h4,.compact-quotation h5{font-size:12.5px!important;margin:0 0 4px!important;line-height:1.2}
+      .compact-quotation p{margin:3px 0!important}
+      .compact-quotation ul,.compact-quotation ol{margin:4px 0!important;padding-left:18px!important}
+      .compact-quotation li{margin:1px 0!important}
+      .compact-quotation table{width:100%!important;border-collapse:collapse!important;margin:5px 0 8px!important}
+      .compact-quotation th,.compact-quotation td{padding:5px 6px!important;font-size:11.5px!important;vertical-align:top}
+      .compact-quotation div[style*="border: 1px solid #eee"],
+      .compact-quotation div[style*="border: 1px solid #ddd"],
+      .compact-quotation div[style*="border: 1px solid #e3f2fd"],
+      .compact-quotation div[style*="border: 1px solid #f5e6e6"]{margin-bottom:10px!important;padding:8px!important;border-radius:6px!important}
+      .compact-quotation div[style*="text-align: center; margin-bottom: 20px"]{margin-bottom:10px!important}
+      .compact-quotation div[style*="margin-top: 30px"]{margin-top:12px!important}
+      .compact-quotation img{max-width:100%!important;height:auto!important}
+      .compact-quotation img[alt="Flight Connection Travel & Tours"]{box-shadow:none!important;border-radius:6px!important}
+    </style>
+    <div class="compact-quotation">${quotationHTML}</div>
+  `;
   
 // Add buttons
 modalButtons.innerHTML = `
