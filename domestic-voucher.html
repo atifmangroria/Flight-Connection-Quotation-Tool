@@ -867,7 +867,13 @@ async function init() {
 
   let existing = null;
   const idMap = loadVoucherIdMap();
-  const mappedId = idMap[quotationId] || '';
+  // Fix legacy stale IDs that had double DOM- prefix (e.g. VCHR-DOM-DOM-829780 → VCHR-DOM-829780)
+  let mappedId = idMap[quotationId] || '';
+  if (mappedId && mappedId.startsWith('VCHR-DOM-DOM-')) {
+    mappedId = mappedId.replace('VCHR-DOM-DOM-', 'VCHR-DOM-');
+    idMap[quotationId] = mappedId;
+    saveVoucherIdMap(idMap);
+  }
   const deterministicId = getDeterministicVoucherId(quotationId);
 
   if (mappedId) {
