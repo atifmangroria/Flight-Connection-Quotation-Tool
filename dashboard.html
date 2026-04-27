@@ -391,12 +391,17 @@
     </div>
     <div class="header-right no-print">
       <button onclick="showQuotationTypeModal()" class="btn-primary">Create Quotation</button>
-      <button onclick="window.location.href='customer-list.html'" class="btn-primary">Customers</button>
-      <button onclick="window.location.href='voucher-access.html'" class="btn-primary">Voucher Access</button>
-      <button id="adminBtn" onclick="showPackageModal()" class="btn-primary" style="display:none;">Manage Packages</button>
-      <button id="agentPackageBtn" onclick="showPackageModal()" class="btn-primary" style="display:none;">View Packages</button>
-      <button id="userMgmtBtn" onclick="window.location.href='user-management.html'" class="btn-primary" style="display:none;">User Management</button>
-      <button onclick="window.location.href='reports.html'" class="btn-primary">Reports</button>
+      <div class="tools-dropdown" id="toolsDropdown">
+        <button class="btn-primary tools-toggle" onclick="toggleToolsMenu(event)">Tools &#9660;</button>
+        <div class="tools-menu" id="toolsMenu">
+          <a class="tools-item" onclick="closeToolsMenu()" href="customer-list.html">&#128100; Customers</a>
+          <a class="tools-item" onclick="closeToolsMenu()" href="voucher-access.html">&#127903; Voucher Access</a>
+          <a class="tools-item" id="adminMenuItem" onclick="closeToolsMenu();showPackageModal()" href="#" style="display:none;">&#128230; Manage Packages</a>
+          <a class="tools-item" id="agentMenuItem" onclick="closeToolsMenu();showPackageModal()" href="#" style="display:none;">&#128230; View Packages</a>
+          <a class="tools-item" id="userMgmtMenuItem" onclick="closeToolsMenu()" href="user-management.html" style="display:none;">&#128101; User Management</a>
+          <a class="tools-item" onclick="closeToolsMenu()" href="reports.html">&#128202; Reports</a>
+        </div>
+      </div>
       <button id="btnLogout" class="btn-logout">Logout</button>
     </div>
   </div>
@@ -1480,14 +1485,17 @@ function loadAgentInfo() {
   if (agent) {
     document.getElementById("agentInfo").textContent = `Logged in as: ${agent.name} (${agent.phone})`;
     if (agent.role === 'admin') {
-      document.getElementById("adminBtn").style.display = 'inline-block';
-      document.getElementById("userMgmtBtn").style.display = 'inline-block';
+      const adminMenuItem = document.getElementById('adminMenuItem');
+      const userMgmtMenuItem = document.getElementById('userMgmtMenuItem');
+      if (adminMenuItem) adminMenuItem.style.display = 'block';
+      if (userMgmtMenuItem) userMgmtMenuItem.style.display = 'block';
       const allUsersBtn = document.getElementById('allUsersBtn');
       const userFilter = document.getElementById('userFilter');
       if (allUsersBtn) allUsersBtn.style.display = 'inline-block';
       if (userFilter) userFilter.style.display = 'inline-block';
     } else {
-      document.getElementById("agentPackageBtn").style.display = 'inline-block';
+      const agentMenuItem = document.getElementById('agentMenuItem');
+      if (agentMenuItem) agentMenuItem.style.display = 'block';
     }
   }
 }
@@ -2383,6 +2391,19 @@ window.viewQuotation = viewQuotation;
 window.editQuotation = editQuotation;
 window.deleteQuotation = deleteQuotation;
 window.transferQuotation = transferQuotation;
+window.toggleToolsMenu = function(e) {
+  e.stopPropagation();
+  document.getElementById('toolsMenu').classList.toggle('open');
+};
+window.closeToolsMenu = function() {
+  document.getElementById('toolsMenu').classList.remove('open');
+};
+document.addEventListener('click', function(e) {
+  const dd = document.getElementById('toolsDropdown');
+  if (dd && !dd.contains(e.target)) {
+    document.getElementById('toolsMenu').classList.remove('open');
+  }
+});
 window.showPackageModal = showPackageModal;
 window.closePackageModal = closePackageModal;
 window.openPackageBuilder = openPackageBuilder;
