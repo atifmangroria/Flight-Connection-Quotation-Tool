@@ -5292,7 +5292,27 @@ function showQuotationModal() {
     showNotification(`Hotel price mode selected: ${selectedMode}`, 'info', 3500);
   }
 
-function getQuotationPreviewClone() {
+  // Handle inter-city flight date prompt asynchronously then render the modal
+  (async () => {
+    const cityChanges = detectCityChanges(getHotelGroups());
+    if (cityChanges.length > 0) {
+      const existing = Array.isArray(window._flightCityChangeDates) ? window._flightCityChangeDates : [];
+      // Determine if any change is missing a date
+      const missing = cityChanges.filter(c => !existing.find(e => e.from === c.from && e.to === c.to));
+      if (missing.length > 0) {
+        const filled = await showFlightDatePromptModal(cityChanges, existing);
+        // Merge filled into existing (overwrite same from/to pair)
+        const merged = existing.filter(e => !filled.find(f => f.from === e.from && f.to === e.to));
+        window._flightCityChangeDates = merged.concat(filled);
+        // Persist immediately
+        saveQuotation();
+      }
+    }
+    _renderQuotationModal(modal, modalTitle, modalContent, modalButtons);
+  })();
+}
+
+function _renderQuotationModal(modal, modalTitle, modalContent, modalButtons) {
   const modalContent = document.getElementById("quotationModalContent");
   if (!modalContent) {
     return null;
@@ -6133,6 +6153,29 @@ quotationHTML += `
   </div>
 `;
 
+// Add Day-wise Itinerary section (hidden by default, shown via toggle)
+const _qItinerary = buildDayWiseItinerary({
+  clientData,
+  hotels: getHotelGroups(),
+  transfers: (function(){
+    const ts = [];
+    document.querySelectorAll("[id^='transferBlock_']").forEach(el => {
+      const idx = el.id.split("_")[1];
+      ts.push({
+        date: document.getElementById(`tDate_${idx}`)?.value || "",
+        from: document.getElementById(`tFrom_${idx}`)?.value || "",
+        to: document.getElementById(`tTo_${idx}`)?.value || "",
+        direction: document.getElementById(`tDirection_${idx}`)?.value || "",
+        returnDate: document.getElementById(`tReturnDate_${idx}`)?.value || ""
+      });
+    });
+    return ts;
+  })(),
+  tours: getTourDetails(),
+  flightCityChangeDates: window._flightCityChangeDates || []
+});
+quotationHTML += renderItineraryHTML(_qItinerary, 'quotation');
+
 // Add terms and conditions
 quotationHTML += `
    <div style="margin-bottom: 20px; border: 1px solid #e3f2fd; padding: 15px; border-radius: 8px; background-color: #ffffff;">
@@ -6188,6 +6231,7 @@ quotationHTML += `
 modalButtons.innerHTML = `
   <button id="printQuotationBtn" class="green-btn" style="margin-right: 10px;">🖨️ Print Quotation</button>
   <button id="shareWhatsAppBtn" class="whatsapp-btn">📱 Share on WhatsApp</button>
+  <button id="btnToggleQItinerary" class="ghost" style="margin-right:10px;" onclick="(function(){var el=document.getElementById('quotationItinerarySection');if(!el)return;var hidden=el.style.display==='none';el.style.display=hidden?'block':'none';document.getElementById('btnToggleQItinerary').textContent=hidden?'📅 Hide Itinerary':'📅 Show Itinerary';})()">📅 Show Itinerary</button>
   <button id="closeQuotationBtn" class="ghost">Close</button>
 `;
 
@@ -6432,6 +6476,237 @@ btnExportExcel.addEventListener('click', () => {
     showAlert("Failed to export to Excel. Please try again.", "Error");
   }
 });
+
+// ============================================================
+// DAY-WISE ITINERARY HELPERS
+// ============================================================
+
+// ============================================================
+// DAY-WISE ITINERARY HELPERS
+// ============================================================
+
+/**
+ * Detect hotel city transitions that require inter-city flights.
+ * Returns [{from, to, suggestedDate}] for each city change in hotel sequence.
+ */
+function detectCityChanges(hotels) {
+  const changes = [];
+  const sorted = (hotels || []).filter(h => h.checkIn).slice().sort((a,b) => new Date(a.checkIn) - new Date(b.checkIn));
+  for (let i=1; i<sorted.length; i++) {
+    if (sorted[i-1].city && sorted[i].city && sorted[i-1].city !== sorted[i].city) {
+      changes.push({
+        from: sorted[i-1].city,
+        to: sorted[i].city,
+        suggestedDate: sorted[i].checkIn || ''
+      });
+    }
+  }
+  return changes;
+}
+
+/**
+ * Show a modal prompting user for inter-city flight dates.
+ * Returns Promise<Array<{from,to,date}>>
+ */
+function showFlightDatePromptModal(cityChanges, existingDates) {
+  return new Promise(resolve => {
+    // Build a map of existing dates for pre-filling
+    const existing = {};
+    (existingDates||[]).forEach(e => { existing[e.from+'|'+e.to] = e.date; });
+
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;';
+
+    const box = document.createElement('div');
+    box.style.cssText = 'background:#fff;border-radius:10px;padding:24px;max-width:460px;width:90%;max-height:80vh;overflow-y:auto;';
+
+    let fieldsHtml = '';
+    cityChanges.forEach((c, i) => {
+      const prefill = existing[c.from+'|'+c.to] || c.suggestedDate || '';
+      fieldsHtml += `
+        <div style="margin-bottom:14px;">
+          <label style="display:block;font-weight:600;color:#333;margin-bottom:4px;">✈️ Flight: ${sanitizeInput(c.from)} → ${sanitizeInput(c.to)}</label>
+          <input type="date" id="flightPromptDate_${i}" value="${prefill}" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;font-size:14px;">
+          <label style="font-size:12px;color:#888;margin-top:4px;display:flex;align-items:center;gap:4px;">
+            <input type="checkbox" id="flightPromptSkip_${i}" style="margin:0;"> No flight (overland/ferry)
+          </label>
+        </div>`;
+    });
+
+    box.innerHTML = `
+      <h3 style="margin:0 0 10px;color:#0b76d1;">Inter-city Flight Dates</h3>
+      <p style="font-size:13px;color:#555;margin-bottom:14px;">Your itinerary includes city changes. Please enter the flight date for each leg (or tick "No flight" if travelling by land/sea).</p>
+      ${fieldsHtml}
+      <div style="text-align:right;margin-top:16px;">
+        <button id="flightPromptConfirm" style="padding:8px 20px;background:#0b76d1;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;">Confirm</button>
+      </div>`;
+
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+
+    document.getElementById('flightPromptConfirm').addEventListener('click', () => {
+      const result = [];
+      cityChanges.forEach((c, i) => {
+        const skip = document.getElementById(`flightPromptSkip_${i}`)?.checked;
+        const date = skip ? '' : (document.getElementById(`flightPromptDate_${i}`)?.value || '');
+        if (!skip) result.push({ from: c.from, to: c.to, date });
+      });
+      document.body.removeChild(overlay);
+      resolve(result);
+    });
+  });
+}
+
+
+ * @param {Object} opts
+ *   clientData  – { dateFrom, dateTo }
+ *   hotels      – array from getHotelGroups(): { city, name, checkIn, checkOut, nights, roomTypes[] }
+ *   transfers   – array: { date, from, to, direction, returnDate }
+ *   tours       – array: { date, name, city, duration }
+ *   flightCityChangeDates – array: { from, to, date }
+ * @returns Array of { dayNum, date, dateLabel, items[], city }
+ */
+function buildDayWiseItinerary({ clientData, hotels, transfers, tours, flightCityChangeDates }) {
+  if (!clientData || !clientData.dateFrom || !clientData.dateTo) return [];
+
+  const startDate = new Date(clientData.dateFrom);
+  const endDate   = new Date(clientData.dateTo);
+  if (isNaN(startDate) || isNaN(endDate) || startDate > endDate) return [];
+
+  // helpers
+  const toYMD = d => d instanceof Date ? d.toISOString().slice(0,10) : String(d||'').slice(0,10);
+  const addDay = (d, n) => { const r=new Date(d); r.setDate(r.getDate()+n); return r; };
+  const fmtDate = d => { if(!d) return ''; const dt=new Date(d); if(isNaN(dt)) return ''; return dt.getDate().toString().padStart(2,'0')+'/'+(dt.getMonth()+1).toString().padStart(2,'0')+'/'+dt.getFullYear(); };
+
+  // normalise meal type
+  function mealLabel(serviceType) {
+    const s = (serviceType||'').toLowerCase();
+    if (s.includes('half')) return 'Half Board';
+    if (s.includes('full')) return 'Full Board';
+    if (s.includes('breakfast') || s.includes('with b')) return 'Breakfast';
+    return null;
+  }
+
+  const days = [];
+  let current = new Date(startDate);
+  let dayNum = 0;
+
+  while (current <= endDate) {
+    dayNum++;
+    const dateStr = toYMD(current);
+    const items = [];
+
+    // find active hotel for this date
+    let activeHotel = null;
+    for (const h of (hotels || [])) {
+      if (!h.checkIn || !h.checkOut) continue;
+      const ci = toYMD(new Date(h.checkIn));
+      const co = toYMD(new Date(h.checkOut));
+      if (dateStr >= ci && dateStr < co) { activeHotel = h; break; }
+    }
+
+    const city = activeHotel ? activeHotel.city : (hotels&&hotels.length?hotels[0].city:'');
+
+    // Day 1 arrival tag
+    if (dayNum === 1) {
+      items.push({ type:'arrival', text: 'Arrival in ' + (city || clientData.tourDestination || 'Destination') });
+    }
+
+    // hotel check-in on this day
+    if (activeHotel && toYMD(new Date(activeHotel.checkIn)) === dateStr) {
+      items.push({ type:'checkin', text: 'Check-in: ' + activeHotel.name + (activeHotel.city ? ', ' + activeHotel.city : '') });
+    }
+
+    // city-change flight (inter-city)
+    const flightChange = (flightCityChangeDates||[]).find(f => toYMD(new Date(f.date)) === dateStr);
+    if (flightChange) {
+      items.push({ type:'flight', text: 'Flight: ' + flightChange.from + ' → ' + flightChange.to });
+    }
+
+    // transfers on this day
+    for (const t of (transfers||[])) {
+      if (t.date && toYMD(new Date(t.date)) === dateStr) {
+        items.push({ type:'transfer', text: 'Transfer: ' + (t.from||'') + ' → ' + (t.to||'') });
+      }
+      if (t.direction === 'Return' && t.returnDate && toYMD(new Date(t.returnDate)) === dateStr) {
+        items.push({ type:'transfer', text: 'Transfer: ' + (t.to||'') + ' → ' + (t.from||'') });
+      }
+    }
+
+    // hotel meal
+    if (activeHotel) {
+      const meal = activeHotel.roomTypes && activeHotel.roomTypes.length
+        ? mealLabel(activeHotel.roomTypes[0].serviceType)
+        : null;
+      if (meal) items.push({ type:'meal', text: meal + ' at ' + activeHotel.name });
+    }
+
+    // tours on this day
+    const todayTours = (tours||[]).filter(t => t.date && toYMD(new Date(t.date)) === dateStr);
+    if (todayTours.length > 0) {
+      todayTours.forEach(t => items.push({ type:'tour', text: (t.name||'Tour') + (t.city ? ' in ' + t.city : '') + (t.duration ? ' (' + t.duration + ')' : '') }));
+    } else if (activeHotel && dayNum > 1) {
+      items.push({ type:'free', text: 'Free Day in ' + (activeHotel.city||city) });
+    }
+
+    // check-out
+    if (activeHotel && toYMD(new Date(activeHotel.checkOut)) === dateStr) {
+      items.push({ type:'checkout', text: 'Check-out: ' + activeHotel.name });
+    }
+
+    // last day departure
+    if (toYMD(current) === toYMD(endDate)) {
+      items.push({ type:'departure', text: 'Departure / Return Flight' });
+    }
+
+    days.push({ dayNum, date: dateStr, dateLabel: fmtDate(dateStr), items, city });
+    current = addDay(current, 1);
+  }
+
+  return days;
+}
+
+/**
+ * Render the day-wise itinerary as an HTML string.
+ * @param {Array} days – output of buildDayWiseItinerary
+ * @param {string} context – 'quotation' or 'voucher'
+ * @returns HTML string
+ */
+function renderItineraryHTML(days, context) {
+  if (!days || days.length === 0) return '';
+
+  const icons = { arrival:'✈️', departure:'✈️', flight:'✈️', checkin:'🏨', checkout:'🏨', meal:'🍳', tour:'🏛️', transfer:'🚗', free:'🌴' };
+
+  let rows = '';
+  days.forEach(d => {
+    const itemsHtml = d.items.map(it => `<div style="padding:2px 0;font-size:12px;color:#333;">${icons[it.type]||'•'} ${sanitizeInput(it.text)}</div>`).join('');
+    rows += `
+      <tr>
+        <td style="padding:6px 10px;border:1px solid #dbe6f3;font-weight:700;color:#0b76d1;white-space:nowrap;vertical-align:top;">Day ${d.dayNum}<div style="font-size:11px;font-weight:400;color:#666;">${d.dateLabel}</div></td>
+        <td style="padding:6px 10px;border:1px solid #dbe6f3;color:#444;font-size:12px;vertical-align:top;">${sanitizeInput(d.city||'')}</td>
+        <td style="padding:6px 10px;border:1px solid #dbe6f3;vertical-align:top;">${itemsHtml||'<span style="color:#999;font-size:12px;">—</span>'}</td>
+      </tr>`;
+  });
+
+  return `
+  <div id="quotationItinerarySection" style="display:none;margin-bottom:20px;border:1px solid #dbe6f3;padding:12px;border-radius:8px;background:#fff;">
+    <h3 style="margin-top:0;color:#0b76d1;border-bottom:2px solid #0b76d1;padding-bottom:3px;margin-bottom:8px;">📅 Day-wise Itinerary</h3>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <thead>
+        <tr style="background:#eef5ff;">
+          <th style="padding:6px 10px;border:1px solid #dbe6f3;text-align:left;width:80px;">Day</th>
+          <th style="padding:6px 10px;border:1px solid #dbe6f3;text-align:left;width:120px;">City</th>
+          <th style="padding:6px 10px;border:1px solid #dbe6f3;text-align:left;">Programme</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+
+// ============================================================
+// END DAY-WISE ITINERARY HELPERS
+// ============================================================
 
 // Function to save the current quotation
 function normalizeCustomerPhone(phone) {
@@ -6832,7 +7107,8 @@ const customSectionsData = {
       tours: toursData,
       visa: visaData,
       addons: addonsData,
-      customSections: customSectionsData  // Add this line
+      customSections: customSectionsData,
+      flightCityChangeDates: window._flightCityChangeDates || []
     };
 
     upsertCustomerFromQuotation(quotationData.clientData, {
@@ -7008,6 +7284,9 @@ function loadQuotation(quotationId) {
       localStorage.setItem('sectionDisabled_1', 'false');
       localStorage.setItem('sectionDisabled_2', 'false');
     }
+
+    // Restore flight city change dates for itinerary
+    window._flightCityChangeDates = Array.isArray(quotation.flightCityChangeDates) ? quotation.flightCityChangeDates : [];
 
     // Restore saved pricing settings (agent fee option)
     const pricing = quotation.pricingSettings || {};
