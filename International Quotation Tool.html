@@ -6134,29 +6134,6 @@ quotationHTML += `
   </div>
 `;
 
-// Add Day-wise Itinerary section (hidden by default, shown via toggle)
-const _qItinerary = buildDayWiseItinerary({
-  clientData,
-  hotels: getHotelGroups(),
-  transfers: (function(){
-    const ts = [];
-    document.querySelectorAll("[id^='transferBlock_']").forEach(el => {
-      const idx = el.id.split("_")[1];
-      ts.push({
-        date: document.getElementById(`tDate_${idx}`)?.value || "",
-        from: document.getElementById(`tFrom_${idx}`)?.value || "",
-        to: document.getElementById(`tTo_${idx}`)?.value || "",
-        direction: document.getElementById(`tDirection_${idx}`)?.value || "",
-        returnDate: document.getElementById(`tReturnDate_${idx}`)?.value || ""
-      });
-    });
-    return ts;
-  })(),
-  tours: getTourDetails(),
-  flightCityChangeDates: window._flightCityChangeDates || []
-});
-quotationHTML += renderItineraryHTML(_qItinerary, 'quotation');
-
 // Add terms and conditions
 quotationHTML += `
    <div style="margin-bottom: 20px; border: 1px solid #e3f2fd; padding: 15px; border-radius: 8px; background-color: #ffffff;">
@@ -6212,7 +6189,6 @@ quotationHTML += `
 modalButtons.innerHTML = `
   <button id="printQuotationBtn" class="green-btn" style="margin-right: 10px;">🖨️ Print Quotation</button>
   <button id="shareWhatsAppBtn" class="whatsapp-btn">📱 Share on WhatsApp</button>
-  <button id="btnToggleQItinerary" class="ghost" style="margin-right:10px;" onclick="(function(){var el=document.getElementById('quotationItinerarySection');if(!el)return;var hidden=el.style.display==='none';el.style.display=hidden?'block':'none';document.getElementById('btnToggleQItinerary').textContent=hidden?'📅 Hide Itinerary':'📅 Show Itinerary';})()">📅 Show Itinerary</button>
   <button id="closeQuotationBtn" class="ghost">Close</button>
 `;
 
