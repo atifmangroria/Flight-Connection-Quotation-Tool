@@ -2209,6 +2209,163 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 </script>
 
+<!-- DAY-WISE ITINERARY SECTION -->
+<div class="section" id="itinerarySection" style="margin-top:16px;">
+  <div class="section-toggle-container">
+    <span class="section-toggle-label">Day-wise Itinerary</span>
+    <button type="button" id="toggleItineraryBtn" class="ghost" style="min-width:90px;">Hide</button>
+  </div>
+  <div id="itineraryTableWrap">
+    <div class="small" id="itineraryHint">(Itinerary will be generated from your Hotels, Tours, Transfers, and Dates)</div>
+    <table id="itineraryTable" border="1" style="margin-top:8px;">
+      <thead>
+        <tr>
+          <th>Day</th>
+          <th>Date</th>
+          <th>Hotel</th>
+          <th>Activities / Tours</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody id="itineraryTableBody">
+        <!-- Rows will be generated dynamically -->
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+// --- ITINERARY GENERATION LOGIC ---
+function getHotelStays() {
+  let stays = [];
+  hotels.forEach(idx => {
+    const name = document.getElementById(`hotelName_${idx}`)?.value || '';
+    const city = document.getElementById(`hotelCity_${idx}`)?.value || '';
+    const checkIn = document.getElementById(`hotelCheckIn_${idx}`)?.value;
+    const checkOut = document.getElementById(`hotelCheckOut_${idx}`)?.value;
+    let mealPlan = '';
+    const roomRows = document.querySelectorAll(`#hotelRoomTypes_${idx} .hotelServiceSel`);
+    if (roomRows.length > 0) mealPlan = roomRows[0].value;
+    if (checkIn && checkOut) {
+      let d = new Date(checkIn);
+      const end = new Date(checkOut);
+      while (d < end) {
+        stays.push({
+          date: d.toISOString().split('T')[0],
+          hotel: name,
+          city,
+          mealPlan
+        });
+        d.setDate(d.getDate() + 1);
+      }
+    }
+  });
+  return stays;
+}
+
+function getToursByDate() {
+  let map = {};
+  (window.tours || []).forEach(idx => {
+    const date = document.getElementById(`tourDate_${idx}`)?.value;
+    const name = document.getElementById(`tourName_${idx}`)?.value;
+    if (date && name) {
+      if (!map[date]) map[date] = [];
+      map[date].push(name);
+    }
+  });
+  return map;
+}
+
+function getTransfersByDate() {
+  let map = {};
+  (window.transfers || []).forEach(idx => {
+    const date = document.getElementById(`tDate_${idx}`)?.value;
+    const from = document.getElementById(`tFrom_${idx}`)?.value;
+    const to = document.getElementById(`tTo_${idx}`)?.value;
+    if (date && from && to) {
+      if (!map[date]) map[date] = [];
+      map[date].push(`Transfer: ${from} to ${to}`);
+    }
+  });
+  return map;
+}
+
+function getMealNote(mealPlan) {
+  if (!mealPlan) return '';
+  const mp = mealPlan.toLowerCase();
+  if (mp.includes('full')) return 'Full Board: All meals included';
+  if (mp.includes('half')) return 'Half Board: Breakfast and Dinner included';
+  if (mp.includes('breakfast')) return 'Breakfast included';
+  return '';
+}
+
+function generateItineraryTable() {
+  const tbody = document.getElementById('itineraryTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  const client = getClientData();
+  if (!client?.dateFrom || !client?.dateTo) return;
+  const stays = getHotelStays();
+  const tours = getToursByDate();
+  const transfers = getTransfersByDate();
+  let prevCity = '';
+  let dayNum = 1;
+  let d = new Date(client.dateFrom);
+  const end = new Date(client.dateTo);
+  end.setDate(end.getDate() + 1);
+  while (d < end) {
+    const dateStr = d.toISOString().split('T')[0];
+    const stay = stays.find(s => s.date === dateStr) || {};
+    const hotel = stay.hotel || '';
+    const city = stay.city || '';
+    const mealPlan = stay.mealPlan || '';
+    let activities = [];
+    if (tours[dateStr]) activities = activities.concat(tours[dateStr]);
+    if (transfers[dateStr]) activities = activities.concat(transfers[dateStr]);
+    if (prevCity && city && city !== prevCity) {
+      if (!transfers[dateStr]) {
+        activities.push(`Flight from ${prevCity} to ${city}`);
+      }
+    }
+    if (activities.length === 0) activities.push('Free day');
+    const mealNote = getMealNote(mealPlan);
+    tbody.innerHTML += `<tr><td>${dayNum}</td><td>${formatDateToDMY(dateStr)}</td><td>${hotel}</td><td>${activities.join(', ')}</td><td>${mealNote}</td></tr>`;
+    prevCity = city;
+    dayNum++;
+    d.setDate(d.getDate() + 1);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  const btn = document.getElementById('toggleItineraryBtn');
+  const wrap = document.getElementById('itineraryTableWrap');
+  if (btn && wrap) {
+    btn.addEventListener('click', function() {
+      if (wrap.style.display === 'none') {
+        wrap.style.display = '';
+        btn.textContent = 'Hide';
+      } else {
+        wrap.style.display = 'none';
+        btn.textContent = 'Show';
+      }
+    });
+  }
+  [
+    'dateFrom','dateTo','btnAddHotel','btnAddTrans','btnAddTour','btnSaveClient'
+  ].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', generateItineraryTable);
+    if (el) el.addEventListener('click', generateItineraryTable);
+  });
+  document.body.addEventListener('input', function(e) {
+    if (e.target && (e.target.id.startsWith('hotel') || e.target.id.startsWith('tour') || e.target.id.startsWith('t'))) {
+      generateItineraryTable();
+    }
+  });
+  generateItineraryTable();
+});
+</script>
+
 <!-- FLIGHT -->
 <div class="section" id="flightContainerWrapper">
   <div class="flight-header">
