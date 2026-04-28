@@ -6826,7 +6826,7 @@ const customSectionsData = {
         new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       expiresAt: expiryDate.toISOString(),
-      status: document.getElementById('quotationStatus')?.value || 'pending',
+      status: normalizeQuotationStatus(document.getElementById('quotationStatus')?.value) || 'pending',
       pricingSettings: {
         svcOption: selectedSvcOption,
         svcPerAdult: parseFloat(document.getElementById('svcPerAdult')?.value || 0),
@@ -7029,7 +7029,16 @@ function loadQuotation(quotationId) {
     if (document.getElementById('svcPerInfant')) document.getElementById('svcPerInfant').value = parseFloat(pricing.svcPerInfant || 0);
     toggleServiceOption(svcOptionToSet);
     if (document.getElementById('quotationStatus')) {
-      document.getElementById('quotationStatus').value = quotation.status || 'pending';
+      const normalizedStatus = normalizeQuotationStatus(quotation.status) || 'pending';
+      document.getElementById('quotationStatus').value = normalizedStatus;
+      quotation.status = normalizedStatus;
+
+      const allQuotations = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
+      const rowIndex = allQuotations.findIndex(q => q.id === quotation.id);
+      if (rowIndex !== -1 && allQuotations[rowIndex].status !== normalizedStatus) {
+        allQuotations[rowIndex].status = normalizedStatus;
+        localStorage.setItem('savedQuotations_international', JSON.stringify(allQuotations));
+      }
     }
     
     // Clear existing sections
@@ -7460,8 +7469,13 @@ function loadQuotation(quotationId) {
       }
     }
     
-    // Show status section
+    // Show status section and force voucher visibility for already-booked quotations
     showStatusSection();
+    const voucherBtn = document.getElementById('btnCreateVoucher');
+    const currentStatusValue = normalizeQuotationStatus(document.getElementById('quotationStatus')?.value);
+    if (voucherBtn) {
+      voucherBtn.style.display = currentStatusValue === 'booked' ? 'inline-block' : 'none';
+    }
 
     // Keep loaded values but do not auto-open quotation preview/cost sheet on reload
     updateServiceChargeVisibility();
