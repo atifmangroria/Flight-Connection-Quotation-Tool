@@ -5529,6 +5529,7 @@ function showQuotationModal() {
     console.error('Error generating PDF:', error);
     showAlert("Failed to generate PDF. Please try again.", "Error");
   }
+  // Remove stray code after catch block
 }
   
   const clientData = JSON.parse(localStorage.getItem("savedClientData_international")) || {};
