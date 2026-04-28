@@ -5304,97 +5304,152 @@ function showQuotationModal() {
 
   function getQuotationPreviewClone() {
   const modalContent = document.getElementById("quotationModalContent");
-  if (!modalContent) {
-    return null;
-  }
+  function buildDayWiseItineraryTable() {
+    // Get travel dates
+    const clientData = JSON.parse(localStorage.getItem("savedClientData_international")) || {};
+    const dateFrom = clientData.dateFrom;
+    const dateTo = clientData.dateTo;
+    if (!dateFrom || !dateTo) return '';
+    const start = new Date(dateFrom);
+    const end = new Date(dateTo);
+    if (isNaN(start) || isNaN(end) || end < start) return '';
 
-  const clonedContent = modalContent.cloneNode(true);
-  clonedContent.querySelectorAll('style, button, #printQuotationBtn, #closeQuotationModalBtn').forEach(el => el.remove());
-
-  const sectionIds = ['calculationSummarySection', 'flightSection', 'hotelSection', 'addonSection', 'priceBreakupSection'];
-  sectionIds.forEach(id => {
-    const div = clonedContent.querySelector('#' + id);
-    if (div && div.style.display === 'none') {
-      div.remove();
-    }
-  });
-
-  return clonedContent;
-}
-
-async function waitForRenderedImages(container) {
-  const images = Array.from(container.querySelectorAll('img'));
-  if (!images.length) {
-    return;
-  }
-
-  await Promise.all(images.map((img) => {
-    if (img.complete && img.naturalWidth > 0) {
-      return Promise.resolve();
-    }
-
-    return new Promise((resolve) => {
-      const done = () => resolve();
-      img.addEventListener('load', done, { once: true });
-      img.addEventListener('error', done, { once: true });
+    // Collect hotels, transfers, tours
+    const hotels = [];
+    document.querySelectorAll("[id^='hotelBlock_']").forEach((el) => {
+      const idx = el.id.split("_")[1];
+      hotels.push({
+        name: document.getElementById(`hotelName_${idx}`)?.value || '',
+        city: document.getElementById(`hotelCity_${idx}`)?.value || '',
+        checkIn: document.getElementById(`hotelCheckIn_${idx}`)?.value || '',
+        checkOut: document.getElementById(`hotelCheckOut_${idx}`)?.value || '',
+        meal: (() => {
+          // Find first room with meal plan
+          const room = el.querySelector('.hotelServiceSel');
+          return room ? room.value : '';
+        })()
+      });
     });
-  }));
+    // Sort hotels by checkIn date
+    hotels.sort((a, b) => a.checkIn.localeCompare(b.checkIn));
 
-  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-}
+    // Transfers: include both outbound and return
+    const transfers = [];
+    document.querySelectorAll("[id^='transferBlock_']").forEach((el) => {
+      const idx = el.id.split("_")[1];
+      const direction = document.getElementById(`tDirection_${idx}`)?.value || '';
+      const date = document.getElementById(`tDate_${idx}`)?.value || '';
+      const returnDate = document.getElementById(`tReturnDate_${idx}`)?.value || '';
+      const from = document.getElementById(`tFrom_${idx}`)?.value || '';
+      const to = document.getElementById(`tTo_${idx}`)?.value || '';
+      const vehicle = document.getElementById(`tCar_${idx}`)?.value || '';
+      const serviceType = document.getElementById(`tType_${idx}`)?.value || '';
+      if (direction === 'Return' && returnDate) {
+        transfers.push({ date, from, to, direction: 'Outbound', vehicle, serviceType });
+        transfers.push({ date: returnDate, from: to, to: from, direction: 'Return', vehicle, serviceType });
+      } else {
+        transfers.push({ date, from, to, direction, vehicle, serviceType });
+      }
+    });
 
-function openPdfPreviewWindow(pdfWindow, blobUrl, fileName) {
-  pdfWindow.document.write(`
-    <html>
-    <head><title>${fileName}</title></head>
-    <body style="margin:0;display:flex;flex-direction:column;height:100vh;background:#eef3f9;">
-      <div style="padding:10px 14px;background:#f3f6fb;display:flex;align-items:center;gap:16px;flex-wrap:wrap;border-bottom:1px solid #d7e2f0;">
-        <button id="downloadPdfBtn" style="background:#0b76d1;color:#fff;padding:8px 18px;border:none;border-radius:5px;font-size:14px;cursor:pointer;">⬇️ Download PDF</button>
-        <span style="color:#333;font-size:14px;">PDF Preview: <b>${fileName}</b></span>
-      </div>
-      <iframe src="${blobUrl}#toolbar=1&navpanes=0&scrollbar=1" style="flex:1;width:100%;border:none;background:#fff;"></iframe>
-      <script>
-        document.getElementById('downloadPdfBtn').onclick = function() {
-          const a = document.createElement('a');
-          a.href = '${blobUrl}';
-          a.download = '${fileName}';
-          document.body.appendChild(a);
-          a.click();
-          setTimeout(() => document.body.removeChild(a), 100);
-        };
-      <\/script>
-    </body>
-    </html>
-  `);
-  pdfWindow.document.close();
-}
+    // Tours
+    const tours = [];
+    document.querySelectorAll("[id^='tourBlock_']").forEach((el) => {
+      const idx = el.id.split("_")[1];
+      tours.push({
+        date: document.getElementById(`tourDate_${idx}`)?.value || '',
+        name: document.getElementById(`tourName_${idx}`)?.value || '',
+        city: document.getElementById(`tourCity_${idx}`)?.value || '',
+        duration: document.getElementById(`tourDuration_${idx}`)?.value || '',
+        mode: document.getElementById(`tourMode_${idx}`)?.value || '',
+        vehicle: document.getElementById(`tourVehicle_${idx}`)?.value || ''
+      });
+    });
 
-async function printQuotation() {
-  try {
-    const pdfAgent = getCurrentAgent();
-    const previewWindow = window.open('', '_blank');
-    if (!previewWindow) {
-      showAlert('Popup blocked. Please allow popups to preview the PDF.', 'Error');
-      return;
+    // Detect city changes for flights
+    let cityChangeFlights = [];
+    for (let i = 1; i < hotels.length; i++) {
+      if (hotels[i].city && hotels[i - 1].city && hotels[i].city !== hotels[i - 1].city) {
+        // Ask user if flight exists between cities
+        let key = `flight_${hotels[i - 1].city}_to_${hotels[i].city}`;
+        let exists = localStorage.getItem(key);
+        if (exists === null) {
+          exists = confirm(`Is there a flight from ${hotels[i - 1].city} to ${hotels[i].city} on ${hotels[i].checkIn}?`);
+          localStorage.setItem(key, exists ? 'yes' : 'no');
+        }
+        if (exists === 'yes' || exists === true) {
+          cityChangeFlights.push({ date: hotels[i].checkIn, from: hotels[i - 1].city, to: hotels[i].city });
+        }
+      }
     }
-    previewWindow.document.write('<html><body style="font-family:Calibri,Arial,sans-serif;padding:20px;color:#333;">Generating PDF preview...</body></html>');
-    previewWindow.document.close();
 
-    const clonedContent = getQuotationPreviewClone();
-    if (!clonedContent) {
-      previewWindow.close();
-      showAlert("Quotation preview not found!", "Error");
-      return;
+    // Build day-wise rows
+    const days = [];
+    let prevHotel = null;
+    for (let d = new Date(start), i = 1; d <= end; d.setDate(d.getDate() + 1), i++) {
+      const dateStr = d.toISOString().split('T')[0];
+      // Hotel for this day
+      let hotel = '';
+      let meal = '';
+      let hotelCheckIn = false;
+      let hotelCheckOut = false;
+      for (const h of hotels) {
+        if (h.checkIn === dateStr) {
+          hotelCheckIn = true;
+          hotel = h.name;
+          meal = h.meal;
+          prevHotel = h;
+        }
+        if (h.checkOut === dateStr) {
+          hotelCheckOut = true;
+          hotel = '';
+          meal = '';
+          prevHotel = null;
+        }
+        if (h.checkIn && h.checkOut && dateStr >= h.checkIn && dateStr < h.checkOut) {
+          hotel = h.name;
+          meal = h.meal;
+          prevHotel = h;
+        }
+      }
+      // Transfers for this day
+      const transferActs = transfers.filter(t => t.date === dateStr).map(t => `${t.direction} Transfer: ${t.from} → ${t.to}${t.vehicle ? ' (' + t.vehicle + ')' : ''}`);
+      // Tours for this day
+      const tourActs = tours.filter(t => t.date === dateStr).map(t => t.name ? `Tour: ${t.name}` : 'Tour');
+      // City change flights for this day
+      const flightActs = cityChangeFlights.filter(f => f.date === dateStr).map(f => `Flight from ${f.from} to ${f.to}`);
+      // Activities
+      let activities = [...transferActs, ...tourActs, ...flightActs];
+      if (hotelCheckOut && prevHotel) activities.unshift(`Check-out from ${prevHotel.name}`);
+      if (hotelCheckIn && hotel) activities.unshift(`Check-in at ${hotel}`);
+      let activitiesStr = activities.join('; ');
+      if (!activitiesStr) activitiesStr = 'Free day';
+      // Notes
+      let notes = meal && meal.toLowerCase().includes('breakfast') ? 'Breakfast included' : '';
+      days.push({
+        day: i,
+        date: dateStr.split('-').reverse().join('/'),
+        hotel,
+        activities: activitiesStr,
+        notes
+      });
     }
-
-    const renderHost = document.createElement('div');
-    renderHost.style.position = 'fixed';
-    renderHost.style.left = '-100000px';
-    renderHost.style.top = '0';
-    renderHost.style.width = '794px';
-    renderHost.style.background = '#ffffff';
-    renderHost.style.padding = '0';
-    renderHost.style.zIndex = '-1';
+    // Table HTML - match Service Details style
+    let html = `<div class=\"section\" style=\"margin-bottom: 10px; border: 1px solid #eee; padding: 8px 12px; border-radius: 6px;\">\n`;
+    html += `<div style=\"display:flex;align-items:center;justify-content:space-between;\">`;
+    html += `<h3 style=\"margin-top: 0; color: #0b76d1; border-bottom: 2px solid #0b76d1; padding-bottom: 3px; margin-bottom: 6px;\">Day-wise Itinerary</h3>`;
+    html += `<button type=\"button\" class=\"ghost\" style=\"padding:4px 18px;font-size:13px;\" onclick=\"var tbl=this.closest('.section').querySelector('.itinerary-table-wrap');if(tbl)tbl.classList.toggle('hidden');this.textContent=tbl.classList.contains('hidden')?'Show':'Hide';\">Hide</button>`;
+    html += `</div>`;
+    html += `<div class=\"itinerary-table-wrap\">`;
+    html += `<table style=\"width:100%;border-collapse:collapse;background:#fff;\">`;
+    html += `<thead><tr style=\"background:#f7fbff;\"><th>Day</th><th>Date</th><th>Hotel</th><th>Activities / Tours</th><th>Notes</th></tr></thead>`;
+    html += `<tbody>`;
+    days.forEach(row => {
+      html += `<tr><td>${row.day}</td><td>${row.date}</td><td>${row.hotel}</td><td>${row.activities}</td><td>${row.notes}</td></tr>`;
+    });
+    html += '</tbody></table></div></div>';
+    return html;
+  }
     renderHost.appendChild(clonedContent);
     document.body.appendChild(renderHost);
 
