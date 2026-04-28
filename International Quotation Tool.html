@@ -5302,154 +5302,99 @@ function showQuotationModal() {
   }
 
 
-  async function getQuotationPreviewClone() {
+  function getQuotationPreviewClone() {
   const modalContent = document.getElementById("quotationModalContent");
-  function buildDayWiseItineraryTable() {
-    // Get travel dates
-    const clientData = JSON.parse(localStorage.getItem("savedClientData_international")) || {};
-    const dateFrom = clientData.dateFrom;
-    const dateTo = clientData.dateTo;
-    if (!dateFrom || !dateTo) return '';
-    const start = new Date(dateFrom);
-    const end = new Date(dateTo);
-    if (isNaN(start) || isNaN(end) || end < start) return '';
-
-    // Collect hotels, transfers, tours
-    const hotels = [];
-    document.querySelectorAll("[id^='hotelBlock_']").forEach((el) => {
-      const idx = el.id.split("_")[1];
-      hotels.push({
-        name: document.getElementById(`hotelName_${idx}`)?.value || '',
-        city: document.getElementById(`hotelCity_${idx}`)?.value || '',
-        checkIn: document.getElementById(`hotelCheckIn_${idx}`)?.value || '',
-        checkOut: document.getElementById(`hotelCheckOut_${idx}`)?.value || '',
-        meal: (() => {
-          // Find first room with meal plan
-          const room = el.querySelector('.hotelServiceSel');
-          return room ? room.value : '';
-        })()
-      });
-    });
-    // Sort hotels by checkIn date
-    hotels.sort((a, b) => a.checkIn.localeCompare(b.checkIn));
-
-    // Transfers: include both outbound and return
-    const transfers = [];
-    document.querySelectorAll("[id^='transferBlock_']").forEach((el) => {
-      const idx = el.id.split("_")[1];
-      const direction = document.getElementById(`tDirection_${idx}`)?.value || '';
-      const date = document.getElementById(`tDate_${idx}`)?.value || '';
-      const returnDate = document.getElementById(`tReturnDate_${idx}`)?.value || '';
-      const from = document.getElementById(`tFrom_${idx}`)?.value || '';
-      const to = document.getElementById(`tTo_${idx}`)?.value || '';
-      const vehicle = document.getElementById(`tCar_${idx}`)?.value || '';
-      const serviceType = document.getElementById(`tType_${idx}`)?.value || '';
-      if (direction === 'Return' && returnDate) {
-        transfers.push({ date, from, to, direction: 'Outbound', vehicle, serviceType });
-        transfers.push({ date: returnDate, from: to, to: from, direction: 'Return', vehicle, serviceType });
-      } else {
-        transfers.push({ date, from, to, direction, vehicle, serviceType });
-      }
-    });
-
-    // Tours
-    const tours = [];
-    document.querySelectorAll("[id^='tourBlock_']").forEach((el) => {
-      const idx = el.id.split("_")[1];
-      tours.push({
-        date: document.getElementById(`tourDate_${idx}`)?.value || '',
-        name: document.getElementById(`tourName_${idx}`)?.value || '',
-        city: document.getElementById(`tourCity_${idx}`)?.value || '',
-        duration: document.getElementById(`tourDuration_${idx}`)?.value || '',
-        mode: document.getElementById(`tourMode_${idx}`)?.value || '',
-        vehicle: document.getElementById(`tourVehicle_${idx}`)?.value || ''
-      });
-    });
-
-    // Detect city changes for flights
-    let cityChangeFlights = [];
-    for (let i = 1; i < hotels.length; i++) {
-      if (hotels[i].city && hotels[i - 1].city && hotels[i].city !== hotels[i - 1].city) {
-        // Ask user if flight exists between cities
-        let key = `flight_${hotels[i - 1].city}_to_${hotels[i].city}`;
-        let exists = localStorage.getItem(key);
-        if (exists === null) {
-          exists = confirm(`Is there a flight from ${hotels[i - 1].city} to ${hotels[i].city} on ${hotels[i].checkIn}?`);
-          localStorage.setItem(key, exists ? 'yes' : 'no');
-        }
-        if (exists === 'yes' || exists === true) {
-          cityChangeFlights.push({ date: hotels[i].checkIn, from: hotels[i - 1].city, to: hotels[i].city });
-        }
-      }
-    }
-
-    // Build day-wise rows
-    const days = [];
-    let prevHotel = null;
-    for (let d = new Date(start), i = 1; d <= end; d.setDate(d.getDate() + 1), i++) {
-      const dateStr = d.toISOString().split('T')[0];
-      // Hotel for this day
-      let hotel = '';
-      let meal = '';
-      let hotelCheckIn = false;
-      let hotelCheckOut = false;
-      for (const h of hotels) {
-        if (h.checkIn === dateStr) {
-          hotelCheckIn = true;
-          hotel = h.name;
-          meal = h.meal;
-          prevHotel = h;
-        }
-        if (h.checkOut === dateStr) {
-          hotelCheckOut = true;
-          hotel = '';
-          meal = '';
-          prevHotel = null;
-        }
-        if (h.checkIn && h.checkOut && dateStr >= h.checkIn && dateStr < h.checkOut) {
-          hotel = h.name;
-          meal = h.meal;
-          prevHotel = h;
-        }
-      }
-      // Transfers for this day
-      const transferActs = transfers.filter(t => t.date === dateStr).map(t => `${t.direction} Transfer: ${t.from} → ${t.to}${t.vehicle ? ' (' + t.vehicle + ')' : ''}`);
-      // Tours for this day
-      const tourActs = tours.filter(t => t.date === dateStr).map(t => t.name ? `Tour: ${t.name}` : 'Tour');
-      // City change flights for this day
-      const flightActs = cityChangeFlights.filter(f => f.date === dateStr).map(f => `Flight from ${f.from} to ${f.to}`);
-      // Activities
-      let activities = [...transferActs, ...tourActs, ...flightActs];
-      if (hotelCheckOut && prevHotel) activities.unshift(`Check-out from ${prevHotel.name}`);
-      if (hotelCheckIn && hotel) activities.unshift(`Check-in at ${hotel}`);
-      let activitiesStr = activities.join('; ');
-      if (!activitiesStr) activitiesStr = 'Free day';
-      // Notes
-      let notes = meal && meal.toLowerCase().includes('breakfast') ? 'Breakfast included' : '';
-      days.push({
-        day: i,
-        date: dateStr.split('-').reverse().join('/'),
-        hotel,
-        activities: activitiesStr,
-        notes
-      });
-    }
-    // Table HTML - match Service Details style
-    let html = `<div class=\"section\" style=\"margin-bottom: 10px; border: 1px solid #eee; padding: 8px 12px; border-radius: 6px;\">\n`;
-    html += `<div style=\"display:flex;align-items:center;justify-content:space-between;\">`;
-    html += `<h3 style=\"margin-top: 0; color: #0b76d1; border-bottom: 2px solid #0b76d1; padding-bottom: 3px; margin-bottom: 6px;\">Day-wise Itinerary</h3>`;
-    html += `<button type=\"button\" class=\"ghost\" style=\"padding:4px 18px;font-size:13px;\" onclick=\"var tbl=this.closest('.section').querySelector('.itinerary-table-wrap');if(tbl)tbl.classList.toggle('hidden');this.textContent=tbl.classList.contains('hidden')?'Show':'Hide';\">Hide</button>`;
-    html += `</div>`;
-    html += `<div class=\"itinerary-table-wrap\">`;
-    html += `<table style=\"width:100%;border-collapse:collapse;background:#fff;\">`;
-    html += `<thead><tr style=\"background:#f7fbff;\"><th>Day</th><th>Date</th><th>Hotel</th><th>Activities / Tours</th><th>Notes</th></tr></thead>`;
-    html += `<tbody>`;
-    days.forEach(row => {
-      html += `<tr><td>${row.day}</td><td>${row.date}</td><td>${row.hotel}</td><td>${row.activities}</td><td>${row.notes}</td></tr>`;
-    });
-    html += '</tbody></table></div></div>';
-    return html;
+  if (!modalContent) {
+    return null;
   }
+
+  const clonedContent = modalContent.cloneNode(true);
+  clonedContent.querySelectorAll('style, button, #printQuotationBtn, #closeQuotationModalBtn').forEach(el => el.remove());
+
+  const sectionIds = ['calculationSummarySection', 'flightSection', 'hotelSection', 'addonSection', 'priceBreakupSection'];
+  sectionIds.forEach(id => {
+    const div = clonedContent.querySelector('#' + id);
+    if (div && div.style.display === 'none') {
+      div.remove();
+    }
+  });
+
+  return clonedContent;
+}
+
+async function waitForRenderedImages(container) {
+  const images = Array.from(container.querySelectorAll('img'));
+  if (!images.length) {
+    return;
+  }
+
+  await Promise.all(images.map((img) => {
+    if (img.complete && img.naturalWidth > 0) {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+      const done = () => resolve();
+      img.addEventListener('load', done, { once: true });
+      img.addEventListener('error', done, { once: true });
+    });
+  }));
+
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+}
+
+function openPdfPreviewWindow(pdfWindow, blobUrl, fileName) {
+  pdfWindow.document.write(`
+    <html>
+    <head><title>${fileName}</title></head>
+    <body style="margin:0;display:flex;flex-direction:column;height:100vh;background:#eef3f9;">
+      <div style="padding:10px 14px;background:#f3f6fb;display:flex;align-items:center;gap:16px;flex-wrap:wrap;border-bottom:1px solid #d7e2f0;">
+        <button id="downloadPdfBtn" style="background:#0b76d1;color:#fff;padding:8px 18px;border:none;border-radius:5px;font-size:14px;cursor:pointer;">⬇️ Download PDF</button>
+        <span style="color:#333;font-size:14px;">PDF Preview: <b>${fileName}</b></span>
+      </div>
+      <iframe src="${blobUrl}#toolbar=1&navpanes=0&scrollbar=1" style="flex:1;width:100%;border:none;background:#fff;"></iframe>
+      <script>
+        document.getElementById('downloadPdfBtn').onclick = function() {
+          const a = document.createElement('a');
+          a.href = '${blobUrl}';
+          a.download = '${fileName}';
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(() => document.body.removeChild(a), 100);
+        };
+      <\/script>
+    </body>
+    </html>
+  `);
+  pdfWindow.document.close();
+}
+
+async function printQuotation() {
+  try {
+    const pdfAgent = getCurrentAgent();
+    const previewWindow = window.open('', '_blank');
+    if (!previewWindow) {
+      showAlert('Popup blocked. Please allow popups to preview the PDF.', 'Error');
+      return;
+    }
+    previewWindow.document.write('<html><body style="font-family:Calibri,Arial,sans-serif;padding:20px;color:#333;">Generating PDF preview...</body></html>');
+    previewWindow.document.close();
+
+    const clonedContent = getQuotationPreviewClone();
+    if (!clonedContent) {
+      previewWindow.close();
+      showAlert("Quotation preview not found!", "Error");
+      return;
+    }
+
+    const renderHost = document.createElement('div');
+    renderHost.style.position = 'fixed';
+    renderHost.style.left = '-100000px';
+    renderHost.style.top = '0';
+    renderHost.style.width = '794px';
+    renderHost.style.background = '#ffffff';
+    renderHost.style.padding = '0';
+    renderHost.style.zIndex = '-1';
     renderHost.appendChild(clonedContent);
     document.body.appendChild(renderHost);
 
@@ -5529,7 +5474,6 @@ function showQuotationModal() {
     console.error('Error generating PDF:', error);
     showAlert("Failed to generate PDF. Please try again.", "Error");
   }
-  // Remove stray code after catch block
 }
   
   const clientData = JSON.parse(localStorage.getItem("savedClientData_international")) || {};
@@ -5556,93 +5500,119 @@ function showQuotationModal() {
       if (section.includes("Add-on")) {
         addonCostPKR += costBase;
         addonServicePKR += svcBase;
+      } else if (section.includes("Agent Service Fee")) {
+        agentServicePKR += svcBase;
+      } else {
+        totalCostPKR += costBase;
+        totalServicePKR += svcBase;
       }
-
-    // Collect hotels, transfers, tours
-    const hotels = [];
-    document.querySelectorAll("[id^='hotelBlock_']").forEach((el) => {
-      const idx = el.id.split("_")[1];
-      hotels.push({
-        name: document.getElementById(`hotelName_${idx}`)?.value || '',
-        city: document.getElementById(`hotelCity_${idx}`)?.value || '',
-        checkIn: document.getElementById(`hotelCheckIn_${idx}`)?.value || '',
-        checkOut: document.getElementById(`hotelCheckOut_${idx}`)?.value || '',
-        meal: (() => {
-          // Find first room with meal plan
-          const room = el.querySelector('.hotelServiceSel');
-          return room ? room.value : '';
-        })()
-      });
-    });
-    const transfers = [];
-    document.querySelectorAll("[id^='transferBlock_']").forEach((el) => {
-      const idx = el.id.split("_")[1];
-      transfers.push({
-        date: document.getElementById(`tDate_${idx}`)?.value || '',
-        from: document.getElementById(`tFrom_${idx}`)?.value || '',
-        to: document.getElementById(`tTo_${idx}`)?.value || '',
-        direction: document.getElementById(`tDirection_${idx}`)?.value || '',
-      });
-    });
-    const tours = [];
-    document.querySelectorAll("[id^='tourBlock_']").forEach((el) => {
-      const idx = el.id.split("_")[1];
-      tours.push({
-        date: document.getElementById(`tourDate_${idx}`)?.value || '',
-        name: document.getElementById(`tourName_${idx}`)?.value || '',
-        city: document.getElementById(`tourCity_${idx}`)?.value || '',
-      });
-    });
-
-    // Build day-wise rows
-    const days = [];
-    for (let d = new Date(start), i = 1; d <= end; d.setDate(d.getDate() + 1), i++) {
-      const dateStr = d.toISOString().split('T')[0];
-      // Hotel for this day
-      let hotel = '';
-      let meal = '';
-      for (const h of hotels) {
-        if (h.checkIn && h.checkOut && dateStr >= h.checkIn && dateStr < h.checkOut) {
-          hotel = h.name;
-          meal = h.meal;
-          break;
-        }
-      }
-      // Transfers for this day
-      const transferActs = transfers.filter(t => t.date === dateStr).map(t => `Transfer: ${t.from} → ${t.to}`);
-      // Tours for this day
-      const tourActs = tours.filter(t => t.date === dateStr).map(t => t.name ? `Tour: ${t.name}` : 'Tour');
-      // Activities
-      let activities = [...transferActs, ...tourActs].join('; ');
-      if (!activities) activities = 'Free day';
-      // Notes
-      let notes = meal && meal.toLowerCase().includes('breakfast') ? 'Breakfast included' : '';
-      days.push({
-        day: i,
-        date: dateStr.split('-').reverse().join('/'),
-        hotel,
-        activities,
-        notes
-      });
     }
-    // Table HTML
-    let html = `<div class="section" style="margin-top:12px;margin-bottom:12px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;">
-        <h3 style="margin:0 0 8px;">Day-wise Itinerary</h3>
-        <button onclick="this.parentNode.parentNode.querySelector('.itinerary-table-wrap').classList.toggle('hidden')" style="padding:4px 18px;font-size:14px;">Hide/Show</button>
-      </div>
-      <div class="small" style="margin-bottom:8px;">(Itinerary will be generated from your Hotels, Tours, Transfers, and Dates)</div>
-      <div class="itinerary-table-wrap">
-      <table style="width:100%;border-collapse:collapse;background:#fff;">
-        <thead><tr style="background:#f7fbff;"><th>Day</th><th>Date</th><th>Hotel</th><th>Activities / Tours</th><th>Notes</th></tr></thead>
-        <tbody>`;
-    days.forEach(row => {
-      html += `<tr><td>${row.day}</td><td>${row.date}</td><td>${row.hotel}</td><td>${row.activities}</td><td>${row.notes}</td></tr>`;
+  });
+  
+  const finalTotalSellPKR = totalCostPKR + totalServicePKR + agentServicePKR;
+  const grandTotalPKR = finalTotalSellPKR + addonCostPKR + addonServicePKR;
+
+  // Calculate per person costs
+  const paxData = getCurrentPaxData();
+  const numAdult = paxData.adults || 0;
+  const numChildBed = paxData.childBed || 0;
+  const numChildNoBed = paxData.childNoBed || 0;
+  const numInfant = paxData.infants || 0;
+  const totalPax = numAdult + numChildBed + numChildNoBed + numInfant;
+  
+  // Calculate per person costs using the same logic as package calculation
+  const perPersonCosts = calculatePerPersonCosts(totalCostPKR, totalServicePKR + agentServicePKR, paxData);
+  const perAdultCost = perPersonCosts.perAdult;
+  const perChildBedCost = perPersonCosts.perChildBed;
+  const perChildNoBedCost = perPersonCosts.perChildNoBed;
+  const perInfantCost = perPersonCosts.perInfant;
+  const hotelPriceMode = getHotelPriceMode();
+  const hotelEntries = getHotelRoomEntries();
+  const hotelGroups = getHotelGroups();
+  const hotelPayingPax = numAdult + numChildBed;
+  const computedPackageAmount =
+    (perAdultCost * numAdult) +
+    (perChildBedCost * numChildBed) +
+    (perChildNoBedCost * numChildNoBed) +
+    (perInfantCost * numInfant);
+  const totalPackageAmount = finalTotalSellPKR > 0 ? finalTotalSellPKR : computedPackageAmount;
+
+  // Per-room-type per-adult pricing for Package Price section
+  // Show breakdown by room type with complete pricing (flights + hotel per room type + transfers + tours + visa + agent service)
+  const validHotelEntries_q = hotelEntries.filter(r => r.rooms > 0 && r.nights > 0);
+  let perAdultLines_q;
+  if (hotelPriceMode === 'actual' && validHotelEntries_q.length > 0) {
+    // Calculate average hotel cost per paying pax
+    const totalHotelCostPKR = validHotelEntries_q.reduce((sum, r) => {
+      return sum + convertToPKR((r.costNight + r.svcNight) * r.nights * r.rooms, r.currency);
+    }, 0);
+    const hotelPayingPaxCount = numAdult + numChildBed;
+    const avgHotelCostPerPerson_q = hotelPayingPaxCount > 0 ? (totalHotelCostPKR / hotelPayingPaxCount) : 0;
+    
+    // Calculate non-hotel costs for each pax type (flights + other services, excluding hotel)
+    const nonHotelCostAdult_q = perAdultCost - avgHotelCostPerPerson_q;
+    const nonHotelCostChildBed_q = perChildBedCost - avgHotelCostPerPerson_q;
+    const nonHotelCostChildNoBed_q = perChildNoBedCost - avgHotelCostPerPerson_q;
+    const nonHotelCostInfant_q = perInfantCost - avgHotelCostPerPerson_q;
+    
+    // Group by room type and calculate per-person hotel cost for each
+    const roomTypeMap = {};
+    validHotelEntries_q.forEach(r => {
+      const key = r.roomType;
+      if (!roomTypeMap[key]) {
+        roomTypeMap[key] = { totalPax: 0, hotelCostTotal: 0, label: key };
+      }
+      roomTypeMap[key].totalPax += (r.rooms * (r.capacity || 1));
+      roomTypeMap[key].hotelCostTotal += convertToPKR((r.costNight + r.svcNight) * r.nights * r.rooms, r.currency);
     });
-    html += '</tbody></table></div></div>';
-    return html;
+    
+    // Intelligently distribute pax across room types
+    let remainingAdults_q = numAdult;
+    let remainingChildBed_q = numChildBed;
+    
+    // Sort room types by total pax for consistent distribution
+    const sortedRoomTypes = Object.values(roomTypeMap).sort((a, b) => a.totalPax - b.totalPax);
+    
+    const paxPerRoomType = [];
+    sortedRoomTypes.forEach(rt => {
+      const adultsInRoom = Math.min(remainingAdults_q, rt.totalPax);
+      const childrenInRoom = Math.min(remainingChildBed_q, rt.totalPax - adultsInRoom);
+      
+      remainingAdults_q -= adultsInRoom;
+      remainingChildBed_q -= childrenInRoom;
+      
+      const hotelCostPerPerson = rt.totalPax > 0 ? rt.hotelCostTotal / rt.totalPax : 0;
+      
+      if (adultsInRoom > 0) {
+        const adultTotalCost = hotelCostPerPerson + nonHotelCostAdult_q;
+        paxPerRoomType.push(`<li>Adult x${adultsInRoom} (${sanitizeInput(rt.label)} Sharing): <strong>PKR ${fmt(adultTotalCost)}</strong></li>`);
+      }
+      if (childrenInRoom > 0) {
+        const childTotalCost = hotelCostPerPerson + nonHotelCostChildBed_q;
+        paxPerRoomType.push(`<li>Child (bed) x${childrenInRoom} (${sanitizeInput(rt.label)} Sharing): <strong>PKR ${fmt(childTotalCost)}</strong></li>`);
+      }
+    });
+    
+    // Handle any remaining pax not allocated to rooms
+    if (remainingAdults_q > 0) {
+      paxPerRoomType.push(`<li>Adult x${remainingAdults_q}: <strong>PKR ${fmt(perAdultCost)}</strong></li>`);
+    }
+    if (remainingChildBed_q > 0) {
+      paxPerRoomType.push(`<li>Child (bed) x${remainingChildBed_q}: <strong>PKR ${fmt(perChildBedCost)}</strong></li>`);
+    }
+    if (numChildNoBed > 0) {
+      paxPerRoomType.push(`<li>Child (no bed) x${numChildNoBed}: <strong>PKR ${fmt(perChildNoBedCost)}</strong></li>`);
+    }
+    if (numInfant > 0) {
+      paxPerRoomType.push(`<li>Infant x${numInfant}: <strong>PKR ${fmt(perInfantCost)}</strong></li>`);
+    }
+    
+    perAdultLines_q = paxPerRoomType;
+  } else {
+    perAdultLines_q = [`<li>Per Adult: <strong>PKR ${fmt(perAdultCost)}</strong></li>`];
   }
 
+  // Build the HTML for the quotation preview
   let quotationHTML = `
     <div style="text-align: center; margin-bottom: 12px; border-bottom: 1px solid #dbe6f3; padding-bottom: 8px;">
       <h2 style="margin: 2px 0 4px; color: #0b76d1;">Flight Connection Travel & Tours</h2>
