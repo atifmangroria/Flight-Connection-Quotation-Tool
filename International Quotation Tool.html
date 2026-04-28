@@ -2209,8 +2209,6 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 </script>
 
-
-
 <!-- FLIGHT -->
 <div class="section" id="flightContainerWrapper">
   <div class="flight-header">
@@ -5656,37 +5654,35 @@ async function printQuotation() {
         
     <!-- Service Details -->
 <div style="margin-bottom: 10px; border: 1px solid #eee; padding: 8px 12px; border-radius: 6px;">
-      <h3 style="margin-top: 0; color: #0b76d1; border-bottom: 2px solid #0b76d1; padding-bottom: 3px; margin-bottom: 6px;">Service Details</h3>
-      ${document.querySelectorAll("[id^='flightBlock_']").length > 0 ? `
-      <div style="margin-bottom: 5px; padding: 4px 6px; background:#f0f7ff; border-left:3px solid #0b76d1; border-radius:3px;">
-        <strong>✈️ Flight</strong> &mdash; ${getFlightDetails().airline} &bull; ${getFlightDetails().direct}<br>
-        <span style="font-size:11px;color:#444;white-space:pre-wrap;font-family:monospace;">${getFlightDetails().itinerary}</span>
-      </div>` : ''}
-      ${hotelGroups.length > 0 ? 
-        hotelGroups.map((hotel) => `
-      <div style="margin-bottom: 5px; padding: 4px 6px; background:#f0f7ff; border-left:3px solid #0b76d1; border-radius:3px;">
-        <strong>🏨 ${sanitizeInput(hotel.city)} Hotel</strong> &mdash; ${sanitizeInput(hotel.name)} &bull; ${hotel.nights} nights<br>
-        <span style="font-size:11px;color:#555;">Check-in: ${formatDateToDMY(hotel.checkIn)} &bull; Check-out: ${formatDateToDMY(hotel.checkOut)}</span>
-        <div style="margin-top:4px;font-size:11px;color:#333;">${hotel.roomTypes.map((r) => `${sanitizeInput(r.roomType)}${r.roomName ? ` (${sanitizeInput(r.roomName)})` : ''} x${r.rooms} &bull; ${sanitizeInput(r.serviceType)}`).join('<br>')}</div>
-      </div>
-        `).join('') : ''}
-      ${document.getElementById('visaBlock') ? `
-      <div style="margin-bottom: 5px; padding: 4px 6px; background:#f0f7ff; border-left:3px solid #0b76d1; border-radius:3px;">
-        <strong>🛂 Visa</strong> &mdash; ${getVisaDetails().type} (${getVisaDetails().country}) &bull; ${getVisaDetails().count} visas
-      </div>` : ''}
-      ${document.querySelectorAll("[id^='transferBlock_']").length > 0 ? `
-      <div style="margin-bottom: 5px; padding: 4px 6px; background:#f0f7ff; border-left:3px solid #0b76d1; border-radius:3px;">
-        <strong>🚗 Transfer</strong><br><span style="font-size:11px;color:#444;white-space:pre-wrap;">${getTransferDetails()}</span>
-      </div>` : ''}
-      ${document.querySelectorAll("[id^='tourBlock_']").length > 0 ? 
-        getTourDetails().map((tour, index) => `
-      <div style="margin-bottom: 5px; padding: 4px 6px; background:#f0f7ff; border-left:3px solid #0b76d1; border-radius:3px;">
-        <strong>🏛️ Tours</strong> &mdash; ${tour.name} &bull; ${tour.duration} &bull; ${tour.mode} &bull; ${tour.vehicle}${tour.date ? ` &bull; Date: ${formatDateToDMY(tour.date)}` : ''}
-      </div>
-        `).join('') : ''}
-    </div>
-    <!-- Day-wise Itinerary Section -->
-    ${buildDayWiseItineraryTable()}
+  <h3 style="margin-top: 0; color: #0b76d1; border-bottom: 2px solid #0b76d1; padding-bottom: 3px; margin-bottom: 6px;">Service Details</h3>
+  ${document.querySelectorAll("[id^='flightBlock_']").length > 0 ? `
+  <div style="margin-bottom: 5px; padding: 4px 6px; background:#f0f7ff; border-left:3px solid #0b76d1; border-radius:3px;">
+    <strong>✈️ Flight</strong> &mdash; ${getFlightDetails().airline} &bull; ${getFlightDetails().direct}<br>
+    <span style="font-size:11px;color:#444;white-space:pre-wrap;font-family:monospace;">${getFlightDetails().itinerary}</span>
+  </div>` : ''}
+  ${hotelGroups.length > 0 ? 
+    hotelGroups.map((hotel) => `
+  <div style="margin-bottom: 5px; padding: 4px 6px; background:#f0f7ff; border-left:3px solid #0b76d1; border-radius:3px;">
+    <strong>🏨 ${sanitizeInput(hotel.city)} Hotel</strong> &mdash; ${sanitizeInput(hotel.name)} &bull; ${hotel.nights} nights<br>
+    <span style="font-size:11px;color:#555;">Check-in: ${formatDateToDMY(hotel.checkIn)} &bull; Check-out: ${formatDateToDMY(hotel.checkOut)}</span>
+    <div style="margin-top:4px;font-size:11px;color:#333;">${hotel.roomTypes.map((r) => `${sanitizeInput(r.roomType)}${r.roomName ? ` (${sanitizeInput(r.roomName)})` : ''} x${r.rooms} &bull; ${sanitizeInput(r.serviceType)}`).join('<br>')}</div>
+  </div>
+    `).join('') : ''}
+  ${document.getElementById('visaBlock') ? `
+  <div style="margin-bottom: 5px; padding: 4px 6px; background:#f0f7ff; border-left:3px solid #0b76d1; border-radius:3px;">
+    <strong>🛂 Visa</strong> &mdash; ${getVisaDetails().type} (${getVisaDetails().country}) &bull; ${getVisaDetails().count} visas
+  </div>` : ''}
+  ${document.querySelectorAll("[id^='transferBlock_']").length > 0 ? `
+  <div style="margin-bottom: 5px; padding: 4px 6px; background:#f0f7ff; border-left:3px solid #0b76d1; border-radius:3px;">
+    <strong>🚗 Transfer</strong><br><span style="font-size:11px;color:#444;white-space:pre-wrap;">${getTransferDetails()}</span>
+  </div>` : ''}
+  ${document.querySelectorAll("[id^='tourBlock_']").length > 0 ? 
+    getTourDetails().map((tour, index) => `
+  <div style="margin-bottom: 5px; padding: 4px 6px; background:#f0f7ff; border-left:3px solid #0b76d1; border-radius:3px;">
+    <strong>🏛️ Tours</strong> &mdash; ${tour.name} &bull; ${tour.duration} &bull; ${tour.mode} &bull; ${tour.vehicle}${tour.date ? ` &bull; Date: ${formatDateToDMY(tour.date)}` : ''}
+  </div>
+    `).join('') : ''}
+</div>
   
   <button onclick="toggleCalculationSummary()" style="margin-bottom: 6px; padding: 3px 10px; background: #0b76d1; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Show/Hide Price Breakdown</button>
   <div id="calculationSummarySection" style="margin-bottom: 10px; display: none;">
