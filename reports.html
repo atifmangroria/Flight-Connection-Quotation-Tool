@@ -57,6 +57,47 @@
             margin-top: 4px;
         }
 
+        .report-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            margin-bottom: 18px;
+            padding: 16px 0;
+            border-bottom: 1px solid var(--line);
+            position: relative;
+        }
+        .delete-report-group {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 8px;
+            position: relative;
+        }
+        .delete-dialog {
+            position: absolute;
+            top: 40px;
+            right: 0;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 14px;
+            width: 240px;
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
+            z-index: 10;
+        }
+
+        .report-heading h2 {
+            margin: 0;
+            font-size: 20px;
+            color: var(--accent);
+        }
+
+        .report-heading .subtitle {
+            margin: 6px 0 0;
+            font-size: 13px;
+        }
+
         .layout {
             display: grid;
             grid-template-columns: 320px 1fr;
@@ -272,7 +313,31 @@
             .preset-grid,
             .quick-range { grid-template-columns: 1fr; }
         }
-    </style>
+
+        @media (max-width: 720px) {
+            .page { margin: 10px auto; padding: 0 12px 16px; }
+            .topbar { padding: 12px; }
+            .topbar h1 { font-size: 20px; }
+            .topbar .subtitle { font-size: 12px; }
+            .report-heading { flex-direction: column; align-items: stretch; gap: 10px; }
+            .delete-report-group { width: 100%; align-items: flex-start; }
+            .delete-report-group .btn { width: 100%; }
+            .report-heading h2 { font-size: 18px; }
+            .delete-dialog { position: static; width: 100%; box-shadow: none; border-radius: 12px; margin-top: 8px; }
+            .panel { padding: 12px; }
+            .workspace-toolbar { grid-template-columns: 1fr; }
+            .workspace-toolbar .btn { width: 100%; }
+            .quick-range { grid-template-columns: 1fr; }
+            .field-library, .dropzone { min-height: 60px; }
+            .dropzone { padding: 10px 8px; }
+            .workspace-toolbar input, .workspace-toolbar button { min-width: 0; }
+            .table-wrap { max-height: 45vh; }
+            table { min-width: 100%; font-size: 12px; }
+            th, td { padding: 8px 6px; }
+            .status-row { flex-direction: column; align-items: flex-start; }
+            .export-group { width: 100%; justify-content: space-between; }
+        }
+</style>
 </head>
 <body>
     <div class="page">
@@ -288,24 +353,38 @@
             <aside class="panel">
                 <div class="row">
                     <h3 class="section-title">Ready Reports</h3>
-                    <div class="preset-grid">
-                        <button class="btn btn-ghost" data-preset="sales">Sales Report</button>
-                        <button class="btn btn-ghost" data-preset="quotation">Quotation Report</button>
-                        <button class="btn btn-ghost" data-preset="destination">By Destination</button>
-                    </div>
-                </div>
-
-                <div class="row">
-                    <label for="data-source">Data Source</label>
-                    <select id="data-source">
-                        <option value="quotations">Quotations</option>
-                        <option value="sales">Sales</option>
-                        <option value="customers">Customers</option>
+                    <select id="report-select">
+                        <option value="sales">Sales Report</option>
+                        <option value="quotation">Quotation Report</option>
+                        <option value="destination">By Destination</option>
+                        <option value="bookingSummary">Booking Summary</option>
+                        <option value="customerActivity">Customer Activity</option>
+                        <option value="custom">Custom Report</option>
                     </select>
                 </div>
 
                 <div class="row">
+                    <h3 class="section-title">Saved Reports</h3>
+                    <select id="saved-reports">
+                        <option value="">-- Select saved report --</option>
+                    </select>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+                        <input type="text" id="save-report-name" placeholder="New report name" style="flex:1;min-width:180px;padding:8px;border:1px solid var(--line);border-radius:8px;">
+                        <button class="btn btn-primary" id="save-report-btn" type="button">Save Report</button>
+                    </div>
+                    <div style="margin-top:8px;">
+                        <label><input type="checkbox" id="save-global-checkbox" style="margin-right:6px;">Save for all (admin only)</label>
+                    </div>
+                </div>
+
+                <div class="row">
                     <h3 class="section-title">Field Blocks</h3>
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+                        <select id="field-block-select" style="flex:1;min-width:180px;padding:8px;border:1px solid var(--line);border-radius:8px;">
+                            <option value="">Select field to add</option>
+                        </select>
+                        <button class="btn btn-ghost" id="add-field-btn" type="button">Add Field</button>
+                    </div>
                     <div class="field-library" id="field-library"></div>
                 </div>
 
@@ -326,7 +405,23 @@
             </aside>
 
             <main class="workspace">
-                <h3 class="section-title">Report Canvas</h3>
+                <div class="report-heading">
+                    <div>
+                        <h2 id="report-title">Custom Report</h2>
+                        <div class="subtitle" id="report-subtitle">Select fields and click Generate.</div>
+                    </div>
+                    <div class="delete-report-group">
+                        <button class="btn btn-danger" id="delete-saved-report-btn" type="button" disabled>Delete Report</button>
+                        <div class="delete-dialog" id="delete-confirmation" style="display:none;">
+                            <div>Delete this saved report?</div>
+                            <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px;">
+                                <button class="btn btn-ghost" id="cancel-delete-btn" type="button">Cancel</button>
+                                <button class="btn btn-danger" id="confirm-delete-btn" type="button">Delete</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            <h3 class="section-title">Report Canvas</h3>
                 <div class="dropzone" id="selected-fields-zone">
                     <div class="drop-hint">Drag field blocks here (or click blocks to add).</div>
                 </div>
@@ -366,5 +461,18 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="reports.js"></script>
+
+
+
+
+
+
+
 </body>
 </html>
+
+
+
+
+
+

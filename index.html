@@ -141,6 +141,13 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus, 
   .add-btn:hover { background: #45a049; }
   .remove-btn { background: #e74c3c; color: #fff; border: none; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 8px; }
   .remove-btn:hover { background: #c0392b; }
+
+  .service-tabs { display:flex; flex-wrap:wrap; gap:10px; margin:18px 0 8px; }
+  .service-tab { border:1px solid #d6dbe2; background:#fbfdff; color:#111; padding:10px 16px; border-radius:999px; font-size:14px; cursor:pointer; transition:all .2s ease; }
+  .service-tab:hover { background:#eef5fb; }
+  .service-tab.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .service-panel { display:none; }
+  .service-panel.active { display:block; }
   
 /* Modal Styles */
 .modal-overlay {
@@ -362,7 +369,16 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus, 
   }
 
   /* Add this at the end of your existing CSS */
+  .page-header { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+  .page-header-right { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .page-header-right .small { min-width: 180px; }
+
 @media (max-width: 768px) {
+  .page-header { flex-direction:column; align-items:flex-start; }
+  .page-header-right { width:100%; justify-content:flex-start; }
+  .page-header-right .small { width:100%; }
+  .page-header-right button { flex:1 1 auto; min-width:140px; }
+
   .grid {
     grid-template-columns: 1fr;
   }
@@ -382,6 +398,37 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus, 
     margin-bottom: 8px;
   }
   
+  .add-btn, .remove-btn, .page-header-right button, button.ghost {
+    width: auto !important;
+    min-width: 0 !important;
+  }
+  .add-btn { white-space: normal; }
+  .remove-btn { margin-left: 4px; }
+
+  .section#agentExtraSvc > div {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .section#agentExtraSvc label {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  .section#agentExtraSvc input[type="radio"] {
+    margin: 0 8px 0 0;
+  }
+  .section#agentExtraSvc #perPersonSvcOption {
+    grid-template-columns: 1fr !important;
+  }
+  .section#agentExtraSvc #perPersonSvcOption input {
+    width: 100%;
+    min-width: 0;
+  }
+
   .inline-input {
     flex-direction: column;
     align-items: stretch;
@@ -450,7 +497,40 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus, 
 }
 
   @media (max-width:800px){ .grid{grid-template-columns:1fr} }
-  @media print{ .no-print{display:none} }
+  @media print{ .no-print{display:none} .itinerary-hidden{display:none!important} }
+
+  @media (max-width: 960px) {
+    .wrap { padding: 14px; margin: 0 auto; border-radius: 0; }
+    .grid, .grid-2, .grid-3, .grid-4, .modalGrid, .controls, .tableWrap, .table-wrap, .itinerary-table-wrapper, .package-toolbar, .card-grid, .modal-content, .service-panel, .addonsWrapper { grid-template-columns: 1fr !important; }
+    .filters-section, .header, .header-right, .top, .actions, .action-buttons, .pkg-actions, .info-bar, .card-header, .bar, .addon-category, .service-panel, .addonsWrapper { flex-direction: column !important; align-items: stretch !important; }
+    .service-tabs { flex-wrap: wrap !important; justify-content: flex-start !important; }
+    .service-tab, .service-panel, button, .btn, input, select, textarea { width: 100% !important; min-width: 0 !important; }
+    .tableWrap, .table-wrap, .itinerary-table-wrapper, .saved-list, .modalBox, .notice, .addonsWrapper { overflow-x: auto !important; }
+    table, .quotation-table, .pax-table, .itinerary-table { width: 100% !important; }
+    .section, .card, .panel, .modalBox, .top, .notice, .bar { padding: 12px !important; }
+    .logo img, .header img { max-width: 100%; height: auto; }
+    .wrap, .login-container, .modalBox { max-width: 100% !important; }
+  }
+
+  @media (max-width: 960px) {
+    header, .service-tabs, .currency-selector, .section-toggle-container, .progress-bar, .actions, .search-container { flex-wrap: wrap !important; align-items: stretch !important; }
+    .service-tab { flex: 1 1 100% !important; max-width: 100% !important; }
+    .currency-selector { flex-direction: column !important; gap: 8px !important; }
+    .currency-selector select, .currency-display, .header-btn, .search-input, .search-btn { width: 100% !important; min-width: 0 !important; }
+    .section-entry h4 { flex-direction: column !important; align-items: stretch !important; gap: 8px !important; }
+    .inline-input { flex-wrap: wrap !important; align-items: stretch !important; }
+    .inline-input label, .inline-input input { width: 100% !important; min-width: 0 !important; }
+    .inline-input input { width: auto !important; }
+    .modal-content { width: 95% !important; max-width: 100% !important; padding: 20px !important; }
+    .progress-step { flex: 1 1 100% !important; margin-bottom: 8px !important; }
+  }
+
+  @media (max-width: 640px) {
+    .service-tab { font-size: 13px !important; padding: 10px 12px !important; }
+    .addon-panel, .section-entry, .card, .header-card { padding: 10px !important; }
+    header, .search-container, .actions, .service-tabs { flex-direction: column !important; align-items: stretch !important; }
+    .header img { height: auto !important; max-width: 100%; }
+  }
 
 #calcSummaryTable thead th {
   background-color: #0b76d1;
@@ -728,12 +808,12 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus, 
 <div class="wrap">
 
 <!-- HEADER -->
-<div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+<div class="page-header">
   <div>
     <h1>Umrah Quotation</h1>
     <div class="small">Use Chrome/Edge.</div>
   </div>
-  <div style="display:flex;gap:8px;align-items:center" class="no-print">
+  <div class="page-header-right no-print">
     <div id="agentInfoDisplay" class="small"></div>
     <button id="btnSaveQuotation" class="ghost">Save Quotation</button>
     <button id="btnLoadQuotation" class="ghost">Load Quotation</button>
@@ -1590,7 +1670,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
   <div class="actions" style="margin-top:10px">
     <button id="btnSaveClient" type="button">Save Client & Pax</button>
-    <button id="btnCheckClient" type="button">Check Data</button>
     <button id="btnFindCustomer" type="button" class="ghost">Find Customer</button>
   </div>
 
@@ -1598,7 +1677,6 @@ document.addEventListener('DOMContentLoaded', function() {
   <div id="customerSummaryCard" class="section" style="display:none;margin-top:10px;background:#f8fbff;border-color:#d7e8fb;"></div>
 
   <!-- Output data -->
-  <pre id="outputData" style="margin-top:10px;padding:10px;border:1px solid #ccc;background:#f9f9f9;display:none"></pre>
 </div>
 
 <script>
@@ -2168,21 +2246,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
   btnSaveClient.addEventListener("click", validateAndSaveClientData);
 
-  // --- CHECK CLIENT DATA ---
-  const btnCheckClient = document.getElementById("btnCheckClient");
-  const outputData = document.getElementById("outputData");
-
-  btnCheckClient.addEventListener("click", () => {
-    const saved = localStorage.getItem("savedClientData");
-    if (saved) {
-      outputData.style.display = "block";
-      outputData.textContent = saved;
-    } else {
-      outputData.style.display = "block";
-      outputData.textContent = "No data saved yet!";
-    }
-  });
-
   // Event listeners for PAX changes
   const paxInputs = ['numAdult', 'numChildBed', 'numChildNoBed', 'numInfant'];
   paxInputs.forEach(id => {
@@ -2256,8 +2319,16 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 
+<div class="service-tabs no-print" id="serviceTabs">
+  <button type="button" class="service-tab active" data-service="flight">Flight</button>
+  <button type="button" class="service-tab" data-service="hotel">Hotels</button>
+  <button type="button" class="service-tab" data-service="transfer">Transfers</button>
+  <button type="button" class="service-tab" data-service="visa">Visa</button>
+  <button type="button" class="service-tab" data-service="addons">Add Extras</button>
+</div>
+
 <!-- FLIGHT -->
-<div class="section" id="flightContainerWrapper">
+<div class="section service-panel active" id="flightContainerWrapper" data-service="flight">
   <div class="flight-header">
     <h3>Flight</h3>
     <button type="button" id="btnAddFlight" class="add-btn">+ Add Flight</button>
@@ -2501,7 +2572,7 @@ document.getElementById("btnAddFlight").addEventListener("click", async () => {
 
 
 <!-- HOTEL MAKKAH -->
-<div class="section" id="hotelContainerM">
+<div class="section service-panel" id="hotelContainerM" data-service="hotel">
   <div class="hotel-header">
     <h3>Hotel - Makkah</h3>
     <button type="button" id="btnAddHotelM" class="add-btn">+ Add Hotel</button>
@@ -3095,7 +3166,7 @@ document.getElementById("btnAddHotelM").addEventListener("click", async ()=>{
 </script>
 
 <!-- HOTEL MADINA -->
-<div class="section" id="hotelContainerA">
+<div class="section service-panel" id="hotelContainerA" data-service="hotel">
   <div class="hotel-header">
     <h3>Hotel - Madina</h3>
     <button type="button" id="btnAddHotelA" class="add-btn">+ Add Hotel</button>
@@ -3252,7 +3323,7 @@ document.getElementById("btnAddHotelA").addEventListener("click", async ()=>{
 </div>
 
 <!-- TRANSFERS -->
-<div class="section" id="transferWrapper">
+<div class="section service-panel" id="transferWrapper" data-service="transfer">
   <div class="transfer-header">
     <h3>Transfers</h3>
     <button type="button" id="btnAddTrans" class="add-btn">+ Add Transfer</button>
@@ -3576,7 +3647,7 @@ document.getElementById("btnAddTrans").addEventListener("click", addTransfer);
 </script>
 
 <!-- VISA -->
-<div class="section" id="visaWrapper">
+<div class="section service-panel" id="visaWrapper" data-service="visa">
   <div class="visa-header">
     <h3>Visa</h3>
     <button type="button" id="btnAddVisa" class="add-btn">+ Add Visa</button>
@@ -3662,10 +3733,32 @@ function removeVisa(){
 // Event listener
 document.getElementById("btnAddVisa").addEventListener("click", addVisa);
 </script>
+<script>
+(function() {
+  function setActiveServiceTab(service) {
+    document.querySelectorAll('.service-tab').forEach(tab => {
+      tab.classList.toggle('active', tab.dataset.service === service);
+    });
+    document.querySelectorAll('.service-panel').forEach(panel => {
+      panel.classList.toggle('active', panel.dataset.service === service);
+    });
+  }
+
+  document.querySelectorAll('.service-tab').forEach(tab => {
+    tab.addEventListener('click', () => setActiveServiceTab(tab.dataset.service));
+  });
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => setActiveServiceTab('flight'));
+  } else {
+    setActiveServiceTab('flight');
+  }
+})();
+</script>
 
 
 <!-- ADD-ONS -->
-<div class="section" id="addonsWrapper">
+<div class="section service-panel" id="addonsWrapper" data-service="addons">
   <h3>Add Extras</h3>
 
   <!-- Upgraded Flight Panel -->
@@ -4122,12 +4215,12 @@ function showToast(message, type = "info") {
   <h4>Agent Service Charge Options (Optional)</h4>
   <p class="small" style="color:#666; margin-top:-10px;">Choose one option for adding service fee to the final selling price.</p>
   
-  <div style="margin-bottom: 15px;">
-    <label style="display: flex; align-items: center; margin-bottom: 10px;">
+  <div style="margin-bottom: 15px; display:flex; flex-direction:column; align-items:flex-start;">
+    <label style="display: flex; justify-content:flex-start; align-items: center; gap: 8px; width:100%; margin-bottom: 10px;">
       <input type="radio" name="svcOption" value="perPerson" onchange="toggleServiceOption('perPerson')" style="margin-right: 8px;">
       <span>Add Service Fee Per Person (PKR)</span>
     </label>
-    <label style="display: flex; align-items: center;">
+    <label style="display: flex; justify-content:flex-start; align-items: center; gap: 8px; width:100%;">
       <input type="radio" name="svcOption" value="none" checked onchange="toggleServiceOption('none')" style="margin-right: 8px;">
       <span>No Service Charge</span>
     </label>
@@ -4186,6 +4279,7 @@ function showToast(message, type = "info") {
   </div>
 </div>
 
+<script src="itinerary-component.js"></script>
 <script>
 const btnCalculate = document.getElementById("btnCalculate");
 const calcSummarySection = document.getElementById("calcSummarySection");
@@ -4300,6 +4394,93 @@ async function loadCustomTermsFromFirebase() {
 // Initialize custom terms
 let customTerms = defaultTerms; // Temporary default
 loadCustomTermsFromFirebase();
+
+let itineraryEditorState = {
+  rows: [],
+  flightSegments: {},
+  source: 'auto',
+  updatedAt: ''
+};
+
+function buildUmrahItineraryHotels() {
+  const hotels = [];
+  getMakkahHotelDetails().forEach((h) => {
+    hotels.push({
+      name: h.name,
+      city: 'Makkah',
+      checkIn: h.checkIn,
+      checkOut: h.checkOut,
+      nights: h.nights,
+      roomTypes: (h.roomEntries || []).map((r) => ({ serviceType: r.serviceType }))
+    });
+  });
+  getMadinaHotelDetails().forEach((h) => {
+    hotels.push({
+      name: h.name,
+      city: 'Madina',
+      checkIn: h.checkIn,
+      checkOut: h.checkOut,
+      nights: h.nights,
+      roomTypes: (h.roomEntries || []).map((r) => ({ serviceType: r.serviceType }))
+    });
+  });
+  return hotels;
+}
+
+function getPreviewItinerarySourceData() {
+  const savedClientData = JSON.parse(localStorage.getItem('savedClientData')) || {};
+  return {
+    clientData: {
+      dateFrom: savedClientData.dateFrom || document.getElementById('dateFrom')?.value || '',
+      dateTo: savedClientData.dateTo || document.getElementById('dateTo')?.value || '',
+      depCity: savedClientData.depCity || document.getElementById('depCity')?.value || '',
+      tourDestination: savedClientData.tourDestination || 'Umrah'
+    },
+    hotels: buildUmrahItineraryHotels(),
+    transfers: Array.from(document.querySelectorAll("[id^='transferBlock_']")).map((el) => {
+      const idx = el.id.split('_')[1];
+      return {
+        date: document.getElementById(`tDate_${idx}`)?.value || '',
+        returnDate: document.getElementById(`tReturnDate_${idx}`)?.value || '',
+        from: document.getElementById(`tFrom_${idx}`)?.value || '',
+        to: document.getElementById(`tTo_${idx}`)?.value || '',
+        vehicle: document.getElementById(`tCar_${idx}`)?.value || '',
+        type: document.getElementById(`tType_${idx}`)?.value || '',
+        direction: document.getElementById(`tDirection_${idx}`)?.value || ''
+      };
+    }),
+    tours: []
+  };
+}
+
+async function askItineraryFlightDetails(segment) {
+  const routeText = `${segment.fromCity} and ${segment.toCity}`;
+  const hasFlight = window.confirm(`Is there a flight between ${routeText}?`);
+  if (!hasFlight) return null;
+
+  const flightNumber = window.prompt('Flight Number:', '') || '';
+  const departureCity = window.prompt('Departure City:', segment.fromCity || '') || segment.fromCity || '';
+  const arrivalCity = window.prompt('Arrival City:', segment.toCity || '') || segment.toCity || '';
+  const departureTime = window.prompt('Departure Time:', '') || '';
+  const arrivalTime = window.prompt('Arrival Time:', '') || '';
+  const flightDate = window.prompt('Flight Date (YYYY-MM-DD):', segment.date || '') || segment.date || '';
+
+  return {
+    flightNumber,
+    departureCity,
+    arrivalCity,
+    departureTime,
+    arrivalTime,
+    flightDate
+  };
+}
+
+function getSavedItineraryRows() {
+  if (itineraryEditorState && Array.isArray(itineraryEditorState.rows) && itineraryEditorState.rows.length) {
+    return itineraryEditorState.rows;
+  }
+  return [];
+}
 
 // Initialize section contents
 let visaRequirements = defaultVisaRequirements;
@@ -5486,6 +5667,7 @@ function getQuotationPreviewClone() {
 
   const clonedContent = modalContent.cloneNode(true);
   clonedContent.querySelectorAll('style, button, #printQuotationBtn, #closeQuotationModalBtn').forEach(el => el.remove());
+  clonedContent.querySelectorAll('.it-edit-icon').forEach(el => el.remove());
 
   const sectionIds = ['calculationSummarySection', 'flightSection', 'hotelSection', 'addonSection', 'priceBreakupSection'];
   sectionIds.forEach(id => {
@@ -5494,6 +5676,12 @@ function getQuotationPreviewClone() {
       div.remove();
     }
   });
+
+  const itineraryWrapper = clonedContent.querySelector('#itinerarySectionWrapper');
+  const clonedItineraryContainer = clonedContent.querySelector('#itineraryTableContainer');
+  if (itineraryWrapper && (itineraryWrapper.classList.contains('itinerary-hidden') || (clonedItineraryContainer && clonedItineraryContainer.style.display === 'none'))) {
+    itineraryWrapper.remove();
+  }
 
   return clonedContent;
 }
@@ -5838,6 +6026,17 @@ console.log("Total package amount:", totalPackageAmount);
   <div style="margin-bottom: 5px; padding: 4px 6px; background:#f0f7ff; border-left:3px solid #0b76d1; border-radius:3px;">
     <strong>🚗 Transfer</strong><br><span style="font-size:11px;color:#444;white-space:pre-wrap;">${getTransferDetails()}</span>
   </div>` : ''}
+</div>
+
+<div id="itinerarySectionWrapper" style="margin-bottom: 12px; border: 1px solid #eee; padding: 10px 12px; border-radius: 6px; background:#fff;">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+    <h3 style="margin:0;color:#0b76d1;border-bottom:2px solid #0b76d1;padding-bottom:3px;">Day Wise Itinerary</h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button id="toggleItineraryBtn" type="button" class="blue-btn" style="padding:4px 10px;font-size:12px;">Show Itinerary</button>
+      <button id="saveItineraryBtn" type="button" class="green-btn" style="padding:4px 10px;font-size:12px;display:none;">Save Itinerary</button>
+    </div>
+  </div>
+  <div id="itineraryTableContainer" style="display:none;margin-top:8px;"></div>
 </div>
   
   <button onclick="toggleCalculationSummary()" style="margin-bottom: 6px; padding: 3px 10px; background: #0b76d1; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Show/Hide Price Breakdown</button>
@@ -6453,7 +6652,7 @@ modalButtons.innerHTML = `
   
 
 // Add event listeners after modal is shown
-setTimeout(() => {
+setTimeout(async () => {
   // Print Quotation button
   document.getElementById('printQuotationBtn').onclick = function() {
     printQuotation();
@@ -6468,6 +6667,57 @@ setTimeout(() => {
   document.getElementById('closeQuotationBtn').onclick = function() {
     modal.classList.remove('visible');
   };
+
+  const itinerarySection = document.getElementById('itinerarySectionWrapper');
+  const itineraryContainer = document.getElementById('itineraryTableContainer');
+  const toggleBtn = document.getElementById('toggleItineraryBtn');
+  const saveBtn = document.getElementById('saveItineraryBtn');
+
+  if (itinerarySection && itineraryContainer && itineraryContainer.style.display === 'none') {
+    itinerarySection.classList.add('itinerary-hidden');
+  }
+
+  if (window.ItineraryComponent && itineraryContainer && toggleBtn && saveBtn) {
+    const sourceData = getPreviewItinerarySourceData();
+    const hasSavedRows = Array.isArray(itineraryEditorState.rows) && itineraryEditorState.rows.length > 0;
+
+    if (!hasSavedRows) {
+      const generated = await window.ItineraryComponent.generateItinerary({
+        clientData: sourceData.clientData,
+        flights: [],
+        hotels: sourceData.hotels,
+        tours: sourceData.tours,
+        transfers: sourceData.transfers,
+        existingRows: getSavedItineraryRows(),
+        existingFlightSegments: itineraryEditorState.flightSegments || {},
+        askFlightDetails: askItineraryFlightDetails,
+        promptForMissingFlightOnCityChange: true
+      });
+      itineraryEditorState.rows = generated.rows;
+      itineraryEditorState.flightSegments = generated.flightSegments || {};
+      itineraryEditorState.source = 'auto';
+      itineraryEditorState.updatedAt = new Date().toISOString();
+    }
+
+    itineraryContainer.innerHTML = window.ItineraryComponent.renderItineraryTable(itineraryEditorState.rows, { editable: true });
+    window.ItineraryComponent.initEditableItinerary(itineraryContainer);
+
+    toggleBtn.onclick = function() {
+      const isHidden = itineraryContainer.style.display === 'none';
+      itineraryContainer.style.display = isHidden ? 'block' : 'none';
+      saveBtn.style.display = isHidden ? 'inline-block' : 'none';
+      toggleBtn.textContent = isHidden ? 'Hide Itinerary' : 'Show Itinerary';
+      if (itinerarySection) itinerarySection.classList.toggle('itinerary-hidden', !isHidden);
+    };
+
+    saveBtn.onclick = function() {
+      const updatedRows = window.ItineraryComponent.readEditableRows(itineraryContainer);
+      itineraryEditorState.rows = updatedRows;
+      itineraryEditorState.source = 'manual';
+      itineraryEditorState.updatedAt = new Date().toISOString();
+      showNotification('Itinerary saved in quotation preview.', 'success');
+    };
+  }
 }, 100);
 
   // Show modal
@@ -7194,7 +7444,13 @@ function saveQuotation() {
       hotelsMadina: hotelsMadinaData,
       transfers: transfersData,
       visa: visaData,
-      addons: addonsData
+      addons: addonsData,
+      itineraryData: {
+        rows: Array.isArray(itineraryEditorState.rows) ? itineraryEditorState.rows : [],
+        flightSegments: itineraryEditorState.flightSegments || {},
+        source: itineraryEditorState.source || 'auto',
+        updatedAt: itineraryEditorState.updatedAt || ''
+      }
     };
 
     const packageTotalAmount = calculateUmrahPackageTotalAmount(quotationData);
@@ -7305,6 +7561,13 @@ async function loadQuotation(quotationId) {
     
     // Set the current quotation ID
     currentQuotationId = quotationId;
+
+    itineraryEditorState = {
+      rows: Array.isArray(quotation?.itineraryData?.rows) ? quotation.itineraryData.rows : [],
+      flightSegments: quotation?.itineraryData?.flightSegments || {},
+      source: quotation?.itineraryData?.source || 'auto',
+      updatedAt: quotation?.itineraryData?.updatedAt || ''
+    };
 
     // Restore selected package from quotation data (or clear stale selection)
     const packageSelect = document.getElementById('packageSelect');

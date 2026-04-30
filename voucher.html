@@ -7,6 +7,7 @@
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="itinerary-component.js"></script>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
   import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, query, where } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
@@ -102,6 +103,23 @@ button.whatsapp:hover{background:#128C7E}
 .add-small{background:#4CAF50;color:#fff;border:none;padding:5px 11px;border-radius:5px;cursor:pointer;font-size:12px}
 .add-small:hover{background:#45a049}
 @media(max-width:600px){.grid{grid-template-columns:1fr}.grid-3{grid-template-columns:1fr}}
+@media (max-width: 960px) {
+  .wrap { padding: 14px; margin: 0 auto; border-radius: 0; }
+  .grid, .grid-2, .grid-3, .grid-4, .card, .section, .info-bar, .actions, .actions-bar, .service-box, .modal-box, .itinerary-table-wrapper, .search-container, .currency-selector, .addon-panel, .section-entry, .progress-bar { grid-template-columns: 1fr !important; }
+  .card-header, .header-card, .actions-bar, .info-bar, .link-row, .modal-btns, .service-box, .actions, .action-buttons, .section-entry h4, .currency-selector, .progress-bar { flex-direction: column !important; align-items: stretch !important; }
+  .service-tabs { flex-wrap: wrap !important; gap: 8px !important; }
+  .service-tab { flex: 1 1 100% !important; max-width: 100% !important; }
+  button, .btn, input, select, textarea, .search-input, .search-btn, .currency-selector select, .currency-display, .header-btn { width: 100% !important; min-width: 0 !important; }
+  .card, .section, .modal-box, .info-bar, .addon-panel, .section-entry, .header-card { padding: 12px !important; }
+  .itinerary-table, table, .pax-table { width: 100% !important; overflow-x: auto !important; }
+  .itinerary-table { min-width: 650px !important; }
+  .header-card .meta, .qr-area, .qr-area .qr-box { width: 100% !important; display: block; text-align: center; }
+  .inline-input { flex-wrap: wrap !important; align-items: stretch !important; }
+  .inline-input label, .inline-input input { width: 100% !important; min-width: 0 !important; }
+  .inline-input input { width: auto !important; }
+  .modal-content { width: 95% !important; max-width: 100% !important; padding: 20px !important; }
+  .progress-step { flex: 1 1 100% !important; margin-bottom: 8px !important; }
+}
 </style>
 </head>
 <body>
@@ -238,6 +256,17 @@ button.whatsapp:hover{background:#128C7E}
   <div id="visaOpsList"></div>
 </div>
 
+<div class="section" id="itinerarySection" style="display:none">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+    <h3 style="margin:0">Day Wise Itinerary</h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button type="button" id="toggleVoucherItineraryBtn" class="ghost" style="font-size:12px;padding:5px 12px">Show Itinerary</button>
+      <button type="button" id="saveVoucherItineraryBtn" class="green" style="font-size:12px;padding:5px 12px;display:none">Save Itinerary</button>
+    </div>
+  </div>
+  <div id="voucherItineraryContainer" style="display:none;margin-top:10px"></div>
+</div>
+
 <!-- Agent Note -->
 <div class="section">
   <h3>Agent Note to Customer</h3>
@@ -268,6 +297,8 @@ let hotelMOpsCount = 0;
 let hotelAOpsCount = 0;
 let transferOpsCount = 0;
 let ziyarahOpsCount = 0;
+let voucherItineraryRows = [];
+let voucherItineraryFlightSegments = {};
 
 // ===== Helpers =====
 function showNotif(msg, type = 'info', dur = 3500) {
@@ -661,6 +692,70 @@ function renderOverview() {
   `;
 }
 
+function mapHotelsForVoucherItinerary(hotelsMakkah, hotelsMadina) {
+  const mapped = [];
+  (hotelsMakkah || []).forEach((h) => mapped.push({ ...h, city: h.city || 'Makkah' }));
+  (hotelsMadina || []).forEach((h) => mapped.push({ ...h, city: h.city || 'Madina' }));
+  return mapped;
+}
+
+async function initializeVoucherItinerary(q, existing) {
+  if (!window.ItineraryComponent || !q) return;
+
+  const section = document.getElementById('itinerarySection');
+  const container = document.getElementById('voucherItineraryContainer');
+  const toggleBtn = document.getElementById('toggleVoucherItineraryBtn');
+  const saveBtn = document.getElementById('saveVoucherItineraryBtn');
+  if (!section || !container || !toggleBtn || !saveBtn) return;
+
+  section.style.display = 'block';
+
+  const existingVoucherRows = Array.isArray(existing?.itinerary) ? existing.itinerary : [];
+  const quotationRows = Array.isArray(q?.itineraryData?.rows) ? q.itineraryData.rows : [];
+  const sourceRows = existingVoucherRows.length ? existingVoucherRows : quotationRows;
+
+  if (sourceRows.length) {
+    voucherItineraryRows = sourceRows;
+    voucherItineraryFlightSegments = existing?.itineraryFlightSegments || q?.itineraryData?.flightSegments || {};
+  } else {
+    const generated = await window.ItineraryComponent.generateItinerary({
+      clientData: q.clientData || {},
+      flights: q.flights || [],
+      hotels: mapHotelsForVoucherItinerary(q.hotelsMakkah, q.hotelsMadina),
+      tours: q.addons?.ziyarah || [],
+      transfers: q.transfers || [],
+      existingRows: [],
+      existingFlightSegments: {},
+      promptForMissingFlightOnCityChange: false
+    });
+    voucherItineraryRows = generated.rows || [];
+    voucherItineraryFlightSegments = generated.flightSegments || {};
+  }
+
+  container.innerHTML = window.ItineraryComponent.renderItineraryTable(voucherItineraryRows, { editable: true });
+  window.ItineraryComponent.initEditableItinerary(container);
+
+  toggleBtn.onclick = function() {
+    const isHidden = container.style.display === 'none';
+    container.style.display = isHidden ? 'block' : 'none';
+    saveBtn.style.display = isHidden ? 'inline-block' : 'none';
+    toggleBtn.textContent = isHidden ? 'Hide Itinerary' : 'Show Itinerary';
+  };
+
+  saveBtn.onclick = function() {
+    voucherItineraryRows = window.ItineraryComponent.readEditableRows(container);
+    showNotif('Itinerary saved in voucher.', 'success');
+  };
+}
+
+function getVoucherItineraryRows() {
+  const container = document.getElementById('voucherItineraryContainer');
+  if (window.ItineraryComponent && container && container.style.display !== 'none') {
+    return window.ItineraryComponent.readEditableRows(container);
+  }
+  return Array.isArray(voucherItineraryRows) ? voucherItineraryRows : [];
+}
+
 // ===== Collect form data =====
 function collectFormData() {
   // Passengers
@@ -763,7 +858,18 @@ function collectFormData() {
     visa.visaNumbers = visaNumbers;
   }
 
-  return { passengers, emergencyContact, flights, hotelsMakkah, hotelsMadina, transfers, ziyarah, visa };
+  return {
+    passengers,
+    emergencyContact,
+    flights,
+    hotelsMakkah,
+    hotelsMadina,
+    transfers,
+    ziyarah,
+    visa,
+    itinerary: getVoucherItineraryRows(),
+    itineraryFlightSegments: voucherItineraryFlightSegments || {}
+  };
 }
 
 // ===== Validate for publish =====
@@ -798,6 +904,10 @@ function buildVoucherDoc(data, status) {
     transfers: data.transfers,
     ziyarah: data.ziyarah,
     visa: data.visa,
+    itinerary: Array.isArray(data.itinerary) && data.itinerary.length
+      ? data.itinerary
+      : (Array.isArray(quotation?.itineraryData?.rows) ? quotation.itineraryData.rows : []),
+    itineraryFlightSegments: data.itineraryFlightSegments || quotation?.itineraryData?.flightSegments || {},
     passengers: data.passengers,
     emergencyContact: data.emergencyContact,
     agentNote: getVal('agentNote'),
@@ -961,6 +1071,10 @@ function populateFromQuotation(q, existing) {
 
   // Visa — no need to pass passengers; buildVisaOps now reads live passenger DOM
   buildVisaOps(q.visa, existing?.visa);
+
+  initializeVoucherItinerary(q, existing).catch((err) => {
+    console.error('Failed to initialize itinerary in voucher editor:', err);
+  });
 
   // Load existing form values
   if (existing) loadVoucherIntoForm(existing);

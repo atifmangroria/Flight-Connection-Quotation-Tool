@@ -95,6 +95,15 @@
     .title{font-size:21px}
     .btn{width:100%}
   }
+  @media (max-width:960px) {
+    .wrap { padding: 14px; margin: 0 auto; }
+    .bar { grid-template-columns: 1fr !important; }
+    .header { flex-direction: column; align-items: stretch; }
+    .header > div:last-child { width: 100%; display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn, button, input, select { width: 100% !important; min-width: 0 !important; }
+    .table-wrap, table { width: 100% !important; overflow-x: auto !important; }
+    .section, .card, .bar { padding: 12px !important; }
+  }
 </style>
 </head>
 <body>

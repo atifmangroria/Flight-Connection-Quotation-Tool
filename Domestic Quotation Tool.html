@@ -152,10 +152,28 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus, 
   .input-error { border: 2px solid red !important; }
   .flight-header, .hotel-header, .transfer-header, .visa-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
   .flight-header h3, .hotel-header h3, .transfer-header h3, .visa-header h3 { margin: 0; }
+  .section h4, .section-entry h4 { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 0 0 8px 0; flex-wrap: wrap; }
+  .section h4 button.remove-btn { margin-left: 0; }
   .add-btn { background: #4CAF50; color: #fff; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 14px; }
   .add-btn:hover { background: #45a049; }
   .remove-btn { background: #e74c3c; color: #fff; border: none; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 8px; }
   .remove-btn:hover { background: #c0392b; }
+
+  .service-tabs { display:flex; flex-wrap:wrap; gap:10px; margin:18px 0 8px; }
+  .service-tab { border:1px solid #d6dbe2; background:#fbfdff; color:#111; padding:10px 16px; border-radius:999px; font-size:14px; cursor:pointer; transition:all .2s ease; }
+  .page-header { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+  .page-header-right { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .page-header-right .small { min-width:180px; }
+  @media (max-width: 780px) {
+    .page-header { flex-direction:column; align-items:flex-start; }
+    .page-header-right { width:100%; justify-content:flex-start; }
+    .page-header-right .small { width:100%; }
+    .page-header-right button { flex:1 1 auto; min-width:140px; }
+  }
+  .service-tab:hover { background:#eef5fb; }
+  .service-tab.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .service-panel { display:none; }
+  .service-panel.active { display:block; }
 
   /* Currency Selector */
   .currency-selector {
@@ -548,13 +566,56 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus, 
     .modal-content { width: 95%; max-height: 90vh; padding: 15px; }
     .actions { flex-direction: column; }
     button { width: 100%; margin-bottom: 8px; min-height: 44px; }
+    .add-btn, .remove-btn, .page-header-right button, button.ghost { width: auto !important; min-width: 0 !important; }
+    .add-btn { white-space: normal; }
+    .remove-btn { margin-left: 0; }
+    .section h4, .section-entry h4 { width: 100%; }
+    .section h4 button.remove-btn { align-self: flex-start; }
+    .section#agentExtraSvc > div { display: flex; flex-direction: column; align-items: flex-start; }
+    .section#agentExtraSvc label { display: flex; justify-content: flex-start; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; }
+    .section#agentExtraSvc input[type="radio"] { margin: 0 8px 0 0; }
+    .section#agentExtraSvc #perPersonSvcOption { grid-template-columns: 1fr !important; }
+    .section#agentExtraSvc #perPersonSvcOption input { width: 100%; min-width: 0; }
     .inline-input { flex-direction: column; align-items: stretch; }
     .inline-input label { margin-bottom: 5px; }
     table { font-size: 12px; overflow-x: auto; display: block; }
     th, td { padding: 6px; }
     .saved-list { max-height: 150px; }
   }
-  @media print{ .no-print{display:none} }
+  @media print{ .no-print{display:none} .itinerary-hidden{display:none!important} }
+
+  @media (max-width: 960px) {
+    .wrap { padding: 14px; margin:0 auto; border-radius:0; }
+    .grid, .grid-2, .grid-3, .grid-4, .modalGrid, .controls, .tableWrap, .table-wrap, .itinerary-table-wrapper, .package-toolbar, .card-grid, .modal-content, .service-panel, .addonsWrapper { grid-template-columns: 1fr !important; }
+    .filters-section, .header, .header-right, .top, .actions, .action-buttons, .pkg-actions, .info-bar, .card-header, .bar, .addon-category, .service-panel, .addonsWrapper { flex-direction: column !important; align-items: stretch !important; }
+    .service-tabs { flex-wrap: wrap !important; justify-content: flex-start !important; }
+    .service-tab, .service-panel, button, .btn, input, select, textarea { width: 100% !important; min-width: 0 !important; }
+    .tableWrap, .table-wrap, .itinerary-table-wrapper, .saved-list, .modalBox, .notice, .addonsWrapper { overflow-x: auto !important; }
+    table, .quotation-table, .pax-table, .itinerary-table { width: 100% !important; }
+    .section, .card, .panel, .modalBox, .top, .notice, .bar { padding: 12px !important; }
+    .logo img, .header img { max-width: 100%; height: auto; }
+    .wrap, .login-container, .modalBox { max-width: 100% !important; }
+  }
+
+  @media (max-width: 960px) {
+    header, .service-tabs, .currency-selector, .section-toggle-container, .progress-bar, .actions, .search-container { flex-wrap: wrap !important; align-items: stretch !important; }
+    .service-tab { flex: 1 1 100% !important; max-width: 100% !important; }
+    .currency-selector { flex-direction: column !important; gap: 8px !important; }
+    .currency-selector select, .currency-display, .header-btn, .search-input, .search-btn { width: 100% !important; min-width: 0 !important; }
+    .section-entry h4 { flex-direction: column !important; align-items: stretch !important; gap: 8px !important; }
+    .inline-input { flex-wrap: wrap !important; align-items: stretch !important; }
+    .inline-input label, .inline-input input { width: 100% !important; min-width: 0 !important; }
+    .inline-input input { width: auto !important; }
+    .modal-content { width: 95% !important; max-width: 100% !important; padding: 20px !important; }
+    .progress-step { flex: 1 1 100% !important; margin-bottom: 8px !important; }
+  }
+
+  @media (max-width: 640px) {
+    .service-tab { font-size: 13px !important; padding: 10px 12px !important; }
+    .addon-panel, .section-entry, .card, .header-card { padding: 10px !important; }
+    header, .search-container, .actions, .service-tabs { flex-direction: column !important; align-items: stretch !important; }
+    .header img { height: auto !important; max-width: 100%; }
+  }
 
 /* Add this to your main <style> section */
 @page { 
@@ -627,12 +688,12 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus, 
 <div class="wrap">
 
 <!-- HEADER -->
-<div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+<div class="page-header">
   <div>
     <h1>Domestic Quotation</h1>
     <div class="small">Use Chrome/Edge.</div>
   </div>
-  <div style="display:flex;gap:8px;align-items:center" class="no-print">
+  <div class="page-header-right no-print">
     <div id="agentInfoDisplay" class="small"></div>
     <button id="btnSaveQuotation" class="ghost">Save Quotation</button>
     <button id="btnLoadQuotation" class="ghost">Load Quotation</button>
@@ -1323,7 +1384,6 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
     <div class="actions" style="margin-top:10px">
       <button id="btnSaveClient" type="button">Save Client & Pax</button>
-      <button id="btnCheckClient" type="button">Check Data</button>
       <button id="btnFindCustomer" type="button" class="ghost">Find Customer</button>
     </div>
 
@@ -2018,8 +2078,16 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 </script>
 
+<div class="service-tabs no-print" id="serviceTabs">
+  <button type="button" class="service-tab active" data-service="flight">Flight</button>
+  <button type="button" class="service-tab" data-service="hotel">Hotels</button>
+  <button type="button" class="service-tab" data-service="transfer">Transfers</button>
+  <button type="button" class="service-tab" data-service="tours">Tours</button>
+  <button type="button" class="service-tab" data-service="addons">Add Extras</button>
+</div>
+
 <!-- FLIGHT -->
-<div class="section" id="flightContainerWrapper">
+<div class="section service-panel active" id="flightContainerWrapper" data-service="flight">
   <div class="flight-header">
     <h3>Flight</h3>
     <button type="button" id="btnAddFlight" class="add-btn">+ Add Flight</button>
@@ -2286,7 +2354,7 @@ document.getElementById("btnAddFlight").addEventListener("click", async () => {
 </script>
 
 <!-- HOTELS -->
-<div class="section" id="hotelWrapper">
+<div class="section service-panel" id="hotelWrapper" data-service="hotel">
   <div class="hotel-header">
     <h3>Hotels</h3>
     <button type="button" id="btnAddHotel" class="add-btn">+ Add Hotel</button>
@@ -2808,7 +2876,7 @@ document.getElementById("btnAddHotel").addEventListener("click", async function(
 </script>
 
 <!-- TRANSFERS -->
-<div class="section" id="transferWrapper">
+<div class="section service-panel" id="transferWrapper" data-service="transfer">
   <div class="transfer-header">
     <h3>Transfers</h3>
     <button type="button" id="btnAddTrans" class="add-btn">+ Add Transfer</button>
@@ -3168,7 +3236,7 @@ document.getElementById("btnAddTrans").addEventListener("click", addTransfer);
 </script>
 
 <!-- TOURS & ACTIVITIES -->
-<div class="section" id="toursWrapper">
+<div class="section service-panel" id="toursWrapper" data-service="tours">
   <div class="transfer-header">
     <h3>Tours & Activities</h3>
     <button type="button" id="btnAddTour" class="add-btn">+ Add Tour</button>
@@ -3335,7 +3403,7 @@ document.getElementById("btnAddTour").addEventListener("click", addTour);
 </script>
 
 <!-- VISA -->
-<div class="section" id="visaWrapper">
+<div class="section service-panel" id="visaWrapper" data-service="visa">
   <div class="visa-header">
     <h3>Visa</h3>
     <button type="button" id="btnAddVisa" class="add-btn">+ Add Visa</button>
@@ -3452,9 +3520,31 @@ function removeVisa(){
 // Event listener
 document.getElementById("btnAddVisa").addEventListener("click", addVisa);
 </script>
+<script>
+(function() {
+  function setActiveServiceTab(service) {
+    document.querySelectorAll('.service-tab').forEach(tab => {
+      tab.classList.toggle('active', tab.dataset.service === service);
+    });
+    document.querySelectorAll('.service-panel').forEach(panel => {
+      panel.classList.toggle('active', panel.dataset.service === service);
+    });
+  }
+
+  document.querySelectorAll('.service-tab').forEach(tab => {
+    tab.addEventListener('click', () => setActiveServiceTab(tab.dataset.service));
+  });
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => setActiveServiceTab('flight'));
+  } else {
+    setActiveServiceTab('flight');
+  }
+})();
+</script>
 
 <!-- ADD-ONS -->
-<div class="section" id="addonsWrapper">
+<div class="section service-panel" id="addonsWrapper" data-service="addons">
   <h3>Add Extras</h3>
 
   <!-- Upgraded Flight Panel -->
@@ -3918,12 +4008,12 @@ function removeAddon(id){
     <h4>Agent Service Charge Options (Optional)</h4>
     <p class="small" style="color:#666; margin-top:-10px;">Choose one option for adding service fee to the final selling price.</p>
     
-    <div style="margin-bottom: 15px;">
-      <label style="display: flex; align-items: center; margin-bottom: 10px;">
+    <div style="margin-bottom: 15px; display:flex; flex-direction:column; align-items:flex-start;">
+      <label style="display: flex; justify-content:flex-start; align-items: center; gap: 8px; width:100%; margin-bottom: 10px;">
         <input type="radio" name="svcOption" value="perPerson" onchange="toggleServiceOption('perPerson')" style="margin-right: 8px;">
         <span>Add Service Fee Per Person (PKR)</span>
       </label>
-      <label style="display: flex; align-items: center;">
+      <label style="display: flex; justify-content:flex-start; align-items: center; gap: 8px; width:100%;">
         <input type="radio" name="svcOption" value="none" checked onchange="toggleServiceOption('none')" style="margin-right: 8px;">
         <span>No Service Charge</span>
       </label>
@@ -5125,6 +5215,7 @@ document.getElementById('quotationStatus')?.addEventListener('change', (event) =
   </div>
 </div>
 
+<script src="itinerary-component.js"></script>
 <script>
 // Default terms and conditions
 const defaultTerms = `
@@ -5208,6 +5299,67 @@ loadCustomTermsFromFirebase();
 // Get stored content
 const section1Content = localStorage.getItem('section1Content_international') || '';
 const section2Content = localStorage.getItem('section2Content_international') || '';
+let itineraryEditorState = {
+  rows: [],
+  flightSegments: {},
+  source: 'auto',
+  updatedAt: ''
+};
+
+function getPreviewItinerarySourceData() {
+  const savedClientData = JSON.parse(localStorage.getItem('savedClientData_domestic')) || {};
+  return {
+    clientData: {
+      dateFrom: savedClientData.dateFrom || document.getElementById('dateFrom')?.value || '',
+      dateTo: savedClientData.dateTo || document.getElementById('dateTo')?.value || '',
+      depCity: savedClientData.depCity || document.getElementById('depCity')?.value || '',
+      tourDestination: savedClientData.tourDestination || document.getElementById('tourDestination')?.value || ''
+    },
+    hotels: getHotelGroups(),
+    transfers: Array.from(document.querySelectorAll("[id^='transferBlock_']")).map((el) => {
+      const idx = el.id.split('_')[1];
+      return {
+        date: document.getElementById(`tDate_${idx}`)?.value || '',
+        returnDate: document.getElementById(`tReturnDate_${idx}`)?.value || '',
+        from: document.getElementById(`tFrom_${idx}`)?.value || '',
+        to: document.getElementById(`tTo_${idx}`)?.value || '',
+        vehicle: document.getElementById(`tCar_${idx}`)?.value || '',
+        type: document.getElementById(`tType_${idx}`)?.value || '',
+        direction: document.getElementById(`tDirection_${idx}`)?.value || ''
+      };
+    }),
+    tours: getTourDetails()
+  };
+}
+
+async function askItineraryFlightDetails(segment) {
+  const routeText = `${segment.fromCity} and ${segment.toCity}`;
+  const hasFlight = window.confirm(`Is there a flight between ${routeText}?`);
+  if (!hasFlight) return null;
+
+  const flightNumber = window.prompt('Flight Number:', '') || '';
+  const departureCity = window.prompt('Departure City:', segment.fromCity || '') || segment.fromCity || '';
+  const arrivalCity = window.prompt('Arrival City:', segment.toCity || '') || segment.toCity || '';
+  const departureTime = window.prompt('Departure Time:', '') || '';
+  const arrivalTime = window.prompt('Arrival Time:', '') || '';
+  const flightDate = window.prompt('Flight Date (YYYY-MM-DD):', segment.date || '') || segment.date || '';
+
+  return {
+    flightNumber,
+    departureCity,
+    arrivalCity,
+    departureTime,
+    arrivalTime,
+    flightDate
+  };
+}
+
+function getSavedItineraryRows() {
+  if (itineraryEditorState && Array.isArray(itineraryEditorState.rows) && itineraryEditorState.rows.length) {
+    return itineraryEditorState.rows;
+  }
+  return [];
+}
 
 function showQuotationModal() {
   const modal = document.getElementById('quotationModal');
@@ -5227,6 +5379,7 @@ function getQuotationPreviewClone() {
 
   const clonedContent = modalContent.cloneNode(true);
   clonedContent.querySelectorAll('style, button, #printQuotationBtn, #closeQuotationModalBtn').forEach(el => el.remove());
+  clonedContent.querySelectorAll('.it-edit-icon').forEach(el => el.remove());
 
   const sectionIds = ['calculationSummarySection', 'flightSection', 'hotelSection', 'addonSection', 'priceBreakupSection'];
   sectionIds.forEach(id => {
@@ -5235,6 +5388,12 @@ function getQuotationPreviewClone() {
       div.remove();
     }
   });
+
+  const itineraryWrapper = clonedContent.querySelector('#itinerarySectionWrapper');
+  const clonedItineraryContainer = clonedContent.querySelector('#itineraryTableContainer');
+  if (itineraryWrapper && (itineraryWrapper.classList.contains('itinerary-hidden') || (clonedItineraryContainer && clonedItineraryContainer.style.display === 'none'))) {
+    itineraryWrapper.remove();
+  }
 
   return clonedContent;
 }
@@ -5531,6 +5690,17 @@ async function printQuotation() {
     <strong>🏛️ Tours</strong> &mdash; ${tour.name} &bull; ${tour.duration} &bull; ${tour.mode} &bull; ${tour.vehicle}${tour.date ? ` &bull; Date: ${formatDateToDMY(tour.date)}` : ''}
   </div>
     `).join('') : ''}
+</div>
+
+<div id="itinerarySectionWrapper" style="margin-bottom: 12px; border: 1px solid #eee; padding: 10px 12px; border-radius: 6px; background:#fff;">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+    <h3 style="margin:0;color:#0b76d1;border-bottom:2px solid #0b76d1;padding-bottom:3px;">Day Wise Itinerary</h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button id="toggleItineraryBtn" type="button" class="blue-btn" style="padding:4px 10px;font-size:12px;">Show Itinerary</button>
+      <button id="saveItineraryBtn" type="button" class="green-btn" style="padding:4px 10px;font-size:12px;display:none;">Save Itinerary</button>
+    </div>
+  </div>
+  <div id="itineraryTableContainer" style="display:none;margin-top:8px;"></div>
 </div>
   
   <button onclick="toggleCalculationSummary()" style="margin-bottom: 6px; padding: 3px 10px; background: #0b76d1; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Show/Hide Price Breakdown</button>
@@ -6047,6 +6217,83 @@ modalButtons.innerHTML = `
 
 // Add event listeners after modal is shown
 setTimeout(() => {
+  const itinerarySection = document.getElementById('itinerarySectionWrapper');
+  const itineraryBtn = document.getElementById('toggleItineraryBtn');
+  const saveItineraryBtn = document.getElementById('saveItineraryBtn');
+  const itineraryTableContainer = document.getElementById('itineraryTableContainer');
+  let itineraryRows = getSavedItineraryRows();
+  let itineraryFlightSegments = Object.assign({}, itineraryEditorState?.flightSegments || {});
+
+  if (itinerarySection && itineraryTableContainer && itineraryTableContainer.style.display === 'none') {
+    itinerarySection.classList.add('itinerary-hidden');
+  }
+
+  const renderItineraryEditor = (rows) => {
+    itineraryTableContainer.innerHTML = window.ItineraryComponent
+      ? window.ItineraryComponent.renderItineraryTable(rows, { editable: true })
+      : '<div style="color:#c00;font-size:12px;">Itinerary component is missing.</div>';
+    if (window.ItineraryComponent) {
+      window.ItineraryComponent.initEditableItinerary(itineraryTableContainer);
+    }
+  };
+
+  itineraryBtn.onclick = async function() {
+    const isHidden = itineraryTableContainer.style.display === 'none';
+    if (!isHidden) {
+      itineraryTableContainer.style.display = 'none';
+      saveItineraryBtn.style.display = 'none';
+      itineraryBtn.textContent = 'Show Itinerary';
+      if (itinerarySection) itinerarySection.classList.add('itinerary-hidden');
+      return;
+    }
+
+    if (!window.ItineraryComponent) {
+      showAlert('Itinerary component could not be loaded.', 'Error');
+      return;
+    }
+
+    if (!itineraryRows.length) {
+      const sourceData = getPreviewItinerarySourceData();
+      const generated = await window.ItineraryComponent.generateItinerary({
+        clientData: sourceData.clientData,
+        hotels: sourceData.hotels,
+        transfers: sourceData.transfers,
+        tours: sourceData.tours,
+        flightSegments: itineraryFlightSegments,
+        promptFlightDetails: true,
+        flightPrompt: askItineraryFlightDetails
+      });
+      itineraryRows = generated.rows;
+      itineraryFlightSegments = generated.flightSegments || itineraryFlightSegments;
+    }
+
+    renderItineraryEditor(itineraryRows);
+    itineraryTableContainer.style.display = 'block';
+    if (itinerarySection) itinerarySection.classList.remove('itinerary-hidden');
+    saveItineraryBtn.style.display = 'inline-block';
+    itineraryBtn.textContent = 'Hide Itinerary';
+  };
+
+  saveItineraryBtn.onclick = function() {
+    if (!window.ItineraryComponent) return;
+    const editedRows = window.ItineraryComponent.readEditableRows(itineraryTableContainer);
+    if (!editedRows.length) {
+      showAlert('Please keep at least one itinerary row before saving.', 'Itinerary');
+      return;
+    }
+
+    itineraryRows = editedRows;
+    itineraryEditorState = {
+      rows: editedRows,
+      flightSegments: itineraryFlightSegments,
+      source: 'edited',
+      updatedAt: new Date().toISOString()
+    };
+    renderItineraryEditor(itineraryRows);
+    saveQuotation();
+    showNotification('Itinerary saved to quotation.', 'success');
+  };
+
   // Print Quotation button
   document.getElementById('printQuotationBtn').onclick = function() {
     printQuotation();
@@ -6689,6 +6936,7 @@ const customSectionsData = {
       tours: toursData,
       visa: visaData,
       addons: addonsData,
+      itineraryData: itineraryEditorState,
       customSections: customSectionsData  // Add this line
     };
 
@@ -6866,6 +7114,10 @@ function loadQuotation(quotationId) {
       localStorage.setItem('sectionDisabled_1', 'false');
       localStorage.setItem('sectionDisabled_2', 'false');
     }
+
+    itineraryEditorState = quotation.itineraryData && Array.isArray(quotation.itineraryData.rows)
+      ? quotation.itineraryData
+      : { rows: [], flightSegments: {}, source: 'auto', updatedAt: '' };
 
     // Restore saved pricing settings (agent fee option)
     const pricing = quotation.pricingSettings || {};

@@ -21,12 +21,12 @@ const DATA_FIELDS = {
 const PRESETS = {
     sales: {
         source: "sales",
-        fields: ["id", "clientName", "destination", "bookedDate", "amount", "agentId"],
+        fields: ["id", "clientName", "destination", "bookedDate", "amount", "agentName"],
         filter: ""
     },
     quotation: {
         source: "quotations",
-        fields: ["id", "type", "clientName", "destination", "status", "createdAt", "amount"],
+        fields: ["id", "type", "clientName", "destination", "status", "createdAt", "amount", "agentName"],
         filter: ""
     },
     destination: {
@@ -34,10 +34,61 @@ const PRESETS = {
         fields: ["destination", "totalQuotations", "bookedQuotations", "totalExpectedSales"],
         filter: "",
         groupedByDestination: true
+    },
+    bookingSummary: {
+        source: "quotations",
+        fields: ["id", "type", "clientName", "destination", "status", "createdAt", "amount", "agentName"],
+        filter: ""
+    },
+    customerActivity: {
+        source: "customers",
+        fields: ["customerName", "phone", "email", "totalQuotations", "bookedQuotations", "bookedSales", "lastQuotationDate"],
+        filter: ""
     }
 };
 
-const dataSourceSelect = document.getElementById("data-source");
+const ALL_FIELDS = Array.from(new Set([
+    ...DATA_FIELDS.quotations,
+    ...DATA_FIELDS.sales,
+    ...DATA_FIELDS.customers,
+    "agentName"
+]));
+
+const FIELD_SOURCES = {
+    quotations: new Set(DATA_FIELDS.quotations.concat(["agentName"])),
+    sales: new Set(DATA_FIELDS.sales.concat(["agentName"])),
+    customers: new Set(DATA_FIELDS.customers)
+};
+
+function inferSourceFromFields(fields) {
+    const sourceCounts = { quotations: 0, sales: 0, customers: 0 };
+
+    fields.forEach(field => {
+        if (FIELD_SOURCES.customers.has(field)) sourceCounts.customers += 1;
+        if (FIELD_SOURCES.sales.has(field)) sourceCounts.sales += 1;
+        if (FIELD_SOURCES.quotations.has(field)) sourceCounts.quotations += 1;
+    });
+
+    if (sourceCounts.customers > 0 && sourceCounts.customers >= sourceCounts.sales && sourceCounts.customers >= sourceCounts.quotations) {
+        return "customers";
+    }
+    if (sourceCounts.sales > 0 && sourceCounts.sales >= sourceCounts.quotations) {
+        return "sales";
+    }
+    return "quotations";
+}
+
+const reportSelect = document.getElementById("report-select");
+const savedReportsSelect = document.getElementById("saved-reports");
+const saveReportNameInput = document.getElementById("save-report-name");
+const saveReportBtn = document.getElementById("save-report-btn");
+const saveGlobalCheckbox = document.getElementById("save-global-checkbox");
+const deleteSavedReportBtn = document.getElementById("delete-saved-report-btn");
+const deleteConfirmation = document.getElementById("delete-confirmation");
+const confirmDeleteBtn = document.getElementById("confirm-delete-btn");
+const cancelDeleteBtn = document.getElementById("cancel-delete-btn");
+const fieldBlockSelect = document.getElementById("field-block-select");
+const addFieldBtn = document.getElementById("add-field-btn");
 const fieldLibrary = document.getElementById("field-library");
 const selectedFieldsZone = document.getElementById("selected-fields-zone");
 const filterInput = document.getElementById("filter");
@@ -49,12 +100,17 @@ const table = document.getElementById("report-table");
 const tableHead = document.getElementById("table-head");
 const tableBody = document.getElementById("table-body");
 const reportStatus = document.getElementById("report-status");
+const reportTitleElement = document.getElementById("report-title");
+const reportSubtitleElement = document.getElementById("report-subtitle");
 const dateFromInput = document.getElementById("date-from");
 const dateToInput = document.getElementById("date-to");
 const backDashboardBtn = document.getElementById("back-dashboard");
 
 let selectedFields = [];
 let activePreset = null;
+let currentSource = "quotations";
+let customReportName = null;
+let savedReports = [];
 let currentRenderedRows = [];
 let currentRenderedFields = [];
 let lastLoadUsedLocalFallback = false;
@@ -68,6 +124,256 @@ function setStatus(message, ok = false) {
 
 function getDataSourceLabel() {
     return lastLoadUsedLocalFallback ? "Source: cache" : "Source: live";
+}
+
+function getActiveReportLabel() {
+    if (activePreset === "destination") return "Destination Summary Report";
+    if (activePreset === "sales") return "Sales Report";
+    if (activePreset === "quotation") return "Quotation Report";
+    if (activePreset === "bookingSummary") return "Booking Summary Report";
+    if (activePreset === "customerActivity") return "Customer Activity Report";
+    if (activePreset === "custom" || selectedFields.length) return customReportName ? `Custom Report: ${customReportName}` : "Custom Report";
+    if (currentSource === "sales") return "Sales Data Report";
+    if (currentSource === "customers") return "Customers Data Report";
+    return "Quotations Report";
+}
+
+function formatDateRangeLabel() {
+    const from = dateFromInput.value ? new Date(dateFromInput.value).toLocaleDateString() : "-";
+    const to = dateToInput.value ? new Date(dateToInput.value).toLocaleDateString() : "-";
+    return `Date: ${from} - ${to}`;
+}
+
+function updateReportHeading() {
+    if (!reportTitleElement || !reportSubtitleElement) return;
+    const title = getActiveReportLabel();
+    reportTitleElement.textContent = title;
+    reportSubtitleElement.textContent = `${formatDateRangeLabel()} · ${activePreset ? `Preset selected` : `Custom`}`;
+}
+
+function getLoggedInUserId() {
+    const agent = getLoggedInAgent();
+    return agent?.uid || agent?.id || null;
+}
+
+async function loadSavedReports() {
+    savedReports = [];
+    const currentUserId = getLoggedInUserId();
+    let firestoreLoaded = false;
+
+    try {
+        const snapshot = await db.collection("savedReports").get();
+        snapshot.forEach(doc => {
+            const data = doc.data() || {};
+            if (data.shared || data.ownerId === currentUserId) {
+                savedReports.push({ id: doc.id, ...data });
+            }
+        });
+        firestoreLoaded = true;
+    } catch (error) {
+        console.warn("Could not load saved reports from Firestore", error);
+    }
+
+    if (!firestoreLoaded) {
+        const localSaved = JSON.parse(localStorage.getItem("savedReports") || "[]");
+        localSaved.forEach(report => {
+            if (report.shared || report.ownerId === currentUserId) {
+                savedReports.push(report);
+            }
+        });
+    }
+
+    refreshSavedReportControls();
+}
+
+function refreshSavedReportControls() {
+    if (savedReportsSelect) {
+        savedReportsSelect.innerHTML = "<option value=''>-- Select saved report --</option>";
+        savedReports.forEach(report => {
+            const option = document.createElement("option");
+            option.value = report.id;
+            option.textContent = report.shared ? `${report.name} (shared)` : report.name;
+            savedReportsSelect.appendChild(option);
+        });
+    }
+
+    if (reportSelect) {
+        const currentValue = reportSelect.value;
+        const readyOptions = [
+            { value: "sales", label: "Sales Report" },
+            { value: "quotation", label: "Quotation Report" },
+            { value: "destination", label: "By Destination" },
+            { value: "bookingSummary", label: "Booking Summary" },
+            { value: "customerActivity", label: "Customer Activity" },
+            { value: "custom", label: "Custom Report" }
+        ];
+
+        reportSelect.innerHTML = "";
+        const readyGroup = document.createElement("optgroup");
+        readyGroup.label = "Ready Reports";
+        readyOptions.forEach(optData => {
+            const option = document.createElement("option");
+            option.value = optData.value;
+            option.textContent = optData.label;
+            readyGroup.appendChild(option);
+        });
+        reportSelect.appendChild(readyGroup);
+
+        if (currentValue) reportSelect.value = currentValue;
+        if (!reportSelect.value) reportSelect.value = "custom";
+    }
+
+    updateDeleteSavedReportButtonState();
+}
+
+function updateDeleteSavedReportButtonState() {
+    if (!deleteSavedReportBtn || !savedReportsSelect) return;
+    const selectedId = savedReportsSelect.value;
+    if (!selectedId) {
+        deleteSavedReportBtn.disabled = true;
+        deleteSavedReportBtn.textContent = "Delete Report";
+        hideDeleteConfirmation();
+        return;
+    }
+
+    const report = savedReports.find(r => r.id === selectedId);
+    const currentUserId = getLoggedInUserId();
+    const canDelete = report && currentUserId && report.createdBy === currentUserId;
+
+    deleteSavedReportBtn.disabled = !canDelete;
+    deleteSavedReportBtn.textContent = canDelete ? "Delete Report" : "Delete Not Allowed";
+}
+
+function showDeleteConfirmation() {
+    if (deleteConfirmation) deleteConfirmation.style.display = "block";
+}
+
+function hideDeleteConfirmation() {
+    if (deleteConfirmation) deleteConfirmation.style.display = "none";
+}
+
+async function deleteSavedReport(reportId) {
+    hideDeleteConfirmation();
+    const report = savedReports.find(r => r.id === reportId);
+    if (!report) {
+        setStatus("Saved report not found.");
+        return;
+    }
+
+    const currentUserId = getLoggedInUserId();
+    if (!currentUserId || report.createdBy !== currentUserId) {
+        setStatus("You can only delete reports you created.");
+        updateDeleteSavedReportButtonState();
+        return;
+    }
+
+    let deleted = false;
+    try {
+        await db.collection("savedReports").doc(reportId).delete();
+        deleted = true;
+        setStatus(`Deleted saved report '${report.name}'.`, true);
+    } catch (error) {
+        console.warn("Firestore delete failed, falling back to local storage", error);
+    }
+
+    const localSaved = JSON.parse(localStorage.getItem("savedReports") || "[]");
+    const filtered = localSaved.filter(item => item.id !== reportId);
+    if (filtered.length !== localSaved.length) {
+        localStorage.setItem("savedReports", JSON.stringify(filtered));
+        deleted = true;
+    }
+
+    if (!deleted) {
+        setStatus("Could not delete saved report.");
+        return;
+    }
+
+    await loadSavedReports();
+    if (savedReportsSelect) savedReportsSelect.value = "";
+    updateDeleteSavedReportButtonState();
+}
+
+async function saveCustomReport() {
+    const name = saveReportNameInput.value.trim();
+    if (!name) {
+        setStatus("Enter a name to save the report.");
+        return;
+    }
+
+    const currentUserId = getLoggedInUserId();
+    if (!currentUserId) {
+        setStatus("Login required to save custom reports.");
+        return;
+    }
+
+    const isGlobal = saveGlobalCheckbox.checked && String(getLoggedInAgent()?.role || "").toLowerCase() === "admin";
+    const payload = {
+        name,
+        source: currentSource,
+        fields: [...selectedFields],
+        filter: filterInput.value || "",
+        fromDate: dateFromInput.value || null,
+        toDate: dateToInput.value || null,
+        shared: isGlobal,
+        ownerId: isGlobal ? null : currentUserId,
+        createdBy: currentUserId,
+        createdAt: new Date().toISOString()
+    };
+
+    try {
+        const savedReportRef = await db.collection("savedReports").add(payload);
+        setStatus(`Report '${name}' saved successfully.`, true);
+        saveReportNameInput.value = "";
+        customReportName = name;
+        activePreset = "custom";
+        currentSource = payload.source || "quotations";
+        if (reportSelect) reportSelect.value = "custom";
+        updateReportHeading();
+        await loadSavedReports();
+        if (reportSelect) reportSelect.value = savedReportRef.id;
+        return;
+    } catch (error) {
+        console.error(error);
+        setStatus(`Firestore save failed, using local fallback.`);
+    }
+
+    const localSaved = JSON.parse(localStorage.getItem("savedReports") || "[]");
+    const localId = `local-${Date.now()}`;
+    const localPayload = { id: localId, ...payload };
+    localSaved.push(localPayload);
+    localStorage.setItem("savedReports", JSON.stringify(localSaved));
+    setStatus(`Report '${name}' saved locally.`, true);
+    saveReportNameInput.value = "";
+    customReportName = name;
+    activePreset = "custom";
+    currentSource = payload.source || "quotations";
+    if (reportSelect) reportSelect.value = "custom";
+    updateReportHeading();
+    loadSavedReports();
+}
+
+function applySavedReport(reportId) {
+    const report = savedReports.find(r => r.id === reportId);
+    if (!report) return;
+
+    activePreset = "custom";
+    customReportName = report.name;
+    currentSource = report.source || "quotations";
+    selectedFields = Array.isArray(report.fields) ? [...report.fields] : [];
+    filterInput.value = report.filter || "";
+    if (report.fromDate) dateFromInput.value = report.fromDate;
+    if (report.toDate) dateToInput.value = report.toDate;
+    if (reportSelect) reportSelect.value = report.id;
+    updateFieldLibrary();
+    renderSelectedFields();
+    updateReportHeading();
+    setStatus(`Loaded saved report '${report.name}'. Click Generate.`);
+}
+
+function formatDateRangeLabel() {
+    const from = dateFromInput.value ? new Date(dateFromInput.value).toLocaleDateString() : "-";
+    const to = dateToInput.value ? new Date(dateToInput.value).toLocaleDateString() : "-";
+    return `Date: ${from} - ${to}`;
 }
 
 function normalizeDate(value) {
@@ -325,11 +631,14 @@ function destinationSummary(quotations) {
 }
 
 function updateFieldLibrary() {
-    const source = dataSourceSelect.value;
-    const fields = DATA_FIELDS[source] || [];
     fieldLibrary.innerHTML = "";
+    fieldBlockSelect.innerHTML = "<option value=''>Select field to add</option>";
+    ALL_FIELDS.forEach(field => {
+        const option = document.createElement("option");
+        option.value = field;
+        option.textContent = field;
+        fieldBlockSelect.appendChild(option);
 
-    fields.forEach(field => {
         const chip = document.createElement("button");
         chip.className = "field-chip";
         chip.type = "button";
@@ -370,12 +679,14 @@ function addField(field) {
     if (!selectedFields.includes(field)) {
         selectedFields.push(field);
         renderSelectedFields();
+        updateReportHeading();
     }
 }
 
 function removeField(field) {
     selectedFields = selectedFields.filter(item => item !== field);
     renderSelectedFields();
+    updateReportHeading();
 }
 
 function setQuickRange(type) {
@@ -399,12 +710,21 @@ function setQuickRange(type) {
     dateToInput.value = end.toISOString().slice(0, 10);
 }
 
+function debounce(fn, delay = 250) {
+    let timeoutId;
+    return (...args) => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => fn(...args), delay);
+    };
+}
+
 function bindQuickRangeButtons() {
     document.querySelectorAll("[data-range]").forEach(button => {
         button.addEventListener("click", () => {
             document.querySelectorAll("[data-range]").forEach(b => b.classList.remove("active-range"));
             button.classList.add("active-range");
             setQuickRange(button.dataset.range);
+            updateReportHeading();
         });
     });
 }
@@ -413,19 +733,36 @@ function applyFilterText(rows, filterText) {
     const text = String(filterText || "").trim();
     if (!text) return rows;
 
+    const normalizedRowKeys = rows.length ? Object.keys(rows[0]).map(k => k.toLowerCase()) : [];
+
     const expressions = text
         .split(",")
         .map(item => item.trim())
         .filter(Boolean)
-        .map(item => item.split(":").map(i => i.trim()))
-        .filter(parts => parts.length === 2 && parts[0] && parts[1]);
+        .map(item => {
+            const parts = item.split(/[:=]/).map(i => i.trim());
+            if (parts.length === 2 && parts[0] && parts[1]) {
+                return { field: parts[0], value: parts[1] };
+            }
+            return { field: null, value: item };
+        });
 
-    if (!expressions.length) return rows;
+    return rows.filter(row => {
+        return expressions.every(expression => {
+            if (expression.field) {
+                const fieldName = normalizedRowKeys.find(key => key === expression.field.toLowerCase());
+                if (!fieldName) {
+                    return Object.keys(row).some(key => key.toLowerCase() === expression.field.toLowerCase() && String(row[key] ?? "").toLowerCase().includes(expression.value.toLowerCase()));
+                }
+                const origKey = Object.keys(row).find(key => key.toLowerCase() === fieldName);
+                const value = String(row[origKey] ?? "").toLowerCase();
+                return value.includes(expression.value.toLowerCase());
+            }
 
-    return rows.filter(row => expressions.every(([field, expected]) => {
-        const value = String(row[field] ?? "").toLowerCase();
-        return value.includes(expected.toLowerCase());
-    }));
+            const search = expression.value.toLowerCase();
+            return Object.values(row).some(value => String(value ?? "").toLowerCase().includes(search));
+        });
+    });
 }
 
 function applyDateFilter(rows) {
@@ -502,8 +839,10 @@ async function runReport() {
     try {
         setStatus("Loading data from Firebase...");
         await waitForAuthSession();
-        const source = dataSourceSelect.value;
-        let rows = await getRowsBySource(source);
+        if (activePreset === "custom") {
+            currentSource = inferSourceFromFields(selectedFields);
+        }
+        let rows = await getRowsBySource(currentSource);
         rows = applyDateFilter(rows);
         rows = applyFilterText(rows, filterInput.value);
 
@@ -542,11 +881,13 @@ function applyPreset(name) {
     if (!preset) return;
 
     activePreset = name;
-    dataSourceSelect.value = preset.source;
+    currentSource = preset.source;
+    customReportName = name === "custom" ? customReportName : null;
     selectedFields = [...preset.fields];
     filterInput.value = preset.filter || "";
     updateFieldLibrary();
     renderSelectedFields();
+    updateReportHeading();
     setStatus(`${name.replace("-", " ")} preset selected. Click Generate.`);
 }
 
@@ -562,6 +903,7 @@ function clearBuilder() {
     exportExcelBtn.disabled = true;
     currentRenderedRows = [];
     currentRenderedFields = [];
+    updateReportHeading();
     setStatus("Builder reset. Select fields and click Generate.");
 }
 
@@ -598,9 +940,9 @@ function exportPdf() {
         website: "www.flightconnection.net.pk"
     };
 
-    const sourceLabel = dataSourceSelect.value === "quotations"
+    const sourceLabel = currentSource === "quotations"
         ? "Detailed Quotations"
-        : dataSourceSelect.value === "sales"
+        : currentSource === "sales"
             ? "Sales Report"
             : "Customers Report";
 
@@ -610,7 +952,13 @@ function exportPdf() {
             ? "Sales Report"
             : activePreset === "quotation"
                 ? "Quotation Report"
-                : sourceLabel;
+                : activePreset === "bookingSummary"
+                    ? "Booking Summary Report"
+                    : activePreset === "customerActivity"
+                        ? "Customer Activity Report"
+                        : activePreset === "custom"
+                            ? customReportName || "Custom Report"
+                            : sourceLabel;
 
     const reportId = `RPT-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}`;
     const fromText = dateFromInput.value || "-";
@@ -786,32 +1134,94 @@ function initDefaults() {
 
     updateFieldLibrary();
     selectedFields = ["id", "clientName", "destination", "status", "createdAt", "amount"];
+    currentSource = "quotations";
+    activePreset = "quotation";
+    if (reportSelect) reportSelect.value = "quotation";
     renderSelectedFields();
+    updateReportHeading();
     setStatus("Select fields and click Generate.");
+    loadSavedReports();
 }
 
-dataSourceSelect.addEventListener("change", () => {
-    activePreset = null;
-    selectedFields = [];
-    updateFieldLibrary();
-    renderSelectedFields();
-    setStatus("Data source changed. Add field blocks and generate.");
-});
+if (reportSelect) {
+    reportSelect.addEventListener("change", (event) => {
+        const selected = event.target.value;
+        if (selected === "custom") {
+            activePreset = "custom";
+            customReportName = null;
+            selectedFields = [];
+            currentSource = "quotations";
+            filterInput.value = "";
+            updateFieldLibrary();
+            renderSelectedFields();
+            updateReportHeading();
+            setStatus("Custom report selected. Choose fields and click Generate.");
+            return;
+        }
+        applyPreset(selected);
+    });
+}
 
-document.querySelectorAll("[data-preset]").forEach(button => {
-    button.addEventListener("click", () => applyPreset(button.dataset.preset));
-});
+if (savedReportsSelect) {
+    savedReportsSelect.addEventListener("change", (event) => {
+        const reportId = event.target.value;
+        if (reportId) applySavedReport(reportId);
+        updateDeleteSavedReportButtonState();
+    });
+}
+
+if (deleteSavedReportBtn) {
+    deleteSavedReportBtn.addEventListener("click", () => {
+        if (!savedReportsSelect?.value) return;
+        showDeleteConfirmation();
+    });
+}
+
+if (confirmDeleteBtn) {
+    confirmDeleteBtn.addEventListener("click", async () => {
+        const reportId = savedReportsSelect?.value;
+        if (!reportId) return;
+        await deleteSavedReport(reportId);
+    });
+}
+
+if (cancelDeleteBtn) {
+    cancelDeleteBtn.addEventListener("click", () => {
+        hideDeleteConfirmation();
+    });
+}
+
+if (addFieldBtn) {
+    addFieldBtn.addEventListener("click", () => {
+        const field = fieldBlockSelect.value;
+        if (field) addField(field);
+    });
+}
+
+if (saveReportBtn) {
+    saveReportBtn.addEventListener("click", saveCustomReport);
+}
 
 runReportBtn.addEventListener("click", runReport);
 clearBuilderBtn.addEventListener("click", clearBuilder);
 exportExcelBtn.addEventListener("click", exportExcel);
 exportPdfBtn.addEventListener("click", exportPdf);
-bindQuickRangeButtons();
-initDropZone();
-initDefaults();
+
+    if (filterInput) {
+        const instantFilter = debounce(() => {
+            if (!currentRenderedRows.length) return;
+            const rows = applyFilterText(currentRenderedRows, filterInput.value);
+            const validFields = currentRenderedFields.filter(field => rows.length === 0 || Object.prototype.hasOwnProperty.call(rows[0], field));
+            renderTable(validFields, rows);
+            setStatus(`Filtered ${rows.length} row(s). ${getDataSourceLabel()}`, true);
+        }, 250);
+        filterInput.addEventListener("input", instantFilter);
+    }
 
 if (backDashboardBtn) {
     backDashboardBtn.addEventListener("click", () => {
         window.location.href = "dashboard.html";
     });
 }
+bindQuickRangeButtons();
+initDefaults();

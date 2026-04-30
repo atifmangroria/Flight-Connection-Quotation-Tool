@@ -134,6 +134,15 @@
     .controls{grid-template-columns:1fr}
     .modalGrid{grid-template-columns:1fr}
   }
+  @media (max-width: 960px) {
+    .wrap { padding: 14px; margin: 0 auto; }
+    .grid, .grid-2, .grid-3, .grid-4, .modalGrid, .controls, .tableWrap, .table-wrap, .modalBox { grid-template-columns: 1fr !important; }
+    .filters-section, .header, .header-right, .top, .actions, .action-buttons, .pkg-actions, .info-bar, .card-header, .bar { flex-direction: column !important; align-items: stretch !important; }
+    button, .btn, input, select, textarea { width: 100% !important; min-width: 0 !important; }
+    .tableWrap, .table-wrap, .saved-list, .modalBox, .notice { overflow-x: auto !important; }
+    table { width: 100% !important; }
+    .section, .card, .panel, .modalBox { padding: 12px !important; }
+  }
 </style>
 </head>
 <body>

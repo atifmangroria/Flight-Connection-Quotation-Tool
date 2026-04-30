@@ -83,6 +83,14 @@
       .permissions-list { grid-template-columns: 1fr; }
       button { min-height: 44px; }
     }
+    @media (max-width: 960px) {
+      .wrap { padding: 14px; margin: 0 auto; border-radius: 0; }
+      .form-row, .permissions-list, .action-buttons { grid-template-columns: 1fr !important; }
+      .header, .header-right, .form-row, .permissions-list, .action-buttons { flex-direction: column !important; align-items: stretch !important; }
+      button, .btn, input, select, textarea { width: 100% !important; min-width: 0 !important; }
+      .section, .modalBox, .notification { padding: 12px !important; }
+      .tableWrap, .table-wrap, .modal-content { overflow-x: auto !important; }
+    }
   </style>
 </head>
 <body>

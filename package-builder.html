@@ -62,11 +62,48 @@
 </script>
 
 <style>
+  :root{--accent:#0b76d1;--bg:#f3f6fb;--card:#ffffff;--muted:#5f6d7b;--danger:#dc3545;--success:#28a745}
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: Arial, Helvetica, sans-serif; background: #f3f6fb; color: #111; }
-  .header { background: linear-gradient(135deg, #0b76d1, #0d5fa8); color: white; padding: 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-  .header h1 { font-size: 24px; }
-  .btn-close { background: none; border: none; color: white; font-size: 28px; cursor: pointer; }
+  body { font-family: Arial, Helvetica, sans-serif; background: var(--bg); color: #111; }
+  .header { background: var(--card); color: #1b2533; padding: 14px; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; border-radius: 10px; box-shadow: 0 8px 20px rgba(0,0,0,0.06); }
+  .header-left { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; }
+  .header-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .header h1 { font-size: 22px; font-weight: 700; margin: 0; white-space: nowrap; }
+  .header-actions button { background: var(--accent); color: #fff; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; transition: background-color 0.2s ease; }
+
+  @media (max-width: 768px) {
+    .header { flex-direction: column; align-items: stretch; padding: 16px; }
+    .header-left { flex-direction: column; align-items: stretch; gap: 12px; }
+    .header-actions { justify-content: flex-start; width: 100%; }
+    .header-actions button { flex: 1 1 auto; min-width: 0; }
+    .header h1 { white-space: normal; font-size: 20px; }
+
+    .modal-overlay { align-items: flex-start; padding: 10px; }
+    .modal-content { max-width: 100%; max-height: calc(100vh - 40px); padding: 16px; }
+    .modal-header { flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: nowrap; }
+    .modal-close { position: absolute; top: 8px; right: 8px; }
+    .package-toolbar { flex-direction: column; align-items: flex-start; gap: 10px; }
+    .package-search { width: 100%; }
+    .package-search input { width: 100%; }
+    .package-actions { justify-content: flex-start; width: 100%; }
+    .package-actions button { width: auto; }
+    .package-table { display: block; overflow-x: auto; }
+    .package-table th, .package-table td { padding: 8px; white-space: nowrap; }
+  }
+  .header-actions button:hover { background: #085ea3; }
+  .btn-close { display: none; }
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 9999; padding: 20px; }
+  .modal-overlay.visible { display: flex; }
+  .modal-content { width: 100%; max-width: 1040px; max-height: calc(100vh - 100px); overflow-y: auto; background: white; border-radius: 14px; padding: 24px; box-shadow: 0 24px 60px rgba(0,0,0,0.18); }
+  .modal-header { display: flex; justify-content: flex-start; align-items: center; gap: 10px; margin-bottom: 20px; position: relative; width: 100%; }
+  .modal-header h3 { margin: 0; font-size: 20px; color: #0b76d1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; padding-right: 60px; width: 100%; max-width: calc(100% - 60px); }
+  .modal-close { background: none; border: none; font-size: 26px; cursor: pointer; color: #333; position: absolute; top: 8px; right: 8px; z-index: 2; line-height: 1; padding: 6px 8px; }
+  .package-toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .package-search input { padding: 10px 12px; border: 1px solid #d6dbe2; border-radius: 6px; width: 260px; max-width: 100%; }
+  .package-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+  .package-table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+  .package-table th, .package-table td { border: 1px solid #e1e8f5; padding: 10px 12px; text-align: left; font-size: 13px; }
+  .package-table th { background: #f1f7ff; color: #0b76d1; }
   .wrap { max-width: 1100px; margin: 20px auto; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); max-height: calc(100vh - 150px); overflow-y: auto; }
   .section { margin-bottom: 30px; padding: 20px; background: #f9f9f9; border-radius: 8px; border-left: 4px solid #0b76d1; }
   .section h3 { margin: 0 0 20px 0; color: #0b76d1; font-size: 18px; display: flex; align-items: center; gap: 10px; }
@@ -94,9 +131,50 @@
   .btn-print { background: #f39c12; color: white; padding: 12px 30px; font-size: 16px; }
   .btn-print:hover { background: #e67e22; }
   .actions { display: flex; gap: 10px; margin-top: 30px; justify-content: center; padding-top: 20px; border-top: 2px solid #e0e0e0; }
-  .notification { padding: 15px; border-radius: 4px; margin-bottom: 15px; font-weight: 600; }
-  .notification.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-  .notification.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+  .service-tabs { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 18px 0; }
+  .service-tab { border: 1px solid #d6dbe2; background: #fbfdff; color: #111; padding: 10px 16px; border-radius: 999px; font-size: 14px; cursor: pointer; transition: all .2s ease; }
+  .service-tab:hover { background: #eef5fb; }
+  .service-tab.active { background: #0b76d1; color: #fff; border-color: #0b76d1; }
+  .service-panel { display: none; }
+  .service-panel.active { display: block; }
+  .temp-notification-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+  }
+  .temp-notification-overlay.visible {
+    opacity: 1;
+    visibility: visible;
+  }
+  .temp-notification {
+    background: #ffffff;
+    padding: 20px 30px;
+    border-radius: 12px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+    color: #333;
+    text-align: center;
+    transform: scale(0.9);
+    transition: transform 0.3s ease;
+    min-width: 300px;
+    font-size: 16px;
+    pointer-events: auto;
+  }
+  .temp-notification-overlay.visible .temp-notification {
+    transform: scale(1);
+  }
+  .temp-notification.success { background-color: #d4edda; color: #155724; border: 2px solid #28a745; }
+  .temp-notification.error { background-color: #f8d7da; color: #721c24; border: 2px solid #dc3545; }
+  .temp-notification.info { background-color: #e2f2ff; color: #004085; border: 2px solid #007bff; }
   .hidden { display: none !important; }
   .badge { display: inline-block; background: #0b76d1; color: white; padding: 3px 8px; border-radius: 3px; font-size: 11px; margin-left: 5px; }
   
@@ -130,17 +208,67 @@
     .print-document { display: block; padding: 0; }
     .section, .header { display: none; }
   }
+  @media (max-width: 960px) {
+    .wrap, .container { padding: 14px !important; margin: 0 auto !important; border-radius: 0 !important; }
+    .grid, .grid.cols2, .grid.cols3, .grid.cols4, .stats, .actions-bar, .modal-content, .print-details { grid-template-columns: 1fr !important; }
+    .header, .actions-bar, .modal-actions { flex-direction: column !important; align-items: stretch !important; }
+    .btn, button, input, select, textarea { width: 100% !important; min-width: 0 !important; }
+    .table-wrap, table, .pax-table, .itinerary-table { width: 100% !important; overflow-x: auto !important; }
+    .section, .card, .modal-content { padding: 12px !important; }
+  }
 </style>
 </head>
 <body>
 
 <div class="header">
-  <h1>📦 Advanced Package Builder</h1>
-  <button class="btn-close" onclick="window.close()">✕</button>
+  <div class="header-left">
+    <h1>📦 Advanced Package Builder</h1>
+    <div class="header-actions">
+      <button type="button" class="btn btn-secondary" onclick="window.location.href='dashboard.html'">Dashboard</button>
+      <button type="button" class="btn btn-primary" id="btnViewPackages">View Packages</button>
+    </div>
+  </div>
 </div>
 
 <div class="wrap">
-  <div id="notification"></div>
+  <div class="temp-notification-overlay" id="notificationOverlay">
+    <div class="temp-notification" id="notification"></div>
+  </div>
+  <div id="packageListModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="packageListTitle">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="packageListTitle">Saved Packages</h3>
+        <button type="button" class="modal-close" onclick="closePackageListModal()">×</button>
+      </div>
+      <div class="package-toolbar">
+        <div class="package-search">
+          <input type="text" id="packageSearchModal" placeholder="Search package name or destination...">
+        </div>
+        <div class="package-actions">
+          <button type="button" class="btn btn-primary" onclick="loadPackageList()">Refresh</button>
+        </div>
+      </div>
+      <div id="packageListContent">
+        <table class="package-table" id="packageListTable">
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>Name</th>
+              <th>Type</th>
+              <th>Nights</th>
+              <th>Destinations</th>
+              <th>Valid From</th>
+              <th>Valid To</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="packageListBody">
+            <tr><td colspan="8" style="text-align:center;padding:24px;">Loading saved packages...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 
   <form id="packageForm">
 
@@ -182,36 +310,44 @@
       <button type="button" class="btn btn-add" onclick="addDestination()">+ Add Destination</button>
     </div>
 
+    <div class="service-tabs no-print" style="margin-top: 0;">
+      <button type="button" class="service-tab active" data-service="flight">Flight</button>
+      <button type="button" class="service-tab" data-service="hotel">Hotel</button>
+      <button type="button" class="service-tab" data-service="tour">Tour</button>
+      <button type="button" class="service-tab" data-service="transfer">Transfer</button>
+      <button type="button" class="service-tab" data-service="visa">Visa</button>
+    </div>
+
     <!-- FLIGHT DETAILS -->
-    <div class="section">
+    <div class="section service-panel active" data-service="flight">
       <h3>✈️ Flight Details</h3>
       <div id="flightsContainer"></div>
       <button type="button" class="btn btn-add" onclick="addFlight()">+ Add Flight Sector</button>
     </div>
 
     <!-- HOTEL DETAILS -->
-    <div class="section">
+    <div class="section service-panel" data-service="hotel">
       <h3>🏨 Hotel Details</h3>
       <div id="hotelsContainer"></div>
       <button type="button" class="btn btn-add" onclick="addHotel()">+ Add Hotel</button>
     </div>
 
     <!-- TOUR DETAILS (International Only) -->
-    <div class="section hidden" id="tourSection">
+    <div class="section service-panel hidden" id="tourSection" data-service="tour">
       <h3>🎫 Tour Details</h3>
       <div id="toursContainer"></div>
       <button type="button" class="btn btn-add" onclick="addTour()">+ Add Tour</button>
     </div>
 
     <!-- TRANSFER DETAILS -->
-    <div class="section">
+    <div class="section service-panel" data-service="transfer">
       <h3>🚗 Transfer Details</h3>
       <div id="transfersContainer"></div>
       <button type="button" class="btn btn-add" onclick="addTransfer()">+ Add Transfer</button>
     </div>
 
     <!-- VISA DETAILS -->
-    <div class="section">
+    <div class="section service-panel" data-service="visa">
       <h3>🛂 Visa Details</h3>
       <div id="visasContainer"></div>
       <button type="button" class="btn btn-add" onclick="addVisa()">+ Add Visa</button>
@@ -594,6 +730,18 @@ let editingPackageId = null;
 let currentPackageCode = null;
 let isReadOnlyMode = false;
 
+document.addEventListener('DOMContentLoaded', () => {
+  const serviceTabs = document.querySelectorAll('.service-tab');
+  const servicePanels = document.querySelectorAll('.service-panel');
+  serviceTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const service = tab.dataset.service;
+      serviceTabs.forEach(t => t.classList.toggle('active', t === tab));
+      servicePanels.forEach(panel => panel.classList.toggle('active', panel.dataset.service === service));
+    });
+  });
+});
+
 function toIsoDateString(value) {
   const dateObj = new Date(value);
   if (Number.isNaN(dateObj.getTime())) return '';
@@ -913,13 +1061,89 @@ function checkAdminAccess() {
   return true;
 }
 
-function showNotification(msg, type = 'success') {
+function showNotification(msg, type = 'success', duration = 3000) {
+  const overlay = document.getElementById('notificationOverlay');
   const notif = document.getElementById('notification');
   notif.textContent = msg;
-  notif.className = 'notification ' + type;
-  notif.style.display = 'block';
-  if (type === 'success') setTimeout(() => { notif.style.display = 'none'; }, 3000);
+  notif.className = 'temp-notification ' + type;
+  overlay.classList.add('visible');
+  setTimeout(() => { overlay.classList.remove('visible'); }, duration);
 }
+
+function loadPackageList() {
+  const searchValue = document.getElementById('packageSearchModal')?.value.trim().toLowerCase();
+  const agent = JSON.parse(localStorage.getItem('loggedInAgent') || 'null') || JSON.parse(localStorage.getItem('loggedInUser') || 'null') || {};
+  const isAdmin = agent.role === 'admin';
+
+  window.firebaseDB.getAll('packages').then(packages => {
+    const filteredPackages = packages
+      .filter(pkg => isAdmin || pkg.createdBy === agent.id)
+      .filter(pkg => {
+        if (!searchValue) return true;
+        return [pkg.name, pkg.packageCode, pkg.type, (pkg.destinations || []).map(d => d.city).join(' ')].some(value =>
+          String(value || '').toLowerCase().includes(searchValue)
+        );
+      })
+      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+
+    const body = document.getElementById('packageListBody');
+    if (!body) return;
+    if (filteredPackages.length === 0) {
+      body.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;">No saved packages found.</td></tr>';
+      return;
+    }
+
+    body.innerHTML = filteredPackages.map(pkg => {
+      const destinationText = (pkg.destinations || []).map(d => d.city).filter(Boolean).join(', ');
+      return `
+        <tr>
+          <td>${pkg.packageCode || 'N/A'}</td>
+          <td>${pkg.name || 'Untitled'}</td>
+          <td>${pkg.type || 'N/A'}</td>
+          <td>${pkg.totalNights || ''}</td>
+          <td>${destinationText || 'N/A'}</td>
+          <td>${pkg.validFrom || 'N/A'}</td>
+          <td>${pkg.validTo || 'N/A'}</td>
+          <td>
+            <button type="button" class="btn btn-primary" style="padding:6px 10px; font-size:12px;" onclick="openSavedPackage('${pkg.id || pkg.packageCode}')">Open</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }).catch(() => {
+    const body = document.getElementById('packageListBody');
+    if (body) body.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;color:#a00;">Error loading packages.</td></tr>';
+  });
+}
+
+function openPackageListModal() {
+  document.getElementById('packageListModal')?.classList.add('visible');
+  loadPackageList();
+}
+
+function closePackageListModal() {
+  document.getElementById('packageListModal')?.classList.remove('visible');
+}
+
+function openSavedPackage(packageId) {
+  closePackageListModal();
+  const params = new URLSearchParams();
+  params.set('edit', packageId);
+  window.location.search = params.toString();
+}
+
+function setupPackageListModal() {
+  const viewBtn = document.getElementById('btnViewPackages');
+  if (viewBtn) {
+    viewBtn.addEventListener('click', openPackageListModal);
+  }
+  const searchInput = document.getElementById('packageSearchModal');
+  if (searchInput) {
+    searchInput.addEventListener('input', loadPackageList);
+  }
+}
+
+setupPackageListModal();
 
 function updateSections() {
   const type = document.getElementById('packageType').value;

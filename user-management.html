@@ -5,38 +5,52 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>User Management - Flight Connection</title>
   <style>
+    :root { --accent: #0b76d1; --bg: #f3f6fb; --card: #ffffff; --muted: #5f6d7b; --danger: #dc3545; --success: #28a745; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg,#0d5ea2,#104a8c); color: #1a202c; margin:0; padding:0; }
-    .header { background: linear-gradient(135deg, #0a68b1, #0b5ca4); color: #fff; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; gap: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18); border-bottom: 4px solid #1ba4ff; }
-    .header-left { max-width: 70%; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); color: #1b2533; margin: 0; padding: 0; }
+    .header { background: var(--card); color: #1b2533; padding: 18px 22px; display: flex; justify-content: space-between; align-items: center; gap: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08); border-radius: 12px; margin: 20px auto 0; max-width: 1200px; width: calc(100% - 24px); }
+    .header-left { max-width: 70%; min-width: 0; }
     .header-left h1 { font-size: 28px; margin: 0; letter-spacing: 1px; }
-    .header-left .subheading { color: #d8ebff; margin: 5px 0 0; font-size: 14px; }
+    .header-left .subheading { color: var(--muted); margin: 5px 0 0; font-size: 14px; }
     .header-right { display: flex; align-items: center; gap: 10px; }
-    .btn-logout,.btn-create-agent,.btn-back { font-family: inherit; border: none; color: #fff; padding: 10px 18px; border-radius: 8px; cursor: pointer; font-weight: 700; box-shadow: 0 4px 12px rgba(0,0,0,0.2); transition: transform .2s ease, background .2s ease; }
-    .btn-logout:hover, .btn-create-agent:hover, .btn-back:hover { transform: translateY(-1px); }
-    .btn-back { background: #1485d9; }
-    .btn-back:hover { background: #0f76bc; }
-    .btn-logout { background: #e74c3c; }
-    .btn-logout:hover { background: #c0392b; }
-    .btn-create-agent { background: #27ae60; }
-    .btn-create-agent:hover { background: #229954; }
-    .btn-back { background: #1b9af0; }
-    .btn-back:hover { background: #0b79c4; }
-    .container { max-width: 1200px; margin: 20px auto; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+    .btn-logout, .btn-create-agent, .btn-back, .btn-create-role { font-family: inherit; border: none; color: #fff; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-weight: 700; box-shadow: 0 4px 10px rgba(0,0,0,0.08); transition: transform .2s ease, background .2s ease; min-width: 120px; background: var(--accent); }
+    .btn-logout:hover, .btn-create-agent:hover, .btn-back:hover, .btn-create-role:hover { transform: translateY(-1px); background: #085ea3; }
+    .btn-back { background: var(--accent); }
+    .btn-back:hover { background: #085ea3; }
+    .btn-create-agent { background: var(--accent); }
+    .btn-create-agent:hover { background: #085ea3; }
+    .btn-create-role { background: var(--accent); }
+    .btn-create-role:hover { background: #085ea3; }
+    .container { max-width: 1200px; width: min(100%, 1200px); margin: 20px auto; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
     .dashboard-section { margin-top: 20px; }
     .stats-tabs-wrapper { display: flex; flex-direction: column; gap: 20px; }
+    .table-wrapper { width: 100%; overflow-x: auto; }
     .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #ddd; }
-    @media (max-width: 880px) {
-      .header { flex-direction: column; align-items: flex-start; }
+    @media (max-width: 700px) {
+      .header { flex-direction: column; align-items: stretch; }
       .header-right { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
+      .header-right button { width: 100%; max-width: none; }
       .container { margin: 16px 12px; padding: 16px; }
-      .tabs { flex-wrap: wrap; gap: 8px; }
-      .tab { flex: 1 1 auto; text-align: center; }
+      .tabs { flex-wrap: nowrap; overflow-x: auto; gap: 8px; }
+      .tabs::-webkit-scrollbar { height: 6px; }
+      .tabs::-webkit-scrollbar-thumb { background: rgba(11,118,209,0.3); border-radius: 10px; }
+      .tab { flex: 0 0 auto; text-align: center; white-space: nowrap; }
     }
     @media (max-width: 600px) {
       .header-left h1 { font-size: 22px; }
       .header-left .subheading { font-size: 13px; }
-      .btn-logout, .btn-create-agent, .btn-back { padding: 8px 14px; font-size: 12px; }
+      .btn-logout, .btn-create-agent, .btn-back, .btn-create-role { width: 100% !important; padding: 10px 14px; font-size: 13px; min-width: 0; }
+      .header-right { width: 100%; }
+      .stats { grid-template-columns: 1fr !important; }
+    }
+    @media (max-width: 960px) {
+      .container { padding: 14px !important; margin: 0 auto !important; border-radius: 0 !important; }
+      .header { flex-direction: column !important; align-items: stretch !important; }
+      .header-right { width: 100% !important; justify-content: flex-start !important; flex-wrap: wrap !important; }
+      .header-right button { width: 100% !important; min-width: 0 !important; }
+      .stats, .action-group, .modal-actions { flex-direction: column !important; grid-template-columns: 1fr !important; align-items: stretch !important; }
+      .btn, button, input, select, textarea { width: 100% !important; min-width: 0 !important; }
+      .table-wrapper, .modal-content { overflow-x: auto !important; width: 100% !important; }
       .stats { grid-template-columns: 1fr !important; }
     }
     .tab { padding: 12px 20px; cursor: pointer; font-weight: 600; border-bottom: 3px solid transparent; color: #0b76d1; background: rgba(255,255,255,0.9); border-radius: 8px 8px 0 0; transition: all 0.2s ease; }
@@ -44,9 +58,11 @@
     .tab.active { color: #0d47a1; border-bottom-color: #0b76d1; background: #fff; }
     .tab-content { display: none; }
     .tab-content.active { display: block; }
-    table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 8px 22px rgba(12,18,45,0.15); }
+    table { width: 100%; display: block; border-collapse: collapse; background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 8px 22px rgba(12,18,45,0.15); }
     table th { background: #e8f2ff; color: #0a66b3; padding: 13px 14px; text-align: left; font-weight: 700; border-bottom: 1px solid #d6e6fc; }
     table td { padding: 12px 14px; border-bottom: 1px solid #edf3fb; color: #1f2d3e; }
+    table thead, table tbody, table tr { display: table; width: 100%; }
+    table { overflow-x: auto; }
     table tr:last-child td { border-bottom: none; }
     table tr:hover { background: #f6fbff; }
     .badge { font-size: 11px; padding: 5px 10px; font-weight: 700; color: #fff; border-radius: 999px; display: inline-block; text-transform: uppercase; }
@@ -81,12 +97,37 @@
     .stat-card { background: rgba(255,255,255,0.95); border-left: 6px solid #2085df; padding: 18px; border-radius: 14px; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12); }
     .stat-card h3 { color: #1565c0; font-size: 14px; margin-bottom: 10px; text-transform: uppercase; letter-spacing: .8px; }
     .stat-card .number { font-size: 34px; font-weight: 800; color: #0a66b3; line-height: 1.1; }
-    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999; align-items: center; justify-content: center; }
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.55); z-index: 999; align-items: center; justify-content: center; padding: 20px; }
     .modal.active { display: flex; }
-    .modal-content { background: white; padding: 30px; border-radius: 10px; max-width: 500px; width: 90%; }
+    .modal-content { background: white; padding: 24px; border-radius: 10px; max-width: 540px; width: 100%; max-height: 92vh; overflow-y: auto; box-shadow: 0 18px 45px rgba(0,0,0,0.15); }
+    .modal-content input, .modal-content select, .modal-content button { width: 100%; }
     .modal-header { font-size: 20px; font-weight: bold; margin-bottom: 20px; color: #0b76d1; }
-    .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
-    .modal-actions button { flex: 1; padding: 10px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; }
+    .modal-actions { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+    .modal-actions button { flex: 1; min-width: 120px; padding: 10px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; }
+    .user-detail-grid { display: grid; gap: 12px; }
+    .user-detail-row { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid #eef4fb; }
+    .user-detail-row:last-child { border-bottom: none; }
+    .detail-label { font-weight: 700; color: #1b2533; min-width: 140px; }
+    .detail-value { color: #1b2533; flex: 1; min-width: 0; word-break: break-word; }
+    .permissions-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-top: 10px; }
+    .permission-item { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid #d6e6fc; border-radius: 12px; background: #f5f8ff; min-height: auto; max-width: 100%; }
+    .permission-item span { text-align: left; font-size: 16px; font-weight: 600; color: #1b263b; line-height: 1.35; }
+    .permission-item input { width: 18px; height: 18px; margin: 0; flex-shrink: 0; }
+    .user-detail-grid { width: 100%; }
+    .user-detail-row { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid #eef4fb; }
+    .detail-label { font-weight: 700; color: #1b2533; min-width: 120px; }
+    .detail-value { color: #1b2533; flex: 1; min-width: 0; word-break: break-word; }
+    .permission-item label { margin: 0; }
+    .permission-item input { width: 18px; height: 18px; margin-top: 0; flex-shrink: 0; }
+    @media (max-width: 900px) {
+      .permissions-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 520px) {
+      .permission-item { flex-direction: row; align-items: center; padding: 14px 12px; }
+      .permission-item label { font-size: 13px; }
+      .user-detail-row { flex-direction: column; align-items: stretch; }
+      .detail-label, .detail-value { min-width: 100%; }
+    }
   </style>
 </head>
 <body>
@@ -98,8 +139,8 @@
   </div>
   <div class="header-right">
     <button class="btn-create-agent" onclick="showCreateAgentModal()">Create Agent</button>
+    <button class="btn-create-role" onclick="showRoleManagerModal()">Create Role</button>
     <button class="btn-back" onclick="window.location.href='dashboard.html'">Dashboard</button>
-    <button class="btn-logout" onclick="logout()">Logout</button>
   </div>
 </div>
 <div class="container">
@@ -229,8 +270,22 @@
   <div class="modal-content">
     <div class="modal-header">User Details</div>
     <div id="userDetails"></div>
+    <div style="margin-top: 15px; margin-bottom: 10px;">
+      <label style="font-weight: 600; color: #333;">Role:</label>
+      <select id="userRole" onchange="updateRolePermissions('userPermissions', this.value)" style="width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box; display: none;">
+        <option value="agent">Agent</option>
+        <option value="user">User</option>
+        <option value="viewer">Viewer</option>
+        <option value="admin">Admin</option>
+      </select>
+    </div>
+    <div style="margin-top: 10px; display: none;" id="userPermissionSection">
+      <div style="font-weight: 600; color: #333; margin-bottom: 8px;">Feature access</div>
+      <div class="permissions-grid" id="userPermissions"></div>
+    </div>
     <div class="modal-actions">
       <button onclick="closeModal()" style="background: #95a5a6; color: white;">Close</button>
+      <button id="saveSettingsBtn" onclick="saveUserSettings()" style="background: #0b76d1; color: white; display: none;">Save Settings</button>
       <button id="approveBtn" onclick="approveUser()" style="background: #27ae60; color: white; display: none;">Approve</button>
       <button id="rejectBtn" onclick="rejectUser()" style="background: #e74c3c; color: white; display: none;">Reject</button>
     </div>
@@ -262,11 +317,51 @@
         <label style="font-weight: 600; color: #333;">Phone:</label>
         <input type="tel" id="agentPhone" placeholder="e.g., +923001234567" required style="width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
       </div>
+      <div style="margin-bottom: 15px;">
+        <label style="font-weight: 600; color: #333;">Role:</label>
+        <select id="agentRole" onchange="updateRolePermissions('agentPermissions', this.value)" style="width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
+          <option value="agent">Agent</option>
+          <option value="user">User</option>
+          <option value="viewer">Viewer</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+      <div style="margin-bottom: 15px;">
+        <div style="font-weight: 600; color: #333; margin-bottom: 8px;">Feature access</div>
+        <div class="permissions-grid" id="agentPermissions"></div>
+      </div>
       <div class="modal-actions">
         <button type="button" onclick="closeCreateAgentModal()" style="background: #95a5a6; color: white; padding: 10px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600;">Cancel</button>
         <button type="submit" style="background: #27ae60; color: white; padding: 10px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600;">Create Agent</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- Role Manager Modal -->
+<div id="roleManagerModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">Role Management</div>
+    <div style="display: flex; flex-wrap: wrap; gap: 20px;">
+      <div style="flex: 1 1 260px; min-width: 260px;">
+        <div style="font-weight: 700; margin-bottom: 12px; color: #333;">Available Roles</div>
+        <div id="roleList" style="max-height: 320px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; background: #f8fbff;"></div>
+        <button type="button" onclick="showCreateNewRole()" style="margin-top: 14px; width: 100%; background: #0b76d1; color: white; padding: 10px; border: none; border-radius: 6px; cursor: pointer; font-weight: 700;">Create New Role</button>
+      </div>
+      <div style="flex: 2 1 420px; min-width: 260px;">
+        <div style="margin-bottom: 15px;">
+          <label style="font-weight: 600; color: #333; display: block; margin-bottom: 6px;">Role Name:</label>
+          <input type="text" id="roleName" placeholder="e.g., Sales Agent" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box;" />
+        </div>
+        <div style="font-weight: 600; color: #333; margin-bottom: 10px;">Permissions</div>
+        <div class="permissions-grid" id="rolePermissions"></div>
+        <div class="modal-actions" style="margin-top: 18px;">
+          <button type="button" onclick="closeRoleManagerModal()" style="background: #95a5a6; color: white;">Close</button>
+          <button type="button" id="saveRoleBtn" onclick="saveRole()" style="background: #27ae60; color: white;">Save Role</button>
+          <button type="button" id="deleteRoleBtn" onclick="deleteRole()" style="background: #e74c3c; color: white; display: none;">Delete Role</button>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -295,9 +390,107 @@
   const agentCreationAuth = agentCreationApp.auth();
   const agentCreationDb = agentCreationApp.firestore();
 
+  const featureControls = [
+    { key: 'canUseQuotationBuilderDomestic', label: 'Quotation Builder - Domestic' },
+    { key: 'canUseQuotationBuilderInternational', label: 'Quotation Builder - International' },
+    { key: 'canUseQuotationBuilderUmrah', label: 'Quotation Builder - Umrah' },
+    { key: 'canCreatePackage', label: 'Package Builder - Create Package' },
+    { key: 'canEditSavedPackage', label: 'Package Builder - Edit Saved Package' },
+    { key: 'canCreateVouchers', label: 'Create Voucher' },
+    { key: 'canViewReports', label: 'Reports' },
+    { key: 'canManageUsers', label: 'User Management' },
+    { key: 'canExportData', label: 'Export / Download' }
+  ];
+
+  const roleDefaults = {
+    admin: {
+      canUseQuotationBuilderDomestic: true,
+      canUseQuotationBuilderInternational: true,
+      canUseQuotationBuilderUmrah: true,
+      canCreatePackage: true,
+      canEditSavedPackage: true,
+      canCreateVouchers: true,
+      canViewReports: true,
+      canManageUsers: true,
+      canExportData: true
+    },
+    agent: {
+      canUseQuotationBuilderDomestic: true,
+      canUseQuotationBuilderInternational: true,
+      canUseQuotationBuilderUmrah: true,
+      canCreatePackage: true,
+      canEditSavedPackage: true,
+      canCreateVouchers: true,
+      canViewReports: true,
+      canManageUsers: false,
+      canExportData: true
+    },
+    user: {
+      canUseQuotationBuilderDomestic: true,
+      canUseQuotationBuilderInternational: false,
+      canUseQuotationBuilderUmrah: false,
+      canCreatePackage: false,
+      canEditSavedPackage: false,
+      canCreateVouchers: false,
+      canViewReports: false,
+      canManageUsers: false,
+      canExportData: false
+    },
+    viewer: {
+      canUseQuotationBuilderDomestic: false,
+      canUseQuotationBuilderInternational: false,
+      canUseQuotationBuilderUmrah: false,
+      canCreatePackage: false,
+      canEditSavedPackage: false,
+      canCreateVouchers: false,
+      canViewReports: true,
+      canManageUsers: false,
+      canExportData: false
+    }
+  };
+
+  const builtInRoles = [
+    { id: 'admin', name: 'Admin', permissions: roleDefaults.admin, builtIn: true },
+    { id: 'agent', name: 'Agent', permissions: roleDefaults.agent, builtIn: true }
+  ];
+
+  let roles = [...builtInRoles];
+  let selectedRoleId = null;
   let currentUser = null;
   let selectedUserId = null;
   let authCheckInProgress = false;
+
+  function getDefaultPermissions(role) {
+    return roleDefaults[role] ? { ...roleDefaults[role] } : { ...roleDefaults.user };
+  }
+
+  function renderPermissionCheckboxes(containerId, permissionData) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = featureControls.map(feature => {
+      const checked = permissionData && permissionData[feature.key] ? 'checked' : '';
+      return `<label class="permission-item"><input type="checkbox" id="${containerId}-${feature.key}" ${checked} /> <span>${feature.label}</span></label>`;
+    }).join('');
+  }
+
+  function getPermissionsFromContainer(containerId) {
+    const permissions = {};
+    featureControls.forEach(feature => {
+      const input = document.getElementById(`${containerId}-${feature.key}`);
+      permissions[feature.key] = !!(input && input.checked);
+    });
+    return permissions;
+  }
+
+  function setPermissionSectionVisibility(visible) {
+    const roleSelect = document.getElementById('userRole');
+    const section = document.getElementById('userPermissionSection');
+    const saveButton = document.getElementById('saveSettingsBtn');
+    if (!roleSelect || !section || !saveButton) return;
+    roleSelect.style.display = visible ? 'block' : 'none';
+    section.style.display = visible ? 'block' : 'none';
+    saveButton.style.display = visible ? 'block' : 'none';
+  }
 
   // Check if user is admin
   auth.onAuthStateChanged(async (user) => {
@@ -321,7 +514,7 @@
       }
 
       currentUser = user;
-      loadUsers();
+      await Promise.all([loadUsers(), loadRoles()]);
     } finally {
       authCheckInProgress = false;
     }
@@ -362,6 +555,156 @@
       console.error('Error loading users:', error);
       showNotification('Error loading users', 'error');
     }
+  }
+
+  async function loadRoles() {
+    try {
+      const snapshot = await db.collection('roles').get();
+      const customRoles = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      roles = [...builtInRoles, ...customRoles];
+      renderRoleOptions('agentRole');
+      renderRoleOptions('userRole');
+      renderRoleList();
+    } catch (error) {
+      console.error('Error loading roles:', error);
+      showNotification('Error loading roles', 'error');
+    }
+  }
+
+  function renderRoleOptions(selectId) {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+    select.innerHTML = roles.map(role => `<option value="${role.id}">${role.name}</option>`).join('');
+  }
+
+  function renderRoleList() {
+    const roleList = document.getElementById('roleList');
+    if (!roleList) return;
+    roleList.innerHTML = roles.map(role => `
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 12px; margin-bottom:8px; border-radius: 8px; background: #ffffff; border: 1px solid #dbeafe; cursor:pointer;" onclick="showRoleDetails('${role.id}')">
+        <span>${role.name}${role.builtIn ? ' (built-in)' : ''}</span>
+        <span style="font-size:12px; color:#6b7280;">${role.builtIn ? 'System' : 'Custom'}</span>
+      </div>
+    `).join('');
+  }
+
+  function getDefaultPermissions(roleId) {
+    const role = builtInRoles.find(r => r.id === roleId);
+    return role ? { ...role.permissions } : { ...roleDefaults.user };
+  }
+
+  function renderPermissionCheckboxes(containerId, permissionData) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = featureControls.map(feature => {
+      const checked = permissionData && permissionData[feature.key] ? 'checked' : '';
+      return `<label class="permission-item"><input type="checkbox" id="${containerId}-${feature.key}" ${checked} /> <span>${feature.label}</span></label>`;
+    }).join('');
+  }
+
+  function getPermissionsFromContainer(containerId) {
+    const permissions = {};
+    featureControls.forEach(feature => {
+      const input = document.getElementById(`${containerId}-${feature.key}`);
+      permissions[feature.key] = !!(input && input.checked);
+    });
+    return permissions;
+  }
+
+  function updateRolePermissions(containerId, roleId) {
+    const role = roles.find(r => r.id === roleId);
+    const permissions = role ? role.permissions : getDefaultPermissions(roleId);
+    renderPermissionCheckboxes(containerId, permissions);
+  }
+
+  function setPermissionSectionVisibility(visible) {
+    const roleSelect = document.getElementById('userRole');
+    const section = document.getElementById('userPermissionSection');
+    const saveButton = document.getElementById('saveSettingsBtn');
+    if (!roleSelect || !section || !saveButton) return;
+    roleSelect.style.display = visible ? 'block' : 'none';
+    section.style.display = visible ? 'block' : 'none';
+    saveButton.style.display = visible ? 'block' : 'none';
+  }
+
+  function showRoleManagerModal() {
+    selectedRoleId = null;
+    document.getElementById('roleName').value = '';
+    document.getElementById('roleName').disabled = false;
+    renderPermissionCheckboxes('rolePermissions', getDefaultPermissions('agent'));
+    document.getElementById('saveRoleBtn').style.display = 'inline-block';
+    document.getElementById('deleteRoleBtn').style.display = 'none';
+    document.getElementById('roleManagerModal').classList.add('active');
+  }
+
+  function closeRoleManagerModal() {
+    document.getElementById('roleManagerModal').classList.remove('active');
+  }
+
+  function showRoleDetails(roleId) {
+    const role = roles.find(r => r.id === roleId);
+    if (!role) return;
+    selectedRoleId = role.id;
+    document.getElementById('roleName').value = role.name;
+    document.getElementById('roleName').disabled = !!role.builtIn;
+    renderPermissionCheckboxes('rolePermissions', role.permissions || getDefaultPermissions(role.id));
+    document.getElementById('saveRoleBtn').style.display = role.builtIn ? 'none' : 'inline-block';
+    document.getElementById('deleteRoleBtn').style.display = role.builtIn ? 'none' : 'inline-block';
+  }
+
+  async function saveRole() {
+    const name = document.getElementById('roleName').value.trim();
+    const permissions = getPermissionsFromContainer('rolePermissions');
+    if (!name) {
+      showNotification('Please enter a role name.', 'error');
+      return;
+    }
+
+    try {
+      if (selectedRoleId) {
+        await db.collection('roles').doc(selectedRoleId).set({ name, permissions }, { merge: true });
+        showNotification('✅ Role updated successfully', 'success');
+      } else {
+        const newRoleRef = db.collection('roles').doc();
+        await newRoleRef.set({ name, permissions, createdAt: new Date().toISOString() });
+        showNotification('✅ Role created successfully', 'success');
+      }
+      await loadRoles();
+      document.getElementById('saveRoleBtn').style.display = 'inline-block';
+      document.getElementById('deleteRoleBtn').style.display = 'none';
+    } catch (error) {
+      console.error('Error saving role:', error);
+      showNotification('Error saving role: ' + error.message, 'error');
+    }
+  }
+
+  async function deleteRole() {
+    if (!selectedRoleId) return;
+    if (!confirm('Delete this role? This cannot be undone.')) return;
+
+    try {
+      await db.collection('roles').doc(selectedRoleId).delete();
+      showNotification('✅ Role deleted successfully', 'success');
+      await loadRoles();
+      showCreateNewRole();
+    } catch (error) {
+      console.error('Error deleting role:', error);
+      showNotification('Error deleting role: ' + error.message, 'error');
+    }
+  }
+
+  function showCreateNewRole() {
+    selectedRoleId = null;
+    document.getElementById('roleName').value = '';
+    document.getElementById('roleName').disabled = false;
+    renderPermissionCheckboxes('rolePermissions', getDefaultPermissions('agent'));
+    document.getElementById('saveRoleBtn').style.display = 'inline-block';
+    document.getElementById('deleteRoleBtn').style.display = 'none';
+  }
+
+  function updateUserRoleFields() {
+    renderRoleOptions('agentRole');
+    renderRoleOptions('userRole');
   }
 
   function updateTable(tableId, users, status) {
@@ -410,6 +753,26 @@
       byId.set(key, quotation);
     });
     return Array.from(byId.values());
+  }
+
+  async function saveUserSettings() {
+    const role = document.getElementById('userRole')?.value || 'user';
+    const permissions = getPermissionsFromContainer('userPermissions');
+
+    try {
+      await db.collection('users').doc(selectedUserId).update({
+        role,
+        permissions,
+        updatedAt: new Date().toISOString(),
+        updatedBy: currentUser.uid
+      });
+      showNotification('✅ User settings updated successfully!', 'success');
+      closeModal();
+      loadUsers();
+    } catch (error) {
+      console.error('Error saving user settings:', error);
+      showNotification('Error saving user settings: ' + error.message, 'error');
+    }
   }
 
   async function loadQuotationDocsForUser(userId) {
@@ -525,17 +888,23 @@
     const user = userDoc.data();
 
     let html = `
-      <p style="color: #333; margin: 10px 0;"><strong>Name:</strong> ${user.fullName}</p>
-      <p style="color: #333; margin: 10px 0;"><strong>Email:</strong> ${user.email}</p>
-      <p style="color: #333; margin: 10px 0;"><strong>Company:</strong> ${user.company}</p>
-      <p style="color: #333; margin: 10px 0;"><strong>Phone:</strong> ${user.phone}</p>
-      <p style="color: #333; margin: 10px 0;"><strong>Type:</strong> ${user.userType}</p>
-      <p style="color: #333; margin: 10px 0;"><strong>Status:</strong> <span class="badge ${user.status}">${user.status.toUpperCase()}</span></p>
-      <p style="color: #333; margin: 10px 0;"><strong>Signup Date:</strong> ${new Date(user.createdAt).toLocaleString()}</p>
+      <div class="user-detail-grid">
+        <div class="user-detail-row"><span class="detail-label">Name:</span><span class="detail-value">${user.fullName}</span></div>
+        <div class="user-detail-row"><span class="detail-label">Email:</span><span class="detail-value">${user.email}</span></div>
+        <div class="user-detail-row"><span class="detail-label">Company:</span><span class="detail-value">${user.company}</span></div>
+        <div class="user-detail-row"><span class="detail-label">Phone:</span><span class="detail-value">${user.phone}</span></div>
+        <div class="user-detail-row"><span class="detail-label">Type:</span><span class="detail-value">${user.userType}</span></div>
+        <div class="user-detail-row"><span class="detail-label">Status:</span><span class="detail-value"><span class="badge ${user.status}">${user.status.toUpperCase()}</span></span></div>
+        <div class="user-detail-row"><span class="detail-label">Signup Date:</span><span class="detail-value">${new Date(user.createdAt).toLocaleString()}</span></div>
+      </div>
     `;
 
     if (user.approvedAt) {
-      html += `<p style="color: #333; margin: 10px 0;"><strong>Approved Date:</strong> ${new Date(user.approvedAt).toLocaleString()}</p>`;
+      html += `
+        <div class="user-detail-grid">
+          <div class="user-detail-row"><span class="detail-label">Approved Date:</span><span class="detail-value">${new Date(user.approvedAt).toLocaleString()}</span></div>
+        </div>
+      `;
     }
 
     document.getElementById('userDetails').innerHTML = html;
@@ -543,6 +912,12 @@
     // Show approve/reject buttons only for pending users
     document.getElementById('approveBtn').style.display = status === 'pending' ? 'block' : 'none';
     document.getElementById('rejectBtn').style.display = status === 'pending' ? 'block' : 'none';
+
+    const roleSelect = document.getElementById('userRole');
+    const permissionSection = document.getElementById('userPermissionSection');
+    roleSelect.value = user.role || 'user';
+    renderPermissionCheckboxes('userPermissions', user.permissions || getDefaultPermissions(roleSelect.value));
+    setPermissionSectionVisibility(true);
 
     document.getElementById('userModal').classList.add('active');
   }
@@ -558,7 +933,8 @@
         status: 'approved',
         approvedAt: new Date().toISOString(),
         approvedBy: currentUser.uid,
-        role: 'user' // Default role for new users
+        role: 'user',
+        permissions: getDefaultPermissions('user')
       });
 
       showNotification('✅ User approved successfully', 'success');
@@ -586,6 +962,8 @@
   }
 
   function showCreateAgentModal() {
+    document.getElementById('agentRole').value = 'agent';
+    updateRolePermissions('agentPermissions', 'agent');
     document.getElementById('createAgentModal').classList.add('active');
   }
 
@@ -613,6 +991,9 @@
       // Force refresh token
       await user.getIdToken(true);
 
+      const role = document.getElementById('agentRole')?.value || 'agent';
+      const permissions = getPermissionsFromContainer('agentPermissions');
+
       // Store agent data in Firestore with approved status using the same secondary app auth context
       await agentCreationDb.collection('users').doc(user.uid).set({
         uid: user.uid,
@@ -622,7 +1003,8 @@
         phone: phone,
         userType: 'agent',
         status: 'approved', // Agents created by admin are auto-approved
-        role: 'agent',
+        role: role,
+        permissions: permissions,
         createdAt: new Date().toISOString(),
         approvedAt: new Date().toISOString(),
         approvedBy: currentUser.uid

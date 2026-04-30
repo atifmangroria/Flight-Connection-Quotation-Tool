@@ -137,6 +137,12 @@
   .stat-value{font-size:28px;font-weight:bold;margin:5px 0}
   .stat-value.money{font-size:22px;line-height:1.2;word-break:break-word}
   .stat-label{font-size:14px;color:var(--muted)}
+  .notification-panel{background:#fff;border:1px solid #dce3ef;border-radius:12px;padding:16px;margin-bottom:18px;box-shadow:0 8px 20px rgba(0,0,0,0.04)}
+  .notification-header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+  .notification-summary{font-size:13px;color:#555}
+  .notification-list{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+  .notification-item{background:#f8fbff;border:1px solid #d5e6fa;border-radius:10px;padding:12px 14px;color:#1b3d6f;font-size:13px;line-height:1.4}
+  .notification-item strong{display:block;margin-bottom:4px;color:#0b58a4}
   .filters-section{display:flex;gap:10px;align-items:center;margin-bottom:20px;flex-wrap:wrap;background:#f8f9fa;padding:15px;border-radius:8px}
   .filters-section input, .filters-section select{padding:8px;border:1px solid #ddd;border-radius:4px;font-size:16px}
   .filters-section button{background:var(--accent);color:white;border:none;padding:8px 15px;border-radius:4px;cursor:pointer}
@@ -171,8 +177,17 @@
   .expired{color:var(--danger);font-weight:bold}
   .action-buttons{display:flex;gap:5px}
   .action-buttons button{padding:4px 8px;border:none;border-radius:4px;cursor:pointer;font-size:12px}
-  .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+  .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;position:relative}
   .header-right{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .notification-dropdown{position:absolute;top:70px;right:0;width:360px;background:#fff;border:1px solid #dce3ef;border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,0.12);padding:12px;z-index:1000;display:none}
+  .notification-dropdown .notification-header{margin-bottom:12px}
+  .notification-dropdown .notification-list{max-height:320px;overflow-y:auto}
+  .notification-dropdown .notification-item{cursor:pointer}
+  .btn-notification{position:relative;border:1px solid #ddd;background:#fff;color:#111;border-radius:6px;padding:10px;cursor:pointer;font-size:18px;display:inline-flex;align-items:center;justify-content:center;min-width:50px;min-height:50px}
+  .btn-notification:hover{background:#f3f6fb}
+  .notification-badge{position:absolute;top:8px;right:8px;width:10px;height:10px;border-radius:50%;background:#e74c3c;display:none;box-shadow:0 0 0 2px #fff}
+  .btn-notification.has-unread .notification-badge{display:block;animation:bell-pulse 1.2s ease-in-out infinite}
+  @keyframes bell-pulse{0%{transform:scale(1)}50%{transform:scale(1.3)}100%{transform:scale(1)}}
   @media print{.no-print{display:none!important}}
   .status-select{padding:4px 8px;border:1px solid #ddd;border-radius:4px;font-size:12px;cursor:pointer}
   .quotation-type-badge{padding:2px 6px;border-radius:4px;font-size:11px;font-weight:bold;margin-left:5px}
@@ -187,6 +202,17 @@
     .quotation-table { font-size: 12px; overflow-x: auto; display: block; }
     .quotation-table th, .quotation-table td { padding: 6px; }
     button { min-height: 44px; }
+  }
+  @media (max-width: 960px) {
+    .wrap { padding: 14px; margin: 0 auto; border-radius: 0; }
+    .grid, .grid-2, .grid-3, .grid-4, .modalGrid, .controls, .tableWrap, .table-wrap, .package-toolbar, .card-grid, .modal-content, .stats-grid { grid-template-columns: 1fr !important; }
+    .filters-section, .header, .header-right, .top, .actions, .action-buttons, .pkg-actions, .info-bar, .card-header, .bar { flex-direction: column !important; align-items: stretch !important; }
+    .service-tabs { flex-wrap: wrap !important; justify-content: flex-start !important; }
+    .service-tab, button, .btn, input, select, textarea { width: 100% !important; min-width: 0 !important; }
+    .tableWrap, .table-wrap, .saved-list, .modalBox, .notice { overflow-x: auto !important; }
+    table, .quotation-table { width: 100% !important; }
+    .section, .card, .panel, .modalBox, .top, .notice, .bar { padding: 12px !important; }
+    .wrap, .modalBox { max-width: 100% !important; }
   }
   .btn-primary {
   background: linear-gradient(135deg, #0b76d1, #085ea3);
@@ -416,6 +442,19 @@
       <div class="small" id="agentInfo">Loading agent information...</div>
     </div>
     <div class="header-right no-print">
+      <button id="notificationBell" class="btn-notification" type="button" title="View notifications">
+        <span class="bell-icon">🔔</span>
+        <span class="notification-badge" id="notificationCountBadge"></span>
+      </button>
+      <div class="notification-dropdown" id="notificationDropdown" style="display:none;">
+        <div class="notification-header">
+          <h2>Notifications</h2>
+          <div class="notification-summary" id="notificationSummary">Checking reminders...</div>
+        </div>
+        <ul class="notification-list" id="notificationList">
+          <li class="notification-item">Generating reminders for quotations and vouchers...</li>
+        </ul>
+      </div>
       <button onclick="showQuotationTypeModal()" class="btn-primary">Create Quotation</button>
       <div class="tools-dropdown">
         <button class="btn-primary" onclick="toggleToolsMenu(event)">Tools &#9660;</button>
@@ -1210,6 +1249,11 @@ document.getElementById('packageForm').addEventListener('submit', async function
 let currentPage = 1;
 const itemsPerPage = 10;
 let filteredAllQuotations = [];
+const notificationDropdown = document.getElementById('notificationDropdown');
+const notificationList = document.getElementById('notificationList');
+const notificationSummary = document.getElementById('notificationSummary');
+const notificationBell = document.getElementById('notificationBell');
+const notificationCountBadge = document.getElementById('notificationCountBadge');
 let allUmrahQuotations = [];
 let allInternationalQuotations = [];
 let allDomesticQuotations = [];
@@ -1475,6 +1519,155 @@ function showNotification(message, type = 'info') {
   }, 3000);
 }
 
+function parseDateValue(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getDaysBetween(start, end) {
+  return Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+}
+
+function getVoucherIdMaps() {
+  const safeJson = (key) => {
+    try { return JSON.parse(localStorage.getItem(key) || '{}') || {}; } catch (e) { return {}; }
+  };
+  return {
+    ...safeJson('voucherIdByQuotation'),
+    ...safeJson('voucherIdByQuotation_int'),
+    ...safeJson('voucherIdByQuotation_domestic')
+  };
+}
+
+function getVoucherIdForQuotation(quotation) {
+  const maps = getVoucherIdMaps();
+  return maps[quotation.id] || '';
+}
+
+function renderNotifications(items) {
+  if (!notificationDropdown || !notificationList || !notificationSummary) return;
+  notificationList.innerHTML = '';
+  if (!items.length) {
+    notificationSummary.textContent = 'No reminders at the moment.';
+    notificationList.innerHTML = '<li class="notification-item">All clear. No urgent follow-ups or voucher reminders.</li>';
+    return;
+  }
+  notificationSummary.textContent = `${items.length} reminder${items.length === 1 ? '' : 's'} generated`;
+  items.forEach((item, index) => {
+    const li = document.createElement('li');
+    li.className = 'notification-item';
+    li.innerHTML = `<strong>${item.title}</strong>${item.message}`;
+    li.addEventListener('click', () => handleNotificationClick(item, index));
+    notificationList.appendChild(li);
+  });
+}
+
+function handleNotificationClick(item, index) {
+  if (!item) return;
+  markNotificationsRead();
+  if (notificationDropdown) {
+    notificationDropdown.style.display = 'none';
+  }
+  if (item.quotationId && item.quotationType) {
+    const ownerId = item.ownerId ? `&owner=${encodeURIComponent(item.ownerId)}` : '';
+    const url = item.quotationType === 'umrah'
+      ? `index.html?edit=${encodeURIComponent(item.quotationId)}${ownerId}`
+      : item.quotationType === 'domestic'
+        ? `Domestic Quotation Tool.html?edit=${encodeURIComponent(item.quotationId)}${ownerId}`
+        : `International Quotation Tool.html?edit=${encodeURIComponent(item.quotationId)}${ownerId}`;
+    window.open(url, '_blank');
+  }
+  if (notificationDropdown && notificationList) {
+    const removed = notificationList.querySelectorAll('.notification-item')[index];
+    if (removed) removed.remove();
+  }
+}
+
+async function buildNotifications() {
+  const ownQuotations = [...allUmrahQuotations, ...allInternationalQuotations, ...allDomesticQuotations];
+  const now = new Date();
+  const voucherMap = getVoucherIdMaps();
+  const notifications = [];
+
+  ownQuotations.forEach(q => {
+    const createdAt = parseDateValue(q.createdAt || q.updatedAt);
+    const updatedAt = parseDateValue(q.updatedAt || q.createdAt);
+    const dateFrom = parseDateValue(q.clientData?.dateFrom || q.dateFrom || q.travelFrom);
+    const voucherId = voucherMap[q.id] || '';
+    const status = String(q.status || '').toLowerCase();
+    const quoteLabel = `#${q.id} (${q.type || 'quotation'})`;
+
+    if (createdAt) {
+      const hoursSinceCreate = Math.floor((now - createdAt) / (1000 * 60 * 60));
+      if (hoursSinceCreate >= 24 && !['booked', 'cancelled', 'expired', 'followup'].includes(status)) {
+        notifications.push({
+          title: 'Follow-up Reminder',
+          message: `Quotation ${quoteLabel} was created ${hoursSinceCreate} hours ago and still not moved to Follow Up. Please contact the client.`
+        });
+      }
+    }
+
+    if (status === 'followup' && updatedAt) {
+      const hoursSinceFollowup = Math.floor((now - updatedAt) / (1000 * 60 * 60));
+      if (hoursSinceFollowup >= 24) {
+        notifications.push({
+          title: 'Follow-up Status Pending',
+          message: `Quotation ${quoteLabel} has been on Follow Up for ${hoursSinceFollowup} hours. Review and update its status.`
+        });
+      }
+    }
+
+    if (status === 'booked' && dateFrom) {
+      const daysToTravel = getDaysBetween(now, dateFrom);
+      if (daysToTravel <= 15 && daysToTravel >= 0 && !voucherId) {
+        notifications.push({
+          title: 'Create Voucher',
+          message: `Booked quotation ${quoteLabel} departs in ${daysToTravel} day${daysToTravel === 1 ? '' : 's'} and no voucher exists yet. Create the voucher before travel.`
+        });
+      }
+      if (daysToTravel <= 3 && daysToTravel >= 0) {
+        notifications.push({
+          title: 'Travel Imminent',
+          message: `Quotation ${quoteLabel} has travel in ${daysToTravel} day${daysToTravel === 1 ? '' : 's'}. Make sure the voucher and service details are ready.`
+        });
+      }
+    }
+
+    if (voucherId && dateFrom) {
+      const hoursToTravel = Math.floor((dateFrom - now) / (1000 * 60 * 60));
+      if (hoursToTravel <= 24 && hoursToTravel >= 0) {
+        notifications.push({
+          title: 'Voucher Data Check',
+          message: `Voucher for quotation ${quoteLabel} departs within 24 hours. Verify hotel, transfer, tour and driver details and update any TBA fields.`
+        });
+      }
+    }
+  });
+
+  renderNotifications(notifications);
+  updateNotificationBell(notifications.length);
+  if (notifications.length) {
+    showNotification(`${notifications.length} reminder${notifications.length === 1 ? '' : 's'} generated`, 'info');
+  }
+}
+
+function updateNotificationBell(count) {
+  if (!notificationBell) return;
+  notificationBell.classList.toggle('has-unread', count > 0);
+  if (count > 0) {
+    notificationCountBadge.style.display = 'block';
+  } else {
+    notificationCountBadge.style.display = 'none';
+  }
+}
+
+function markNotificationsRead() {
+  if (!notificationBell) return;
+  notificationBell.classList.remove('has-unread');
+  notificationCountBadge.style.display = 'none';
+}
+
 // Show quotation type selection modal
 function showQuotationTypeModal() {
   document.getElementById('quotationTypeModal').classList.add('visible');
@@ -1619,6 +1812,7 @@ async function loadAllQuotations() {
   }
   
   applyFilter();
+  await buildNotifications();
 }
 
 // Apply filters
@@ -2425,9 +2619,12 @@ window.closeToolsMenu = function() {
   document.getElementById('toolsMenu').classList.remove('open');
 };
 document.addEventListener('click', function(e) {
-  const dd = document.getElementById('toolsDropdown');
+  const dd = document.querySelector('.tools-dropdown');
   if (dd && !dd.contains(e.target)) {
     document.getElementById('toolsMenu').classList.remove('open');
+  }
+  if (notificationDropdown && notificationBell && !notificationDropdown.contains(e.target) && !notificationBell.contains(e.target)) {
+    notificationDropdown.style.display = 'none';
   }
 });
 window.showPackageModal = showPackageModal;
@@ -2449,6 +2646,21 @@ document.addEventListener('DOMContentLoaded', async function() {
 
   loadAgentInfo();
   await loadAllQuotations();
+
+  if (notificationBell) {
+    notificationBell.addEventListener('click', (event) => {
+      event.stopPropagation();
+      if (!notificationDropdown) return;
+      const isHidden = notificationDropdown.style.display === 'none' || !notificationDropdown.style.display;
+      notificationDropdown.style.display = isHidden ? 'block' : 'none';
+      if (isHidden) markNotificationsRead();
+    });
+  }
+
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('viewPackages') === '1' || urlParams.get('viewPackages') === 'true') {
+    showPackageList();
+  }
   
   if (sessionStorage.getItem('refreshDashboard') || sessionStorage.getItem('refreshDashboard_umrah') || sessionStorage.getItem('refreshDashboard_international')) {
     sessionStorage.removeItem('refreshDashboard');

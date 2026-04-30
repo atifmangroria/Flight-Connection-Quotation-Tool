@@ -97,6 +97,22 @@ button.whatsapp:hover{background:#128C7E}
 .add-small{background:#4CAF50;color:#fff;border:none;padding:5px 11px;border-radius:5px;cursor:pointer;font-size:12px}
 .add-small:hover{background:#45a049}
 @media(max-width:600px){.grid{grid-template-columns:1fr}.grid-3{grid-template-columns:1fr}}
+@media (max-width: 960px) {
+  .wrap { padding: 14px; margin: 0 auto; border-radius: 0; }
+  .grid, .grid-2, .grid-3, .grid-4, .card, .section, .info-bar, .actions, .service-box, .modal-box, .itinerary-table-wrapper, .search-container, .addon-panel, .section-entry, .progress-bar { grid-template-columns: 1fr !important; }
+  .card-header, .actions, .info-bar, .link-row, .modal-btns, .service-box, .action-buttons, .section-entry h4, .currency-selector, .progress-bar { flex-direction: column !important; align-items: stretch !important; }
+  .service-tabs { flex-wrap: wrap !important; gap: 8px !important; }
+  .service-tab { flex: 1 1 100% !important; max-width: 100% !important; }
+  button, .btn, input, select, textarea, .search-input, .search-btn, .currency-selector select, .currency-display, .header-btn { width: 100% !important; min-width: 0 !important; }
+  .card, .section, .info-bar, .addon-panel, .section-entry, .header-card { padding: 12px !important; }
+  .itinerary-table, table, .pax-table { width: 100% !important; overflow-x: auto !important; }
+  .itinerary-table { min-width: 650px !important; }
+  .inline-input { flex-wrap: wrap !important; align-items: stretch !important; }
+  .inline-input label, .inline-input input { width: 100% !important; min-width: 0 !important; }
+  .inline-input input { width: auto !important; }
+  .modal-content { width: 95% !important; max-width: 100% !important; padding: 20px !important; }
+  .progress-step { flex: 1 1 100% !important; margin-bottom: 8px !important; }
+}
 </style>
 </head>
 <body>
@@ -728,6 +744,8 @@ function buildVoucherDoc(data, status) {
     transfers: data.transfers,
     tours: data.tours,
     visa: data.visa,
+    itinerary: Array.isArray(quotation?.itineraryData?.rows) ? quotation.itineraryData.rows : (existing.itinerary || []),
+    itineraryFlightSegments: quotation?.itineraryData?.flightSegments || existing.itineraryFlightSegments || {},
     passengers: data.passengers,
     emergencyContact: data.emergencyContact,
     agentNote: getVal('agentNote'),

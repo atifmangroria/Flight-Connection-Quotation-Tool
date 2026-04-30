@@ -35,6 +35,7 @@
     }
   };
 </script>
+<script src="itinerary-component.js"></script>
 <style>
 :root{--accent:#0b76d1;--muted:#555;--green:#28a745;--red:#dc3545;--gold:#b8860b;--brand:#0b76d1}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -64,6 +65,18 @@ body{font-family:Calibri,Arial,sans-serif;font-size:14px;background:#f0f4fa;colo
 .pax-table th{background:#0b76d1;color:#fff;padding:6px 8px;text-align:left;font-weight:700;font-size:11px}
 .pax-table td{padding:5px 8px;border-bottom:1px solid #e8f0fb}
 .pax-table tr:nth-child(even) td{background:#f5f9ff}
+.itinerary-table-wrapper{overflow-x:auto}
+.itinerary-table{width:100%;border-collapse:collapse;background:#fff;min-width:650px;font-size:13px;margin-top:10px}
+.itinerary-table th,.itinerary-table td{padding:10px 12px;border:1px solid #dbe6f3;text-align:left;vertical-align:top}
+.itinerary-table th{background:#eef5ff;font-weight:700;font-size:12px}
+.itinerary-table tr:nth-child(even) td{background:#f9fbff}
+.itinerary-table .itinerary-day{width:95px;white-space:nowrap}
+.itinerary-table .itinerary-date{width:140px;white-space:nowrap}
+.itinerary-table .itinerary-activity{min-width:280px}
+.itinerary-table .itinerary-meals{min-width:140px}
+.itinerary-table .it-cell{cursor:pointer}
+.itinerary-table .it-cell:focus{outline:2px solid rgba(11,118,209,.5);outline-offset:2px}
+.itinerary-table .it-edit-icon{opacity:.45;margin-left:6px;font-size:12px}
 .agent-note{background:linear-gradient(135deg,#fff8e1,#fffde7);border:2px solid #f39c12;border-radius:8px;padding:14px;margin-bottom:14px}
 .agent-note h3{color:#f39c12;border-color:#f7d57a}
 .agent-note-text{font-size:14px;line-height:1.6;color:#444;white-space:pre-wrap;margin-top:8px}
@@ -92,6 +105,23 @@ button{padding:8px 16px;border:none;border-radius:6px;cursor:pointer;font-size:1
 .qr-area p{font-size:11px;color:var(--muted);margin-top:6px}
 .company-footer{text-align:center;padding:16px;color:var(--muted);font-size:12px;border-top:1px solid #e8f0fb;margin-top:14px}
 @media(max-width:600px){.grid{grid-template-columns:1fr}.grid-3{grid-template-columns:1fr}.header-card{flex-direction:column}.header-card .meta{text-align:left}}
+@media (max-width: 960px) {
+  .wrap { padding: 14px; margin: 0 auto; border-radius: 0; }
+  .grid, .grid-2, .grid-3, .grid-4, .card, .section, .info-bar, .actions-bar, .service-box, .itinerary-table-wrapper, .header-card, .search-container, .addon-panel, .section-entry, .progress-bar { grid-template-columns: 1fr !important; }
+  .header-card, .actions-bar, .info-bar, .link-row, .service-box, .action-buttons, .section-entry h4, .currency-selector, .progress-bar { flex-direction: column !important; align-items: stretch !important; }
+  .service-tabs { flex-wrap: wrap !important; gap: 8px !important; }
+  .service-tab { flex: 1 1 100% !important; max-width: 100% !important; }
+  button, .btn, input, select, textarea, .search-input, .search-btn, .currency-selector select, .currency-display, .header-btn { width: 100% !important; min-width: 0 !important; }
+  .card, .section, .info-bar, .addon-panel, .section-entry, .header-card { padding: 12px !important; }
+  .itinerary-table, table, .pax-table { width: 100% !important; overflow-x: auto !important; }
+  .itinerary-table { min-width: 650px !important; }
+  .header-card .meta, .qr-area, .qr-area .qr-box { width: 100% !important; display: block; text-align: center; }
+  .inline-input { flex-wrap: wrap !important; align-items: stretch !important; }
+  .inline-input label, .inline-input input { width: 100% !important; min-width: 0 !important; }
+  .inline-input input { width: auto !important; }
+  .modal-content { width: 95% !important; max-width: 100% !important; padding: 20px !important; }
+  .progress-step { flex: 1 1 100% !important; margin-bottom: 8px !important; }
+}
 @media print{
   .actions-bar,.no-print{display:none!important}
   body{background:#fff}
@@ -217,6 +247,14 @@ button{padding:8px 16px;border:none;border-radius:6px;cursor:pointer;font-size:1
     <div class="card" id="visaCard" style="display:none">
       <h3>🛂 Visa Details</h3>
       <div id="visaBody"></div>
+    </div>
+
+    <div class="card" id="itineraryCard" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+        <h3 style="margin-bottom:0;">🗓️ Day Wise Itinerary</h3>
+        <button id="toggleVoucherItineraryBtn" type="button" class="btn-primary" style="padding:6px 12px;font-size:12px;">Show Itinerary</button>
+      </div>
+      <div id="voucherItineraryTable" style="display:none;margin-top:10px;"></div>
     </div>
 
     <div class="card">
@@ -519,6 +557,52 @@ function renderVisa(vc) {
   `;
 }
 
+function renderItinerarySection(vc) {
+  const card = document.getElementById('itineraryCard');
+  const tableWrap = document.getElementById('voucherItineraryTable');
+  const toggleBtn = document.getElementById('toggleVoucherItineraryBtn');
+  if (!card || !tableWrap || !toggleBtn) return;
+
+  const useRows = (rows) => {
+    if (!rows || !rows.length) return;
+    card.style.display = 'block';
+    tableWrap.innerHTML = window.ItineraryComponent
+      ? window.ItineraryComponent.renderItineraryTable(rows, { editable: false })
+      : '';
+    tableWrap.style.display = 'none';
+    card.classList.add('itinerary-hidden');
+    toggleBtn.textContent = 'Show Itinerary';
+    toggleBtn.onclick = function () {
+      const isHidden = tableWrap.style.display === 'none';
+      tableWrap.style.display = isHidden ? 'block' : 'none';
+      toggleBtn.textContent = isHidden ? 'Hide Itinerary' : 'Show Itinerary';
+      card.classList.toggle('itinerary-hidden', !isHidden);
+    };
+  };
+
+  const savedRows = Array.isArray(vc.itinerary) && vc.itinerary.length
+    ? vc.itinerary
+    : Array.isArray(vc.itineraryData?.rows) && vc.itineraryData.rows.length
+      ? vc.itineraryData.rows
+      : null;
+  if (savedRows && savedRows.length) {
+    useRows(savedRows);
+    return;
+  }
+
+  if (!window.ItineraryComponent) return;
+  window.ItineraryComponent.generateItinerary({
+    clientData: vc.clientData || {},
+    hotels: vc.hotels || [],
+    transfers: vc.transfers || [],
+    tours: vc.tours || [],
+    flightSegments: vc.itineraryFlightSegments || vc.itineraryData?.flightSegments || {},
+    promptFlightDetails: false
+  }).then((generated) => {
+    useRows(generated.rows || []);
+  }).catch(() => {});
+}
+
 function generateQR(url) {
   const el = document.getElementById("qrcode");
   if (!el) return;
@@ -538,6 +622,38 @@ async function waitForImages(container) {
   })));
 }
 
+async function renderDesktopVoucherCanvas(element, fixedWidth = 1200) {
+  const clone = element.cloneNode(true);
+  clone.style.width = fixedWidth + 'px';
+  clone.style.maxWidth = fixedWidth + 'px';
+  clone.style.boxSizing = 'border-box';
+  const wrapper = document.createElement('div');
+  wrapper.style.position = 'fixed';
+  wrapper.style.left = '-9999px';
+  wrapper.style.top = '0';
+  wrapper.style.width = fixedWidth + 'px';
+  wrapper.style.overflow = 'visible';
+  wrapper.style.background = '#fff';
+  wrapper.appendChild(clone);
+  document.body.appendChild(wrapper);
+  await waitForImages(clone);
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  const canvas = await html2canvas(clone, {
+    scale: Math.min(4, Math.max(2, window.devicePixelRatio || 2)),
+    useCORS: true,
+    imageTimeout: 15000,
+    backgroundColor: '#fff',
+    logging: false,
+    scrollX: 0,
+    scrollY: 0,
+    windowWidth: fixedWidth,
+    windowHeight: clone.scrollHeight,
+    width: fixedWidth
+  });
+  document.body.removeChild(wrapper);
+  return canvas;
+}
+
 function setupWhatsApp(vc) {
   const btn = document.getElementById("btnWAShare");
   if (!btn) return;
@@ -555,24 +671,20 @@ async function downloadPDF() {
   const el = document.getElementById("voucherWrap");
   const bar = document.querySelector(".actions-bar");
   const qrCard = document.getElementById("qrCard");
+  const itineraryCard = document.getElementById('itineraryCard');
+  const voucherItineraryTable = document.getElementById('voucherItineraryTable');
+  const prevItineraryDisplay = itineraryCard ? itineraryCard.style.display : null;
   if (bar) bar.style.display = "none";
   if (qrCard) qrCard.style.display = "block";
+  if (itineraryCard && voucherItineraryTable && voucherItineraryTable.style.display === 'none') {
+    itineraryCard.style.display = 'none';
+  }
 
   try {
     await waitForImages(el);
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
-    const canvas = await html2canvas(el, {
-      scale: Math.min(4, Math.max(2, window.devicePixelRatio || 2)),
-      useCORS: true,
-      imageTimeout: 15000,
-      backgroundColor: "#fff",
-      logging: false,
-      scrollX: 0,
-      scrollY: -window.scrollY,
-      windowWidth: document.documentElement.scrollWidth,
-      windowHeight: document.documentElement.scrollHeight
-    });
+    const canvas = await renderDesktopVoucherCanvas(el, 1200);
 
     const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     const pW = pdf.internal.pageSize.getWidth() - 10;
@@ -604,6 +716,9 @@ async function downloadPDF() {
     alert("Failed to generate PDF. Please try printing from browser (Ctrl+P).");
   } finally {
     if (bar) bar.style.display = "";
+    if (itineraryCard && prevItineraryDisplay !== null) {
+      itineraryCard.style.display = prevItineraryDisplay;
+    }
   }
 }
 window.downloadPDF = downloadPDF;
@@ -642,6 +757,7 @@ function renderVoucher(vc) {
     renderTours(vc);
     renderTransfers(vc);
     renderVisa(vc);
+    renderItinerarySection(vc);
   }
 
   const url = window.location.href.split("?")[0] + "?id=" + encodeURIComponent(vc.id);
