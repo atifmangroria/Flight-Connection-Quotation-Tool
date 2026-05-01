@@ -944,14 +944,6 @@ function saveToLocalStorage(key, data) {
   }
 }
 
-function showStatusSection() {
-  // This function shows the status section - simplified version
-  const statusSection = document.getElementById('statusSection');
-  if (statusSection) {
-    statusSection.style.display = 'block';
-  }
-}
-
 function formatDateToDMY(dateStr) {
   if (!dateStr) return '';
   const date = new Date(dateStr);
@@ -8930,18 +8922,24 @@ function updateQuotationStatus(quotationId, newStatus) {
   }
 }
 
+function syncCreateVoucherButton(statusValue) {
+  const voucherBtn = document.getElementById('btnCreateVoucher');
+  if (!voucherBtn) return;
+  const shouldShow = !!currentQuotationId && String(statusValue || '').toLowerCase() === 'booked';
+  voucherBtn.style.display = shouldShow ? 'inline-block' : 'none';
+}
+
 function showStatusSection() {
   const statusSection = document.getElementById('statusSection');
   const quotationStatus = document.getElementById('quotationStatus');
-  const btnCreateVoucher = document.getElementById('btnCreateVoucher');
-
-  // Get all quotations from localStorage
-  const allSavedQuotations = JSON.parse(localStorage.getItem('savedQuotations')) || [];
-
   const btnGenerateQuotationLink = document.getElementById('btnGenerateQuotationLink');
   const btnApproveCustomer = document.getElementById('btnApproveCustomer');
   const btnSelfBook = document.getElementById('btnSelfBook');
   const shareUrlInput = document.getElementById('quotationShareUrl');
+  const btnCreateVoucher = document.getElementById('btnCreateVoucher');
+
+  // Get all quotations from localStorage
+  const allSavedQuotations = JSON.parse(localStorage.getItem('savedQuotations')) || [];
 
   if (currentQuotationId) {
     statusSection.style.display = 'block';
@@ -8954,9 +8952,8 @@ function showStatusSection() {
     if (quotation && quotation.status) {
       quotationStatus.value = quotation.status;
     }
-    // Show Create Voucher button only when status is booked
-    if (btnCreateVoucher) {
-      btnCreateVoucher.style.display = (quotationStatus.value === 'booked') ? 'inline-block' : 'none';
+      if (btnCreateVoucher) {
+      syncCreateVoucherButton(quotationStatus.value);
     }
     if (btnGenerateQuotationLink) {
       btnGenerateQuotationLink.style.display = 'inline-block';
@@ -8972,8 +8969,8 @@ function showStatusSection() {
       btnApproveCustomer.disabled = !canApprove;
     }
     if (btnSelfBook) {
-      const canSelfBook = quotation && quotation.status !== 'booked' && !needsReaccept;
-      btnSelfBook.style.display = quotation ? 'inline-block' : 'none';
+      const canSelfBook = quotation && quotation.status !== 'booked' && !customerAccepted && !agentApproved;
+      btnSelfBook.style.display = canSelfBook ? 'inline-block' : 'none';
       btnSelfBook.disabled = !canSelfBook;
     }
     if (shareUrlInput && quotation) {
@@ -9045,10 +9042,7 @@ document.getElementById('btnCopyShareUrl')?.addEventListener('click', () => {
 
 // Show/hide Create Voucher button when status changes
 document.getElementById('quotationStatus')?.addEventListener('change', () => {
-  const btnCreateVoucher = document.getElementById('btnCreateVoucher');
-  if (btnCreateVoucher) {
-    btnCreateVoucher.style.display = (document.getElementById('quotationStatus').value === 'booked') ? 'inline-block' : 'none';
-  }
+    syncCreateVoucherButton(document.getElementById('quotationStatus').value);
 });
 
 function getQuotationPublicUrl(quotationId, shareKey) {
@@ -9248,6 +9242,9 @@ function handleSelfBook(requireTermsCheck = false) {
   }
 
   showNotification('Quotation accepted and booked by agent.', 'success');
+  const statusSelect = document.getElementById('quotationStatus');
+  if (statusSelect) statusSelect.value = 'booked';
+  syncCreateVoucherButton('booked');
   showStatusSection();
 }
 

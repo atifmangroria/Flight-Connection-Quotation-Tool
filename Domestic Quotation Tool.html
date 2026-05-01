@@ -5222,8 +5222,8 @@ function showStatusSection() {
       btnApproveCustomer.disabled = !canApprove;
     }
     if (btnSelfBook) {
-      const canSelfBook = quotation && quotation.status !== 'booked' && !needsReaccept;
-      btnSelfBook.style.display = quotation ? 'inline-block' : 'none';
+      const canSelfBook = quotation && quotation.status !== 'booked' && !customerAccepted && !agentApproved;
+      btnSelfBook.style.display = canSelfBook ? 'inline-block' : 'none';
       btnSelfBook.disabled = !canSelfBook;
     }
     if (shareUrlInput && quotation) {

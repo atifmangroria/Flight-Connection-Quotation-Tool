@@ -53,6 +53,172 @@ function formatDate(value) {
   return d.toLocaleString();
 }
 
+function formatCurrency(value, currencyCode = 'PKR') {
+  if (value === null || value === undefined || value === '') return '-';
+  const number = Number(String(value).replace(/[^0-9.-]+/g, ''));
+  if (Number.isNaN(number)) return sanitize(value);
+  const code = String(currencyCode || 'PKR').toUpperCase().trim() || 'PKR';
+  try {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: code, maximumFractionDigits: 0 }).format(number);
+  } catch (error) {
+    return `${number.toLocaleString()} ${sanitize(code)}`;
+  }
+}
+
+function renderRow(label, value) {
+  if (value === null || value === undefined || String(value).trim() === '') return '';
+  return `
+    <div style="display:flex;justify-content:space-between;gap:12px;margin-bottom:8px;flex-wrap:wrap;">
+      <div style="color:#333;font-weight:700;min-width:140px;">${sanitize(label)}</div>
+      <div style="color:#444;flex:1;min-width:120px;">${sanitize(value)}</div>
+    </div>`;
+}
+
+function renderSection(title, content) {
+  if (!content) return '';
+  return `
+    <div style="margin-bottom:20px;border:1px solid #eee;padding:18px;border-radius:10px;">
+      <h2 style="margin:0 0 12px;color:#0b76d1;font-size:18px;">${sanitize(title)}</h2>
+      ${content}
+    </div>`;
+}
+
+function renderDataRows(fields) {
+  return fields.map(([label, value]) => renderRow(label, value)).join('');
+}
+
+function renderList(title, items) {
+  if (!items || !items.length) return '';
+  const listItems = items.map(item => `<li style="margin-bottom:6px;color:#444;">${sanitize(item)}</li>`).join('');
+  return `
+    <div style="margin-bottom:10px;">
+      <div style="font-weight:700;color:#333;margin-bottom:8px;">${sanitize(title)}</div>
+      <ul style="padding-left:18px;margin:0;">${listItems}</ul>
+    </div>`;
+}
+
+function normalizeArray(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') return value.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  return [String(value)];
+}
+
+function buildServiceSection(quotation) {
+  const blocks = [];
+  if (quotation.addons && Array.isArray(quotation.addons) && quotation.addons.length) {
+    blocks.push(renderSection('Add-ons', renderList('Add-on items', quotation.addons.map(item => item.name || item.title || JSON.stringify(item)))));
+  }
+  if (quotation.services && Array.isArray(quotation.services) && quotation.services.length) {
+    blocks.push(renderSection('Service Details', renderList('Services', quotation.services.map(item => item.name || item.title || JSON.stringify(item)))));
+  }
+  if (quotation.flightSegments && Array.isArray(quotation.flightSegments) && quotation.flightSegments.length) {
+    blocks.push(renderSection('Flight Segments', renderList('Flights', quotation.flightSegments.map(seg => seg.description || `${seg.from || seg.departure || ''} → ${seg.to || seg.arrival || ''}`.trim() || JSON.stringify(seg)))));
+  }
+  if (quotation.flights && Array.isArray(quotation.flights) && quotation.flights.length) {
+    blocks.push(renderSection('Flight Details', renderList('Flights', quotation.flights.map(f => f.number || f.route || JSON.stringify(f)))));
+  }
+  if (quotation.hotels && Array.isArray(quotation.hotels) && quotation.hotels.length) {
+    blocks.push(renderSection('Hotel Details', renderList('Hotels', quotation.hotels.map(h => h.name || `${h.city || ''} ${h.rooms ? `(${h.rooms} rooms)` : ''}`.trim() || JSON.stringify(h)))));
+  }
+  if (quotation.hotelDetails && typeof quotation.hotelDetails === 'object') {
+    blocks.push(renderSection('Hotel Details', renderDataRows(Object.entries(quotation.hotelDetails).map(([key, value]) => [key, Array.isArray(value) ? normalizeArray(value).join(', ') : value]))));
+  }
+  if (quotation.itineraryData?.rows && Array.isArray(quotation.itineraryData.rows) && quotation.itineraryData.rows.length) {
+    blocks.push(renderSection('Itinerary', renderList('Itinerary', quotation.itineraryData.rows.map(row => row.title || row.description || JSON.stringify(row)))));
+  }
+  if (quotation.itinerary && Array.isArray(quotation.itinerary) && quotation.itinerary.length) {
+    blocks.push(renderSection('Itinerary', renderList('Itinerary', quotation.itinerary.map(item => item.title || item.description || JSON.stringify(item)))));
+  }
+  if (quotation.itinerary && typeof quotation.itinerary === 'string') {
+    blocks.push(renderSection('Itinerary', `<div style="color:#444;line-height:1.7;">${sanitize(quotation.itinerary)}</div>`));
+  }
+  return blocks.join('') || '';
+}
+
+function buildQuotation() {
+  const q = quotationDoc || {};
+  const client = q.clientData || q.customer || {};
+  const travelFrom = client.dateFrom || q.dateFrom || q.travelFrom || '-';
+  const travelTo = client.dateTo || q.dateTo || q.travelTo || '-';
+  const depCity = client.depCity || client.departureCity || q.depCity || q.departureCity || '-';
+  const destination = client.tourDestination || q.tourDestination || q.travelDestination || '-';
+  const passengerSummary = [
+    `Adults: ${client.adults || 0}`,
+    client.childBed ? `Child with Bed: ${client.childBed}` : null,
+    client.childNoBed ? `Child without Bed: ${client.childNoBed}` : null,
+    client.infants ? `Infants: ${client.infants}` : null,
+  ].filter(Boolean).join(' · ');
+
+  const header = `
+    <div style="text-align:center;margin-bottom:18px;">
+      <div style="font-size:22px;font-weight:700;color:#0b76d1;">Flight Connection Travel & Tours</div>
+      <div style="font-size:14px;color:#555;margin-top:6px;">Quotation Preview</div>
+    </div>`;
+
+  const summaryRows = renderDataRows([
+    ['Quotation Number', q.id || quotationId],
+    ['Quotation Type', quotationType || q.type || 'Unknown'],
+    ['Status', q.status || 'pending'],
+    ['Version', q.shareVersion || 1],
+    ['Last Updated', formatDate(q.shareUpdatedAt || q.updatedAt || q.createdAt)]
+  ]);
+
+  const clientRows = renderDataRows([
+    ['Client Name', client.name || client.fullName || '-'],
+    ['Phone', client.phone || client.mobile || client.contact || '-'],
+    ['Email', client.email || client.emailAddress || '-'],
+    ['Reference', client.reference || '-']
+  ]);
+
+  const travelRows = renderDataRows([
+    ['Destination', destination],
+    ['Travel Dates', `${sanitize(travelFrom)} — ${sanitize(travelTo)}`],
+    ['Departure City', depCity],
+    ['Passengers', passengerSummary || '-']
+  ]);
+
+  const priceTotalsHidden = !!(q.hidePrice || q.isPriceHidden || q.priceHidden);
+  const priceBreakdownHidden = !!q.hidePriceBreakdown;
+  const currency = q.currency || q.currencyCode || 'PKR';
+  const priceLines = [];
+  if (q.grandTotalPKR != null) priceLines.push(['Grand Total', formatCurrency(q.grandTotalPKR, currency)]);
+  if (q.finalTotalSellPKR != null) priceLines.push(['Final Total', formatCurrency(q.finalTotalSellPKR, currency)]);
+  if (q.totalAmount != null) priceLines.push(['Total Amount', formatCurrency(q.totalAmount, currency)]);
+  if (q.grandTotal != null && q.grandTotal !== q.grandTotalPKR) priceLines.push(['Grand Total', formatCurrency(q.grandTotal, currency)]);
+  if (q.packageTotalPKR != null) priceLines.push(['Package Total', formatCurrency(q.packageTotalPKR, currency)]);
+  if (q.packageTotalAmount != null) priceLines.push(['Package Total', formatCurrency(q.packageTotalAmount, currency)]);
+  const priceSection = !priceTotalsHidden && priceLines.length ? renderSection('Pricing', renderDataRows(priceLines)) : '';
+
+  let breakdownSection = '';
+  const breakdownItems = q.priceBreakdown || q.calculationSummary || q.priceDetails || q.priceBreakup || q.breakdown || null;
+  if (!priceBreakdownHidden && breakdownItems) {
+    if (Array.isArray(breakdownItems)) {
+      breakdownSection = renderSection('Price Breakdown', renderList('Breakdown', breakdownItems.map(item => item.description || item.title || JSON.stringify(item))));
+    } else if (typeof breakdownItems === 'object') {
+      breakdownSection = renderSection('Price Breakdown', renderDataRows(Object.entries(breakdownItems).map(([key, value]) => [key, Array.isArray(value) ? normalizeArray(value).join(', ') : value])));
+    } else {
+      breakdownSection = renderSection('Price Breakdown', `<div style="color:#444;line-height:1.6;">${sanitize(String(breakdownItems))}</div>`);
+    }
+  } else if (priceBreakdownHidden) {
+    breakdownSection = `
+      <div style="margin-bottom:20px;border:1px solid #eee;padding:18px;border-radius:10px;">
+        <h2 style="margin:0 0 12px;color:#0b76d1;font-size:18px;">Price Breakdown</h2>
+        <div style="color:#555;">Price breakdown is hidden by the agent.</div>
+      </div>`;
+  }
+
+  const packageSection = (q.packageSelection || q.package || q.packageName) ? renderSection('Package Details', renderDataRows([
+    ['Package', q.packageSelection?.name || q.package?.name || q.packageName || '-'],
+    ['Package ID', q.packageSelection?.id || q.package?.id || '-'],
+    ['Package Notes', q.packageSelection?.description || q.package?.description || '-']
+  ])) : '';
+
+  const serviceSection = buildServiceSection(q);
+
+  return `${header}${renderSection('Quotation Summary', summaryRows)}${renderSection('Client Details', clientRows)}${renderSection('Travel Details', travelRows)}${packageSection}${serviceSection}${priceSection}${breakdownSection}`;
+}
+
 function buildCustomerAcceptanceSection(quotation) {
   if (!quotation.customerAcceptance) return '';
   return `
@@ -86,10 +252,7 @@ function sanitize(value) {
 function renderQuotation() {
   if (!quotationDoc) return;
   const q = quotationDoc;
-  const hasAccepted = q.customerAcceptance && !q.agentApproval;
   const isBooked = q.status === 'booked';
-  const shareVersion = q.shareVersion || 1;
-
   const customerAccepted = !!q.customerAcceptance;
   btnAcceptQuotation.style.display = (!isBooked && !customerAccepted) ? 'inline-flex' : 'none';
   btnOpenTerms.style.display = q.terms ? 'inline-flex' : 'none';
@@ -97,29 +260,16 @@ function renderQuotation() {
   const termsText = q.terms || q.termsAndConditions || q.customTerms || q.termsText || 'Terms and conditions are not available for this quotation.';
   customerTermsEl.value = termsText;
 
-  quotationContent.innerHTML = `
-    <div class="quote-row"><label>Quotation Number</label><div>${sanitize(q.id)}</div></div>
-    <div class="quote-row"><label>Quotation Type</label><div>${sanitize(quotationType || q.type || 'Unknown')}</div></div>
-    <div class="quote-row"><label>Status</label><div>${sanitize(q.status || 'pending')}</div></div>
-    <div class="quote-row"><label>Version</label><div>${shareVersion}</div></div>
-    <div class="quote-row"><label>Last Updated</label><div>${formatDate(q.shareUpdatedAt || q.updatedAt || q.createdAt)}</div></div>
-    <div class="quote-row"><label>Client Name</label><div>${sanitize(q.clientData?.name || q.clientData?.fullName || '-')}</div></div>
-    <div class="quote-row"><label>Phone</label><div>${sanitize(q.clientData?.phone || q.clientData?.mobile || '-')}</div></div>
-    <div class="quote-row"><label>From</label><div>${sanitize(q.clientData?.dateFrom || q.dateFrom || q.travelFrom || '-')}</div></div>
-    <div class="quote-row"><label>To</label><div>${sanitize(q.clientData?.dateTo || q.dateTo || q.travelTo || '-')}</div></div>
-    <div class="quote-row"><label>Created At</label><div>${formatDate(q.createdAt)}</div></div>
-    ${buildCustomerAcceptanceSection(q)}
-    ${buildApprovalSection(q)}
-  `;
+  quotationContent.innerHTML = buildQuotation();
 
   if (isBooked) {
     setMessage('This quotation is already booked and cannot be accepted again.', 'success');
-  } else if (hasAccepted) {
-    setMessage('The customer has already accepted the quotation and is waiting for agent approval.', 'info');
   } else if (q.customerNeedsReaccept) {
-    setMessage('This quotation was updated after sharing. Please review and accept the latest terms again.', 'warning');
+    setMessage('This quotation was updated after sharing. Please review and accept the latest version again.', 'warning');
+  } else if (customerAccepted) {
+    setMessage('Quotation accepted by customer. Waiting for agent approval.', 'info');
   } else {
-    setMessage('This quotation is ready for customer acceptance. Price breakdown is hidden for security.', 'info');
+    setMessage('Review the quotation preview and accept if everything is correct.', 'info');
   }
 }
 
