@@ -136,23 +136,62 @@ function getItineraryItemDescription(item) {
   return parts.join(' ') || JSON.stringify(item);
 }
 
-function buildItineraryItemsSection(items) {
-  if (!items || !items.length) return '';
-  return items.map((item, index) => {
-    const title = getItineraryItemTitle(item, index + 1);
-    const description = getItineraryItemDescription(item);
-    return renderCollapsibleSection(title, `<div style="color:#444;line-height:1.7;">${sanitize(description)}</div>`, `itinerary-day-${index}`, index === 0);
-  }).join('');
+function getDaywiseItineraryRows(quotation) {
+  const rawRows = Array.isArray(quotation.itineraryData?.rows)
+    ? quotation.itineraryData.rows
+    : Array.isArray(quotation.itinerary)
+      ? quotation.itinerary
+      : [];
+  if (!rawRows || !rawRows.length) return [];
+
+  return rawRows.map((item, index) => {
+    if (typeof item === 'string') {
+      return {
+        day: index + 1,
+        date: '',
+        activity: item,
+        meals: 'No Meals'
+      };
+    }
+
+    if (typeof item === 'object' && item !== null) {
+      return {
+        day: item.day || item.dayNumber || item.dayNo || item.dayLabel || index + 1,
+        date: item.date || item.dayDate || item.travelDate || item.dayDate || '',
+        activity: item.activity || item.title || item.name || item.description || '',
+        meals: item.meals || item.mealsIncluded || item.meal || 'No Meals'
+      };
+    }
+
+    return {
+      day: index + 1,
+      date: '',
+      activity: String(item),
+      meals: 'No Meals'
+    };
+  }).filter(row => row.activity || row.date);
+}
+
+function buildDaywiseItinerarySection(quotation) {
+  const rows = getDaywiseItineraryRows(quotation);
+  if (!rows.length) return '';
+
+  const tableHtml = (window.ItineraryComponent && typeof window.ItineraryComponent.renderItineraryTable === 'function')
+    ? window.ItineraryComponent.renderItineraryTable(rows, { editable: false })
+    : `<div style="color:#444;line-height:1.7;">Day wise itinerary details are available.</div>`;
+
+  return `
+    <div style="margin-bottom:20px;border:1px solid #eee;padding:18px;border-radius:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+        <h2 style="margin:0 0 12px;color:#0b76d1;font-size:18px;">Day Wise Itinerary</h2>
+        <button id="toggleDaywiseItineraryBtn" type="button" class="secondary" style="padding:8px 12px;font-size:13px;">Show Day Wise Table</button>
+      </div>
+      <div id="daywiseItineraryTableContainer" style="display:none;margin-top:14px;">${tableHtml}</div>
+    </div>`;
 }
 
 function buildItinerarySection(quotation) {
-  if (quotation.itineraryData?.rows && Array.isArray(quotation.itineraryData.rows) && quotation.itineraryData.rows.length) {
-    return buildItineraryItemsSection(quotation.itineraryData.rows);
-  }
-  if (quotation.itinerary && Array.isArray(quotation.itinerary) && quotation.itinerary.length) {
-    return buildItineraryItemsSection(quotation.itinerary);
-  }
-  return '';
+  return buildDaywiseItinerarySection(quotation);
 }
 
 function renderDataRows(fields) {
@@ -326,6 +365,17 @@ function renderQuotation() {
 
   const sharedSnapshot = typeof q.publicQuotationHtml === 'string' ? q.publicQuotationHtml.trim() : '';
   quotationContent.innerHTML = sharedSnapshot || buildQuotation();
+
+  const toggleItineraryBtn = document.getElementById('toggleDaywiseItineraryBtn');
+  if (toggleItineraryBtn) {
+    toggleItineraryBtn.addEventListener('click', () => {
+      const container = document.getElementById('daywiseItineraryTableContainer');
+      if (!container) return;
+      const isHidden = container.style.display === 'none';
+      container.style.display = isHidden ? 'block' : 'none';
+      toggleItineraryBtn.textContent = isHidden ? 'Hide Day Wise Table' : 'Show Day Wise Table';
+    });
+  }
 
   if (isBooked) {
     setMessage('This quotation is already booked and cannot be accepted again.', 'success');
