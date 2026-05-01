@@ -100,6 +100,61 @@ function renderSection(title, content) {
     </div>`;
 }
 
+function renderCollapsibleSection(title, content, sectionId, open = false) {
+  const id = sectionId || `section-${Math.random().toString(36).slice(2, 8)}`;
+  return `
+    <div class="collapsible-section">
+      <div class="collapsible-header" role="button" tabindex="0" data-target="${id}">
+        <span>${sanitize(title)}</span>
+        <button type="button" class="toggle-section" data-target="${id}" aria-expanded="${open}">${open ? 'Hide' : 'Show'}</button>
+      </div>
+      <div id="${id}" class="collapsible-content${open ? ' active' : ''}">
+        ${content}
+      </div>
+    </div>`;
+}
+
+function getItineraryItemTitle(item, index) {
+  if (!item) return `Day ${index}`;
+  if (typeof item === 'string') return `Day ${index}`;
+  const day = item.day || item.dayNumber || item.dayNo || item.dayLabel;
+  const label = item.title || item.name || item.description || '';
+  if (day) return `Day ${day}${label ? `: ${label}` : ''}`;
+  if (item.title) return item.title;
+  return `Day ${index}`;
+}
+
+function getItineraryItemDescription(item) {
+  if (!item) return '';
+  if (typeof item === 'string') return item;
+  const parts = [];
+  if (item.description) parts.push(item.description);
+  if (item.details) parts.push(item.details);
+  if (item.notes) parts.push(item.notes);
+  if (item.location) parts.push(`Location: ${item.location}`);
+  if (item.activity) parts.push(item.activity);
+  return parts.join(' ') || JSON.stringify(item);
+}
+
+function buildItineraryItemsSection(items) {
+  if (!items || !items.length) return '';
+  return items.map((item, index) => {
+    const title = getItineraryItemTitle(item, index + 1);
+    const description = getItineraryItemDescription(item);
+    return renderCollapsibleSection(title, `<div style="color:#444;line-height:1.7;">${sanitize(description)}</div>`, `itinerary-day-${index}`, index === 0);
+  }).join('');
+}
+
+function buildItinerarySection(quotation) {
+  if (quotation.itineraryData?.rows && Array.isArray(quotation.itineraryData.rows) && quotation.itineraryData.rows.length) {
+    return buildItineraryItemsSection(quotation.itineraryData.rows);
+  }
+  if (quotation.itinerary && Array.isArray(quotation.itinerary) && quotation.itinerary.length) {
+    return buildItineraryItemsSection(quotation.itinerary);
+  }
+  return '';
+}
+
 function renderDataRows(fields) {
   return fields.map(([label, value]) => renderRow(label, value)).join('');
 }
@@ -141,11 +196,9 @@ function buildServiceSection(quotation) {
   if (quotation.hotelDetails && typeof quotation.hotelDetails === 'object') {
     blocks.push(renderSection('Hotel Details', renderDataRows(Object.entries(quotation.hotelDetails).map(([key, value]) => [key, Array.isArray(value) ? normalizeArray(value).join(', ') : value]))));
   }
-  if (quotation.itineraryData?.rows && Array.isArray(quotation.itineraryData.rows) && quotation.itineraryData.rows.length) {
-    blocks.push(renderSection('Itinerary', renderList('Itinerary', quotation.itineraryData.rows.map(row => row.title || row.description || JSON.stringify(row)))));
-  }
-  if (quotation.itinerary && Array.isArray(quotation.itinerary) && quotation.itinerary.length) {
-    blocks.push(renderSection('Itinerary', renderList('Itinerary', quotation.itinerary.map(item => item.title || item.description || JSON.stringify(item)))));
+  const itinerarySection = buildItinerarySection(quotation);
+  if (itinerarySection) {
+    blocks.push(renderSection('Itinerary', itinerarySection));
   }
   if (quotation.itinerary && typeof quotation.itinerary === 'string') {
     blocks.push(renderSection('Itinerary', `<div style="color:#444;line-height:1.7;">${sanitize(quotation.itinerary)}</div>`));
@@ -417,5 +470,16 @@ btnOpenTerms.addEventListener('click', () => {
 });
 btnCancelAccept.addEventListener('click', closeAcceptModal);
 btnSubmitAccept.addEventListener('click', submitCustomerAcceptance);
+
+document.addEventListener('click', (event) => {
+  const target = event.target;
+  if (!target.matches('.toggle-section')) return;
+  const sectionId = target.dataset.target;
+  const panel = document.getElementById(sectionId);
+  if (!panel) return;
+  const isOpen = panel.classList.toggle('active');
+  target.textContent = isOpen ? 'Hide' : 'Show';
+  target.setAttribute('aria-expanded', isOpen);
+});
 
 loadQuotationFromFirebase();

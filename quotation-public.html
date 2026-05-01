@@ -25,9 +25,9 @@
   .message.error{background:#fde8e8;color:#a82222}
   .link-box{display:flex;gap:10px;align-items:center;margin-top:10px}
   .link-box input{flex:1;padding:10px 12px;border:1px solid #ccc;border-radius:8px;background:#f8f8f8;outline:none}
-  .modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.45);display:none;align-items:center;justify-content:center;z-index:1000}
+  .modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.45);display:none;align-items:center;justify-content:center;z-index:1000;padding:20px;overflow:auto}
   .modal-overlay.active{display:flex}
-  .modal{width:100%;max-width:520px;background:#fff;border-radius:14px;padding:22px;box-shadow:0 18px 40px rgba(0,0,0,0.18);}
+  .modal{width:100%;max-width:520px;background:#fff;border-radius:14px;padding:22px;box-shadow:0 18px 40px rgba(0,0,0,0.18);max-height:calc(100vh - 40px);overflow-y:auto}
   .modal h2{margin-top:0}
   .modal label{display:block;margin:12px 0 4px;font-weight:700}
   .modal input[type=text], .modal input[type=tel]{width:100%;padding:10px 12px;border:1px solid #ccc;border-radius:8px}
@@ -41,6 +41,28 @@
   .acceptance-summary ul{margin:8px 0 0 18px;padding-left:0}
   .acceptance-summary li{margin-bottom:6px}
   .acceptance-summary p{margin:8px 0}
+  .collapsible-section{border:1px solid #e5e9f2;border-radius:10px;margin-bottom:16px;background:#fff}
+  .collapsible-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid #eef2f8;cursor:pointer}
+  .collapsible-header span{font-weight:700;color:#0b76d1}
+  .toggle-section{border:none;background:transparent;color:var(--accent);font-weight:700;cursor:pointer;padding:0 8px;white-space:nowrap}
+  .collapsible-content{display:none;padding:16px;color:#444}
+  .collapsible-content.active{display:block}
+  .toggle-section[aria-expanded="true"]::after{content:" ▲"}
+  .toggle-section[aria-expanded="false"]::after{content:" ▼"}
+  .quote-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+  .button-group{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+  .link-box{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:10px}
+  .link-box input{flex:1;min-width:0;padding:10px 12px;border:1px solid #ccc;border-radius:8px;background:#f8f8f8;outline:none}
+  @media (max-width: 768px) {
+    .wrap{margin:12px auto;padding:16px;border-radius:0}
+    .quote-row{grid-template-columns:1fr}
+    .button-group{flex-direction:column}
+    button{width:100%;max-width:none}
+    .modal{max-width:100%;padding:18px}
+    .modal-footer{flex-direction:column;align-items:stretch}
+    .modal-footer button{width:100%;}
+    .collapsible-header{flex-direction:column;align-items:flex-start}
+  }
   .hide-price .price-breakdown, .hide-price .toggle-price-breakdown{display:none}
 </style>
 </head>
