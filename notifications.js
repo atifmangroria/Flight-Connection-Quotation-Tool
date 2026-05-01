@@ -156,6 +156,7 @@ async function logNotificationAction(ownerId, item, action, extra = {}) {
       details: {
         clientName: item?.clientName || null,
         contactNumber: item?.contactNumber || null,
+        shareVersion: item?.shareVersion || item?.quotation?.shareVersion || null,
         ...extra
       }
     });
@@ -201,7 +202,8 @@ async function findVoucherIdForQuotation(quotation) {
 }
 
 function getNotificationKey(item) {
-  return `${item.quotationType}:${item.quotationId}:${item.type}:${item.title}`;
+  const versionId = item.shareVersion || item.quotation?.shareVersion || 0;
+  return `${item.quotationType}:${item.quotationId}:v${versionId}:${item.type}:${item.title}`;
 }
 
 function copyTextToClipboard(text) {
@@ -333,6 +335,7 @@ function getNotificationBase(q) {
     contactNumber: q.clientData?.phone || q.clientData?.mobile || q.clientData?.contact || q.clientData?.phoneNumber || '',
     clientName: q.clientData?.name || '',
     quoteLabel: `#${q.id} (${q.type || 'quotation'})`,
+    shareVersion: q.shareVersion || 0,
     quotation: q
   };
 }
@@ -378,6 +381,22 @@ async function computeNotifications(quotations) {
           'followup'
         );
       }
+    }
+
+    if (q.customerAcceptance && !q.agentApproval?.approvedAt) {
+      pushNotification(
+        'Customer Acceptance Received',
+        `Customer has accepted quotation ${base.quoteLabel} for ${clientName}. Review the acceptance and approve the booking.`,
+        'approval'
+      );
+    }
+
+    if (q.shareLinkId && q.customerNeedsReaccept) {
+      pushNotification(
+        'Quotation Updated After Share',
+        `Quotation ${base.quoteLabel} was updated after sharing. Ask the customer to review and accept the latest quotation.`,
+        'followup'
+      );
     }
 
     if (status === 'booked' && dateFrom) {

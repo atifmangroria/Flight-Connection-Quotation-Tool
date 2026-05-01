@@ -1536,11 +1536,34 @@ function getVoucherIdForQuotation(quotation) {
   return maps[quotation.id] || '';
 }
 
+function getNotificationKey(item) {
+  return `${item.quotationType}:${item.quotationId}:${item.type}:${item.title}`;
+}
+
+async function loadDismissedNotificationKeys(ownerId) {
+  if (!ownerId || !window.firebaseDB) return new Set();
+  try {
+    const userData = await window.firebaseDB.getData('users', ownerId, { silentPermissionDenied: true });
+    const keys = Array.isArray(userData?.dismissedNotificationKeys) ? userData.dismissedNotificationKeys : [];
+    return new Set(keys);
+  } catch (err) {
+    console.warn('Unable to load dismissed notification keys:', err);
+    return new Set();
+  }
+}
+
 async function buildNotifications() {
   const ownQuotations = [...allUmrahQuotations, ...allInternationalQuotations, ...allDomesticQuotations];
   const now = new Date();
   const voucherMap = getVoucherIdMaps();
+  const dismissKeys = await loadDismissedNotificationKeys(getOwnerId(checkAgentLogin()));
   const notifications = [];
+
+  const addNotification = (item) => {
+    if (!dismissKeys.has(getNotificationKey(item))) {
+      notifications.push(item);
+    }
+  };
 
   ownQuotations.forEach(q => {
     const createdAt = parseDateValue(q.createdAt || q.updatedAt);
@@ -1564,7 +1587,7 @@ async function buildNotifications() {
     if (createdAt) {
       const hoursSinceCreate = Math.floor((now - createdAt) / (1000 * 60 * 60));
       if (hoursSinceCreate >= 24 && !['booked', 'cancelled', 'expired', 'followup'].includes(status)) {
-        notifications.push({
+        addNotification({
           ...notificationBase,
           title: 'Follow-up Reminder',
           message: `Quotation ${quoteLabel} was created ${hoursSinceCreate} hours ago and still not moved to Follow Up. Please contact the client.`,
@@ -1576,7 +1599,7 @@ async function buildNotifications() {
     if (status === 'followup' && updatedAt) {
       const hoursSinceFollowup = Math.floor((now - updatedAt) / (1000 * 60 * 60));
       if (hoursSinceFollowup >= 24) {
-        notifications.push({
+        addNotification({
           ...notificationBase,
           title: 'Follow-up Status Pending',
           message: `Quotation ${quoteLabel} has been on Follow Up for ${hoursSinceFollowup} hours. Review and update its status.`,
@@ -1588,7 +1611,7 @@ async function buildNotifications() {
     if (status === 'booked' && dateFrom) {
       const daysToTravel = getDaysBetween(now, dateFrom);
       if (daysToTravel <= 15 && daysToTravel >= 0 && !voucherId) {
-        notifications.push({
+        addNotification({
           ...notificationBase,
           title: 'Create Voucher',
           message: `Booked quotation ${quoteLabel} departs in ${daysToTravel} day${daysToTravel === 1 ? '' : 's'} and no voucher exists yet. Create the voucher before travel.`,
@@ -1596,7 +1619,7 @@ async function buildNotifications() {
         });
       }
       if (daysToTravel <= 3 && daysToTravel >= 0) {
-        notifications.push({
+        addNotification({
           ...notificationBase,
           title: 'Travel Imminent',
           message: `Quotation ${quoteLabel} has travel in ${daysToTravel} day${daysToTravel === 1 ? '' : 's'}. Make sure the voucher and service details are ready.`,
@@ -1608,7 +1631,7 @@ async function buildNotifications() {
     if (voucherId && dateFrom) {
       const hoursToTravel = Math.floor((dateFrom - now) / (1000 * 60 * 60));
       if (hoursToTravel <= 24 && hoursToTravel >= 0) {
-        notifications.push({
+        addNotification({
           ...notificationBase,
           title: 'Voucher Data Check',
           message: `Voucher for quotation ${quoteLabel} departs within 24 hours. Verify hotel, transfer, tour and driver details and update any TBA fields.`,

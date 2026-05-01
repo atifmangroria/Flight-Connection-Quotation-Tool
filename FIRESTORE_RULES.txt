@@ -148,6 +148,15 @@ service cloud.firestore {
       );
     }
 
+    // ==================== QUOTATION LINKS COLLECTION ====================
+    // Public quotation share links
+    match /quotation_links/{linkId} {
+      allow get: if true;
+      allow create: if request.auth != null && request.resource.data.ownerId == request.auth.uid;
+      allow update: if request.auth != null && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow delete: if request.auth != null && (resource.data.ownerId == request.auth.uid || isAdmin());
+    }
+
     // ==================== CUSTOMERS COLLECTION ====================
     // Customers - shared CRM records generated from quotations
     match /customers/{customerId} {

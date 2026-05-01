@@ -992,6 +992,49 @@ async function updateQuotationStatus() {
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnUpdateStatus')?.addEventListener('click', updateQuotationStatus);
 
+  document.getElementById('btnGenerateQuotationLink')?.addEventListener('click', () => {
+    if (!currentQuotationId) {
+      showAlert('Please save or load the quotation before generating the customer link.');
+      return;
+    }
+    handleGenerateQuotationLink();
+  });
+
+  document.getElementById('btnApproveCustomer')?.addEventListener('click', () => {
+    openAgentApprovalModal('approve');
+  });
+
+  document.getElementById('btnSelfBook')?.addEventListener('click', () => {
+    openAgentApprovalModal('selfbook');
+  });
+
+  document.getElementById('btnCopyShareUrl')?.addEventListener('click', () => {
+    const shareUrlInput = document.getElementById('quotationShareUrl');
+    if (shareUrlInput && shareUrlInput.value) {
+      navigator.clipboard?.writeText(shareUrlInput.value).then(() => {
+        showNotification('Share link copied to clipboard.', 'success');
+      }).catch(() => {
+        showNotification('Unable to copy link. Please copy manually.', 'warning');
+      });
+    } else {
+      showNotification('Nothing to copy yet. Generate the share link first.', 'warning');
+    }
+  });
+
+  document.getElementById('btnCancelAgentApprove')?.addEventListener('click', closeAgentApprovalModal);
+  document.getElementById('btnSubmitAgentApprove')?.addEventListener('click', () => {
+    if (!agentAcceptCheck?.checked) {
+      showAlert('Please accept the terms and conditions before confirming.');
+      return;
+    }
+    if (pendingAgentAction === 'approve') {
+      handleApproveCustomer();
+    } else if (pendingAgentAction === 'selfbook') {
+      handleSelfBook();
+    }
+    closeAgentApprovalModal();
+  });
+
   document.getElementById('btnCreateVoucher')?.addEventListener('click', () => {
     if (!currentQuotationId) {
       showAlert('No quotation selected. Please save or load a quotation first.');
@@ -1007,6 +1050,179 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 });
+
+function getQuotationPublicUrl(quotationId, shareKey) {
+  const url = new URL('quotation-public.html', window.location.href);
+  url.searchParams.set('type', 'international');
+  url.searchParams.set('id', quotationId);
+  url.searchParams.set('key', shareKey);
+  return url.href;
+}
+
+function createShareKey() {
+  return `q-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+function handleGenerateQuotationLink() {
+  let allQuotations = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
+  const quotation = allQuotations.find(q => q.id === currentQuotationId);
+  if (!quotation) {
+    showAlert('No quotation found to share.');
+    return;
+  }
+  if (quotation.shareLinkId) {
+    showNotification('Quotation already shared. Copy the existing link.');
+    return;
+  }
+  quotation.shareLinkId = createShareKey();
+  quotation.shareVersion = (quotation.shareVersion || 0) + 1;
+  quotation.shareUpdatedAt = new Date().toISOString();
+  quotation.sharePublicUrl = getQuotationPublicUrl(quotation.id, quotation.shareLinkId);
+  quotation.customerAcceptance = null;
+  quotation.agentApproval = null;
+  quotation.customerNeedsReaccept = false;
+  allQuotations = allQuotations.filter(q => q.id !== quotation.id);
+  allQuotations.push(quotation);
+  localStorage.setItem('savedQuotations_international', JSON.stringify(allQuotations));
+  savedQuotations = allQuotations;
+
+  const owner = getCurrentAgent();
+  const ownerDocId = owner?.id || owner?.uid || null;
+  if (quotation.shareLinkId && ownerDocId && window.firebaseDB) {
+    window.firebaseDB.saveData('quotation_links', quotation.shareLinkId, {
+      quotationId: quotation.id,
+      type: 'international',
+      ownerId: ownerDocId,
+      shareVersion: quotation.shareVersion,
+      shareUpdatedAt: quotation.shareUpdatedAt,
+      quotation
+    }).catch(err => console.error('Firebase share link save error:', err));
+  }
+
+  showNotification('Shareable quotation link generated. Send this to your customer.', 'success');
+  showStatusSection();
+}
+
+function handleApproveCustomer() {
+  const agent = getCurrentAgent();
+  let allQuotations = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
+  const quotation = allQuotations.find(q => q.id === currentQuotationId);
+  if (!quotation || !quotation.customerAcceptance) {
+    showAlert('No customer acceptance found.');
+    return;
+  }
+  quotation.agentApproval = {
+    approvedBy: agent?.id || agent?.uid || 'agent',
+    approvedByName: agent?.name || agent?.displayName || 'Agent',
+    termsAccepted: true,
+    approvedAt: new Date().toISOString(),
+    selfBooked: false
+  };
+  quotation.status = 'booked';
+  allQuotations = allQuotations.filter(q => q.id !== quotation.id);
+  allQuotations.push(quotation);
+  localStorage.setItem('savedQuotations_international', JSON.stringify(allQuotations));
+  savedQuotations = allQuotations;
+
+  const owner = getCurrentAgent();
+  const ownerDocId = owner?.id || owner?.uid || quotation.agentData?.id || quotation.agentData?.uid || null;
+  if (ownerDocId && window.firebaseDB) {
+    const ownerQuotations = allQuotations.filter(q => ((q?.agentData?.id || q?.agentData?.uid) === ownerDocId));
+    window.firebaseDB.saveData('international_quotations', ownerDocId, { quotations: ownerQuotations, updatedAt: new Date(), agentId: ownerDocId })
+      .catch(err => console.error('Firebase update error:', err));
+    if (quotation.shareLinkId) {
+      window.firebaseDB.saveData('quotation_links', quotation.shareLinkId, {
+        quotationId: quotation.id,
+        type: 'international',
+        ownerId: ownerDocId,
+        shareVersion: quotation.shareVersion,
+        shareUpdatedAt: quotation.shareUpdatedAt,
+        quotation
+      }).catch(err => console.error('Firebase share link update error:', err));
+    }
+  }
+
+  showNotification('Customer acceptance approved and quotation marked as booked.', 'success');
+  showStatusSection();
+}
+
+function handleSelfBook() {
+  const agent = getCurrentAgent();
+  let allQuotations = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
+  const quotation = allQuotations.find(q => q.id === currentQuotationId);
+  if (!quotation) {
+    showAlert('No quotation available.');
+    return;
+  }
+  quotation.agentApproval = {
+    approvedBy: agent?.id || agent?.uid || 'agent',
+    approvedByName: agent?.name || agent?.displayName || 'Agent',
+    termsAccepted: true,
+    approvedAt: new Date().toISOString(),
+    selfBooked: true
+  };
+  quotation.status = 'booked';
+  allQuotations = allQuotations.filter(q => q.id !== quotation.id);
+  allQuotations.push(quotation);
+  localStorage.setItem('savedQuotations_international', JSON.stringify(allQuotations));
+  savedQuotations = allQuotations;
+
+  const owner = getCurrentAgent();
+  const ownerDocId = owner?.id || owner?.uid || quotation.agentData?.id || quotation.agentData?.uid || null;
+  if (ownerDocId && window.firebaseDB) {
+    const ownerQuotations = allQuotations.filter(q => ((q?.agentData?.id || q?.agentData?.uid) === ownerDocId));
+    window.firebaseDB.saveData('international_quotations', ownerDocId, { quotations: ownerQuotations, updatedAt: new Date(), agentId: ownerDocId })
+      .catch(err => console.error('Firebase update error:', err));
+    if (quotation.shareLinkId) {
+      window.firebaseDB.saveData('quotation_links', quotation.shareLinkId, {
+        quotationId: quotation.id,
+        type: 'international',
+        ownerId: ownerDocId,
+        shareVersion: quotation.shareVersion,
+        shareUpdatedAt: quotation.shareUpdatedAt,
+        quotation
+      }).catch(err => console.error('Firebase share link update error:', err));
+    }
+  }
+
+  showNotification('Quotation accepted and booked by agent.', 'success');
+  showStatusSection();
+}
+
+let pendingAgentAction = null;
+const agentApprovalModal = document.getElementById('agentApprovalModal');
+const agentAcceptCheck = document.getElementById('agentAcceptCheck');
+const btnCancelAgentApprove = document.getElementById('btnCancelAgentApprove');
+const btnSubmitAgentApprove = document.getElementById('btnSubmitAgentApprove');
+
+function openAgentApprovalModal(action) {
+  if (!currentQuotationId) {
+    showAlert('Please save or load the quotation before confirming booking.');
+    return;
+  }
+  const allQuotations = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
+  const quotation = allQuotations.find(q => q.id === currentQuotationId);
+  const approvalSummary = document.getElementById('agentApprovalSummary');
+  const acceptedStatus = quotation?.customerAcceptance ? `Customer accepted version ${quotation.customerAcceptance.shareVersion || quotation.shareVersion || 1}` : 'Customer has not accepted yet.';
+  const needsReacceptStatus = quotation?.customerNeedsReaccept ? 'This shared quotation needs re-acceptance before approval.' : '';
+  if (approvalSummary) {
+    approvalSummary.innerHTML = `
+      <strong>Quotation Summary</strong><br>
+      ${acceptedStatus}<br>
+      ${needsReacceptStatus}
+    `;
+  }
+  const terms = quotation?.terms || quotation?.termsAndConditions || quotation?.customTerms || quotation?.termsText || 'Terms and conditions are not available for this quotation.';
+  if (agentApprovalTerms) agentApprovalTerms.value = terms;
+  pendingAgentAction = action;
+  if (agentAcceptCheck) agentAcceptCheck.checked = false;
+  if (agentApprovalModal) agentApprovalModal.style.display = 'flex';
+}
+
+function closeAgentApprovalModal() {
+  pendingAgentAction = null;
+  if (agentApprovalModal) agentApprovalModal.style.display = 'none';
+}
 
 let availablePackages = [];
 let loadPackagesPromise = null;
@@ -4008,14 +4224,42 @@ function removeAddon(id){
       <select id="quotationStatus">
         <option value="pending">Pending</option>
         <option value="followup">Follow-up Required</option>
-        <option value="booked">Booked</option>
         <option value="cancelled">Cancelled</option>
       </select>
     </div>
   </div>
   <div class="actions" style="margin-top:10px">
     <button id="btnUpdateStatus" type="button">Update Status</button>
+    <button id="btnGenerateQuotationLink" type="button" class="blue-btn">🔗 Share Quotation</button>
+    <button id="btnApproveCustomer" type="button" class="blue-btn" style="display:none;">✅ Approve Customer</button>
+    <button id="btnSelfBook" type="button" class="green-btn" style="display:none;">✅ Accept & Book</button>
     <button id="btnCreateVoucher" type="button" class="green-btn" style="display:none;">🎫 Create Voucher</button>
+  </div>
+  <div class="grid" style="margin-top:12px; gap:1rem;">
+    <div style="flex:1; min-width:220px;">
+      <label for="quotationShareUrl">Shareable Quotation Link</label>
+      <input id="quotationShareUrl" type="text" readonly style="width:100%;background:#f7f9fc;border:1px solid #d1d9e5;border-radius:8px;padding:10px;">
+    </div>
+    <div style="display:flex;align-items:flex-end;gap:10px;min-width:180px;">
+      <button id="btnCopyShareUrl" type="button" class="secondary" style="width:100%;height:42px;">📋 Copy Link</button>
+    </div>
+  </div>
+
+  <div id="agentApprovalModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);align-items:center;justify-content:center;z-index:9999;">
+    <div style="background:#fff;border-radius:14px;padding:22px;max-width:560px;width:100%;box-shadow:0 18px 40px rgba(0,0,0,0.18);">
+      <h2 style="margin-top:0;color:#0b76d1;">Agent Terms Confirmation</h2>
+      <p style="margin:0 0 16px;color:#333;">Please review and accept the terms before completing this action.</p>
+      <div id="agentApprovalSummary" style="margin-bottom:14px;padding:12px;border:1px solid #d9e6f3;border-radius:10px;background:#f7fbff;color:#111;font-size:14px;line-height:1.5;"></div>
+      <textarea id="agentApprovalTerms" readonly style="width:100%;min-height:180px;padding:12px;border:1px solid #ccc;border-radius:10px;background:#f8f9fb;margin-bottom:14px;">By clicking Confirm and Book, you acknowledge that you have reviewed the quotation details, passenger information, and pricing, and that you accept responsibility for finalizing this booking as the agent.</textarea>
+      <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:18px;">
+        <input id="agentAcceptCheck" type="checkbox" style="width:18px;height:18px;margin-top:4px;" />
+        <label for="agentAcceptCheck" style="font-size:14px;color:#333;line-height:1.4;">I have read and accept the terms and conditions.</label>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;">
+        <button id="btnCancelAgentApprove" type="button" style="border:1px solid #c8d4e3;background:#f3f6fb;color:#111;border-radius:8px;padding:10px 16px;">Cancel</button>
+        <button id="btnSubmitAgentApprove" type="button" style="background:#0b76d1;color:#fff;border:none;border-radius:8px;padding:10px 16px;">Confirm and Book</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -5200,14 +5444,27 @@ updateServiceChargeVisibility();
 // Function to update quotation status
 function updateQuotationStatus(quotationId, newStatus) {
   try {
+    if (newStatus === 'booked') {
+      showAlert('Use the Accept & Book button instead of directly setting Booked status.');
+      openAgentApprovalModal('selfbook');
+      return false;
+    }
     // Get all quotations
     let savedQuotations = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
     
     // Find and update the quotation
     const quotationIndex = savedQuotations.findIndex(q => q.id === quotationId);
     if (quotationIndex !== -1) {
-      savedQuotations[quotationIndex].status = newStatus;
-      savedQuotations[quotationIndex].updatedAt = new Date().toISOString();
+      const quotation = savedQuotations[quotationIndex];
+      quotation.status = newStatus;
+      quotation.updatedAt = new Date().toISOString();
+      
+      if (newStatus !== 'booked') {
+        if (quotation.customerAcceptance || quotation.agentApproval || quotation.shareLinkId) {
+          quotation.customerNeedsReaccept = true;
+          quotation.agentApproval = null;
+        }
+      }
       
       // Save back to localStorage and Firebase
       localStorage.setItem('savedQuotations_international', JSON.stringify(savedQuotations));
@@ -5225,7 +5482,7 @@ function updateQuotationStatus(quotationId, newStatus) {
       // Trigger dashboard refresh
       sessionStorage.setItem('refreshDashboard_international', 'true');
       
-      showNotification(`Quotation status updated to: ${newStatus}`, "success");
+      showNotification(`Quotation status updated to: ${newStatus}. This quotation now requires customer re-acceptance before booking.`, "success");
       
       // Add this to ensure status section is visible after update
       showStatusSection();
@@ -5248,6 +5505,11 @@ function showStatusSection() {
   // Get all quotations from localStorage
   const allSavedQuotations = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
   
+  const btnGenerateQuotationLink = document.getElementById('btnGenerateQuotationLink');
+  const btnApproveCustomer = document.getElementById('btnApproveCustomer');
+  const btnSelfBook = document.getElementById('btnSelfBook');
+  const shareUrlInput = document.getElementById('quotationShareUrl');
+
   if (currentQuotationId) {
     statusSection.style.display = 'block';
     
@@ -5258,8 +5520,36 @@ function showStatusSection() {
     } else {
       quotationStatus.value = 'pending';
     }
+    if (btnGenerateQuotationLink) {
+      btnGenerateQuotationLink.style.display = 'inline-block';
+      btnGenerateQuotationLink.disabled = !!quotation?.shareLinkId;
+    }
+    const btnCopyShareUrl = document.getElementById('btnCopyShareUrl');
+    if (btnCopyShareUrl) {
+      btnCopyShareUrl.disabled = !quotation?.shareLinkId;
+    }
+    const needsReaccept = quotation?.customerNeedsReaccept;
+    const customerAccepted = !!quotation?.customerAcceptance;
+    const agentApproved = !!quotation?.agentApproval;
+    if (btnApproveCustomer) {
+      const canApprove = quotation && customerAccepted && !agentApproved && quotation.status !== 'booked' && !needsReaccept;
+      btnApproveCustomer.style.display = canApprove ? 'inline-block' : 'none';
+      btnApproveCustomer.disabled = !canApprove;
+    }
+    if (btnSelfBook) {
+      const canSelfBook = quotation && quotation.status !== 'booked' && !needsReaccept;
+      btnSelfBook.style.display = quotation ? 'inline-block' : 'none';
+      btnSelfBook.disabled = !canSelfBook;
+    }
+    if (shareUrlInput && quotation) {
+      shareUrlInput.value = quotation.sharePublicUrl || (quotation.shareLinkId ? getQuotationPublicUrl(quotation.id, quotation.shareLinkId) : '');
+    }
   } else {
       statusSection.style.display = 'none';
+      if (btnGenerateQuotationLink) btnGenerateQuotationLink.style.display = 'none';
+      if (btnApproveCustomer) btnApproveCustomer.style.display = 'none';
+      if (btnSelfBook) btnSelfBook.style.display = 'none';
+      if (shareUrlInput) shareUrlInput.value = '';
     }
   }
 
@@ -7162,15 +7452,49 @@ const customSectionsData = {
     // Always upsert by id to avoid stale records after remove/edit actions.
     const targetQuotationId = currentQuotationId || quotationData.id;
     quotationData.id = targetQuotationId;
+    if (existingQuotation?.shareLinkId) {
+      const oldLinkId = existingQuotation.shareLinkId;
+      quotationData.shareLinkId = null;
+      quotationData.sharePublicUrl = '';
+      quotationData.shareVersion = existingQuotation.shareVersion || 0;
+      quotationData.shareUpdatedAt = '';
+      quotationData.customerAcceptance = null;
+      quotationData.agentApproval = null;
+      if (window.firebaseDB) {
+        window.firebaseDB.saveData('quotation_links', oldLinkId, {
+          invalidated: true,
+          invalidatedAt: new Date().toISOString()
+        }).catch(err => console.error('Firebase invalidate share link error:', err));
+      }
+    } else if (quotationData.shareLinkId) {
+      quotationData.shareVersion = (quotationData.shareVersion || 0) + 1;
+      quotationData.shareUpdatedAt = new Date().toISOString();
+      quotationData.sharePublicUrl = getQuotationPublicUrl(targetQuotationId, quotationData.shareLinkId);
+      quotationData.customerAcceptance = null;
+      quotationData.agentApproval = null;
+      quotationData.customerNeedsReaccept = true;
+    }
     allQuotations = allQuotations.filter(q => q.id !== targetQuotationId);
     allQuotations.push(quotationData);
     currentQuotationId = targetQuotationId;
     
+    const ownerDocId = ownerAgentData?.id || ownerAgentData?.uid || agent?.id;
+
     // Save to localStorage
     localStorage.setItem('savedQuotations_international', JSON.stringify(allQuotations));
+
+    if (quotationData.shareLinkId && ownerDocId && window.firebaseDB) {
+      window.firebaseDB.saveData('quotation_links', quotationData.shareLinkId, {
+        quotationId: quotationData.id,
+        type: 'international',
+        ownerId: ownerDocId,
+        shareVersion: quotationData.shareVersion,
+        shareUpdatedAt: quotationData.shareUpdatedAt,
+        quotation: quotationData
+      }).catch(err => console.error('Firebase share link update error:', err));
+    }
     
     // Save to Firebase
-    const ownerDocId = ownerAgentData?.id || ownerAgentData?.uid || agent?.id;
     if (ownerDocId) {
       const ownerQuotations = allQuotations.filter(q => ((q?.agentData?.id || q?.agentData?.uid) === ownerDocId));
       window.firebaseDB.saveData('international_quotations', ownerDocId, { 
