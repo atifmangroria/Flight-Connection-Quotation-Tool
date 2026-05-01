@@ -352,6 +352,69 @@ function sanitize(value) {
   return String(value).replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+function getPublicDaywiseItineraryRows(quotation) {
+  const rawRows = Array.isArray(quotation.itineraryData?.rows)
+    ? quotation.itineraryData.rows
+    : Array.isArray(quotation.itinerary)
+      ? quotation.itinerary
+      : [];
+
+  return rawRows.map((item, index) => {
+    if (typeof item === 'string') {
+      return {
+        day: index + 1,
+        date: '',
+        activity: item,
+        meals: 'No Meals'
+      };
+    }
+    if (item && typeof item === 'object') {
+      return {
+        day: item.day || item.dayNumber || item.dayNo || item.dayLabel || index + 1,
+        date: item.date || item.dayDate || item.travelDate || '',
+        activity: item.activity || item.title || item.name || item.description || '',
+        meals: item.meals || item.mealsIncluded || item.meal || 'No Meals'
+      };
+    }
+    return {
+      day: index + 1,
+      date: '',
+      activity: String(item),
+      meals: 'No Meals'
+    };
+  }).filter(row => row.activity || row.date);
+}
+
+function buildPublicDaywiseItinerarySection(quotation) {
+  const rows = getPublicDaywiseItineraryRows(quotation);
+  if (!rows.length) return '';
+
+  const tableHtml = (window.ItineraryComponent && typeof window.ItineraryComponent.renderItineraryTable === 'function')
+    ? window.ItineraryComponent.renderItineraryTable(rows, { editable: false })
+    : `<div style="color:#444;line-height:1.7;">Day wise itinerary details are available.</div>`;
+
+  return `
+    <div id="publicDaywiseSection" style="margin-top:20px;border:1px solid #eee;padding:18px;border-radius:10px;background:#fff;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+        <h2 style="margin:0 0 12px;color:#0b76d1;font-size:18px;">Day Wise Itinerary</h2>
+        <button id="publicToggleDaywiseBtn" type="button" class="secondary" style="padding:8px 12px;font-size:13px;">Show Day Wise Table</button>
+      </div>
+      <div id="publicDaywiseTableContainer" style="display:none;margin-top:14px;">${tableHtml}</div>
+    </div>`;
+}
+
+function attachPublicDaywiseToggle() {
+  const toggleBtn = document.getElementById('publicToggleDaywiseBtn');
+  if (!toggleBtn) return;
+  toggleBtn.addEventListener('click', () => {
+    const container = document.getElementById('publicDaywiseTableContainer');
+    if (!container) return;
+    const isHidden = container.style.display === 'none';
+    container.style.display = isHidden ? 'block' : 'none';
+    toggleBtn.textContent = isHidden ? 'Hide Day Wise Table' : 'Show Day Wise Table';
+  });
+}
+
 function renderQuotation() {
   if (!quotationDoc) return;
   const q = quotationDoc;
@@ -366,19 +429,12 @@ function renderQuotation() {
   const sharedSnapshot = typeof q.publicQuotationHtml === 'string' ? q.publicQuotationHtml.trim() : '';
   quotationContent.innerHTML = sharedSnapshot || buildQuotation();
 
-  const toggleItineraryBtn = document.getElementById('toggleDaywiseItineraryBtn') || document.getElementById('toggleItineraryBtn');
-  if (toggleItineraryBtn) {
-    toggleItineraryBtn.addEventListener('click', () => {
-      const container = document.getElementById('daywiseItineraryTableContainer') || document.getElementById('itineraryTableContainer');
-      if (!container) return;
-      const isHidden = container.style.display === 'none';
-      container.style.display = isHidden ? 'block' : 'none';
-      if (toggleItineraryBtn.id === 'toggleDaywiseItineraryBtn') {
-        toggleItineraryBtn.textContent = isHidden ? 'Hide Day Wise Table' : 'Show Day Wise Table';
-      } else {
-        toggleItineraryBtn.textContent = isHidden ? 'Hide Itinerary' : 'Show Itinerary';
-      }
-    });
+  const existingPublicSection = document.getElementById('publicDaywiseSection');
+  if (existingPublicSection) existingPublicSection.remove();
+  const daywiseHtml = buildPublicDaywiseItinerarySection(q);
+  if (daywiseHtml) {
+    quotationContent.insertAdjacentHTML('afterend', daywiseHtml);
+    attachPublicDaywiseToggle();
   }
 
   if (isBooked) {
