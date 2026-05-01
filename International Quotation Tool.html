@@ -950,11 +950,9 @@ function syncCreateVoucherButton(statusValue) {
 function showStatusSection() {
   const statusSection = document.getElementById('statusSection');
   const quotationStatus = document.getElementById('quotationStatus');
-  const btnGenerateQuotationLink = document.getElementById('btnGenerateQuotationLink');
   const btnApproveCustomer = document.getElementById('btnApproveCustomer');
   const btnSelfBook = document.getElementById('btnSelfBook');
   const btnCreateVoucher = ensureCreateVoucherButton();
-  const shareUrlInput = document.getElementById('quotationShareUrl');
 
   // Get all quotations from localStorage
   const allSavedQuotations = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
@@ -964,45 +962,80 @@ function showStatusSection() {
 
     // Get current status
     const quotation = allSavedQuotations.find(q => q.id === currentQuotationId);
+    const currentStatus = normalizeQuotationStatus(quotation?.status);
     if (quotation && quotation.status) {
-      quotationStatus.value = quotation.status;
+      if (currentStatus === 'booked') {
+        quotationStatus.style.display = 'none';
+        const statusLabel = document.getElementById('quotationStatusLabel');
+        if (statusLabel) {
+          statusLabel.style.display = 'block';
+          statusLabel.textContent = 'Status: Booked';
+        }
+      } else {
+        quotationStatus.style.display = 'block';
+        quotationStatus.value = currentStatus || 'pending';
+        const statusLabel = document.getElementById('quotationStatusLabel');
+        if (statusLabel) {
+          statusLabel.style.display = 'none';
+          statusLabel.textContent = '';
+        }
+      }
     } else {
+      quotationStatus.style.display = 'block';
       quotationStatus.value = 'pending';
-    }
-    if (btnGenerateQuotationLink) {
-      btnGenerateQuotationLink.style.display = 'inline-block';
-      btnGenerateQuotationLink.disabled = !!quotation?.shareLinkId;
+      const statusLabel = document.getElementById('quotationStatusLabel');
+      if (statusLabel) {
+        statusLabel.style.display = 'none';
+        statusLabel.textContent = '';
+      }
     }
     if (btnCreateVoucher) {
-      syncCreateVoucherButton(quotationStatus.value);
-    }
-    const btnCopyShareUrl = document.getElementById('btnCopyShareUrl');
-    if (btnCopyShareUrl) {
-      btnCopyShareUrl.disabled = !quotation?.shareLinkId;
+      syncCreateVoucherButton(currentStatus || 'pending');
     }
     const needsReaccept = quotation?.customerNeedsReaccept;
     const customerAccepted = !!quotation?.customerAcceptance;
     const agentApproved = !!quotation?.agentApproval;
     if (btnApproveCustomer) {
-      const canApprove = quotation && customerAccepted && !agentApproved && quotation.status !== 'booked' && !needsReaccept;
+      const canApprove = quotation && customerAccepted && !agentApproved && currentStatus !== 'booked' && !needsReaccept;
       btnApproveCustomer.style.display = canApprove ? 'inline-block' : 'none';
       btnApproveCustomer.disabled = !canApprove;
     }
     if (btnSelfBook) {
-      const canSelfBook = quotation && quotation.status !== 'booked' && !customerAccepted && !agentApproved;
+      const canSelfBook = quotation && currentStatus !== 'booked' && !customerAccepted && !agentApproved;
       btnSelfBook.style.display = canSelfBook ? 'inline-block' : 'none';
       btnSelfBook.disabled = !canSelfBook;
     }
-    if (shareUrlInput && quotation) {
-      shareUrlInput.value = quotation.sharePublicUrl || (quotation.shareLinkId ? getQuotationPublicUrl(quotation.id, quotation.shareLinkId) : '');
+    const btnUpdateStatus = document.getElementById('btnUpdateStatus');
+    const btnReopenPending = document.getElementById('btnReopenPending');
+    if (quotation && currentStatus === 'booked') {
+      if (btnUpdateStatus) {
+        btnUpdateStatus.style.display = 'none';
+        btnUpdateStatus.disabled = true;
+      }
+      if (btnReopenPending) {
+        btnReopenPending.style.display = 'inline-block';
+        btnReopenPending.disabled = false;
+      }
+    } else {
+      if (btnUpdateStatus) {
+        btnUpdateStatus.style.display = 'inline-block';
+        btnUpdateStatus.disabled = false;
+      }
+      if (btnReopenPending) {
+        btnReopenPending.style.display = 'none';
+        btnReopenPending.disabled = true;
+      }
     }
   } else {
     statusSection.style.display = 'none';
-    if (btnGenerateQuotationLink) btnGenerateQuotationLink.style.display = 'none';
     if (btnApproveCustomer) btnApproveCustomer.style.display = 'none';
     if (btnSelfBook) btnSelfBook.style.display = 'none';
     if (btnCreateVoucher) btnCreateVoucher.style.display = 'none';
-    if (shareUrlInput) shareUrlInput.value = '';
+    const btnReopenPending = document.getElementById('btnReopenPending');
+    if (btnReopenPending) {
+      btnReopenPending.style.display = 'none';
+      btnReopenPending.disabled = true;
+    }
   }
 }
 
@@ -1021,6 +1054,13 @@ async function updateQuotationStatus() {
     return;
   }
   allQuotations[idx].status = newStatus;
+  if (newStatus !== 'booked') {
+    allQuotations[idx].customerNeedsReaccept = true;
+    allQuotations[idx].agentApproval = null;
+    allQuotations[idx].customerAcceptance = null;
+    allQuotations[idx].shareLinkId = null;
+    allQuotations[idx].sharePublicUrl = '';
+  }
   localStorage.setItem('savedQuotations_international', JSON.stringify(allQuotations));
 
   const agent = getCurrentAgent();
@@ -1039,14 +1079,12 @@ async function updateQuotationStatus() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('btnUpdateStatus')?.addEventListener('click', updateQuotationStatus);
-
-  document.getElementById('btnGenerateQuotationLink')?.addEventListener('click', () => {
+  document.getElementById('btnReopenPending')?.addEventListener('click', () => {
     if (!currentQuotationId) {
-      showAlert('Please save or load the quotation before generating the customer link.');
+      showAlert("No quotation selected. Please save or load a quotation first.");
       return;
     }
-    handleGenerateQuotationLink();
+    updateQuotationStatus(currentQuotationId, 'pending');
   });
 
   document.getElementById('btnApproveCustomer')?.addEventListener('click', () => {
@@ -1055,19 +1093,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('btnSelfBook')?.addEventListener('click', () => {
     openAgentApprovalModal('selfbook');
-  });
-
-  document.getElementById('btnCopyShareUrl')?.addEventListener('click', () => {
-    const shareUrlInput = document.getElementById('quotationShareUrl');
-    if (shareUrlInput && shareUrlInput.value) {
-      navigator.clipboard?.writeText(shareUrlInput.value).then(() => {
-        showNotification('Share link copied to clipboard.', 'success');
-      }).catch(() => {
-        showNotification('Unable to copy link. Please copy manually.', 'warning');
-      });
-    } else {
-      showNotification('Nothing to copy yet. Generate the share link first.', 'warning');
-    }
   });
 
   document.getElementById('btnCancelAgentApprove')?.addEventListener('click', closeAgentApprovalModal);
@@ -1110,24 +1135,54 @@ function createShareKey() {
   return `q-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
-function handleGenerateQuotationLink() {
+function getPublicQuotationPreviewHtml() {
+  const modalContent = document.getElementById('quotationModalContent');
+  const compactQuotation = modalContent?.querySelector('.compact-quotation');
+  if (!compactQuotation) return '';
+
+  const previewClone = compactQuotation.cloneNode(true);
+  previewClone.querySelectorAll('button, script').forEach(el => el.remove());
+  previewClone.querySelectorAll('.it-edit-icon').forEach(el => el.remove());
+
+  const priceBreakdownSection = previewClone.querySelector('#calculationSummarySection');
+  if (priceBreakdownSection && priceBreakdownSection.style.display === 'none') {
+    priceBreakdownSection.remove();
+  }
+
+  const itineraryWrapper = previewClone.querySelector('#itinerarySectionWrapper');
+  const itineraryContainer = previewClone.querySelector('#itineraryTableContainer');
+  if (itineraryWrapper && (itineraryWrapper.classList.contains('itinerary-hidden') || (itineraryContainer && itineraryContainer.style.display === 'none'))) {
+    itineraryWrapper.remove();
+  }
+
+  return previewClone.outerHTML;
+}
+
+function handleGenerateQuotationLink(options = {}) {
   let allQuotations = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
   const quotation = allQuotations.find(q => q.id === currentQuotationId);
   if (!quotation) {
     showAlert('No quotation found to share.');
     return;
   }
-  if (quotation.shareLinkId) {
-    showNotification('Quotation already shared. Copy the existing link.');
+
+  const previewHtml = getPublicQuotationPreviewHtml();
+  if ((options.requirePreview ?? true) && !previewHtml) {
+    showNotification('Open quotation preview and try again to generate link.', 'warning');
     return;
   }
+
+  if (quotation.shareLinkId) {
+    showNotification('Quotation already shared. Copy the existing link.');
+    if (typeof options.onComplete === 'function') options.onComplete();
+    return;
+  }
+  quotation.publicQuotationHtml = previewHtml || quotation.publicQuotationHtml || '';
+  quotation.publicQuotationSnapshotAt = new Date().toISOString();
   quotation.shareLinkId = createShareKey();
   quotation.shareVersion = (quotation.shareVersion || 0) + 1;
   quotation.shareUpdatedAt = new Date().toISOString();
   quotation.sharePublicUrl = getQuotationPublicUrl(quotation.id, quotation.shareLinkId);
-  quotation.customerAcceptance = null;
-  quotation.agentApproval = null;
-  quotation.customerNeedsReaccept = false;
   allQuotations = allQuotations.filter(q => q.id !== quotation.id);
   allQuotations.push(quotation);
   localStorage.setItem('savedQuotations_international', JSON.stringify(allQuotations));
@@ -1148,6 +1203,7 @@ function handleGenerateQuotationLink() {
 
   showNotification('Shareable quotation link generated. Send this to your customer.', 'success');
   showStatusSection();
+  if (typeof options.onComplete === 'function') options.onComplete();
 }
 
 function handleApproveCustomer() {
@@ -4276,23 +4332,15 @@ function removeAddon(id){
         <option value="followup">Follow-up Required</option>
         <option value="cancelled">Cancelled</option>
       </select>
+      <div id="quotationStatusLabel" style="display:none;margin-top:10px;font-weight:700;color:#0b76d1;"></div>
     </div>
   </div>
   <div class="actions" style="margin-top:10px">
     <button id="btnUpdateStatus" type="button">Update Status</button>
-    <button id="btnGenerateQuotationLink" type="button" class="blue-btn">🔗 Share Quotation</button>
+    <button id="btnReopenPending" type="button" class="blue-btn" style="display:none;">↩ Reopen as Pending</button>
     <button id="btnApproveCustomer" type="button" class="blue-btn" style="display:none;">✅ Approve Customer</button>
     <button id="btnSelfBook" type="button" class="green-btn" style="display:none;">✅ Accept & Book</button>
     <button id="btnCreateVoucher" type="button" class="green-btn" style="display:none;">🎫 Create Voucher</button>
-  </div>
-  <div class="grid" style="margin-top:12px; gap:1rem;">
-    <div style="flex:1; min-width:220px;">
-      <label for="quotationShareUrl">Shareable Quotation Link</label>
-      <input id="quotationShareUrl" type="text" readonly style="width:100%;background:#f7f9fc;border:1px solid #d1d9e5;border-radius:8px;padding:10px;">
-    </div>
-    <div style="display:flex;align-items:flex-end;gap:10px;min-width:180px;">
-      <button id="btnCopyShareUrl" type="button" class="secondary" style="width:100%;height:42px;">📋 Copy Link</button>
-    </div>
   </div>
 
   <div id="agentApprovalModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);align-items:center;justify-content:center;z-index:9999;">
@@ -5513,6 +5561,9 @@ function updateQuotationStatus(quotationId, newStatus) {
         if (quotation.customerAcceptance || quotation.agentApproval || quotation.shareLinkId) {
           quotation.customerNeedsReaccept = true;
           quotation.agentApproval = null;
+          quotation.customerAcceptance = null;
+          quotation.shareLinkId = null;
+          quotation.sharePublicUrl = '';
         }
       }
       
@@ -6691,6 +6742,9 @@ quotationHTML += `
 modalButtons.innerHTML = `
   <button id="printQuotationBtn" class="green-btn" style="margin-right: 10px;">🖨️ Print Quotation</button>
   <button id="shareWhatsAppBtn" class="whatsapp-btn">📱 Share on WhatsApp</button>
+  <button id="btnGenerateShareFromPreview" class="blue-btn">🔗 Generate Customer Link</button>
+  <button id="btnCopyShareFromPreview" class="ghost">📋 Copy Link</button>
+  <input id="previewShareUrl" type="text" readonly style="min-width:280px;flex:1;background:#f7f9fc;border:1px solid #d1d9e5;border-radius:8px;padding:10px;" placeholder="Share link will appear here">
   <button id="closeQuotationBtn" class="ghost">Close</button>
 `;
 
@@ -6782,6 +6836,43 @@ setTimeout(() => {
   document.getElementById('shareWhatsAppBtn').onclick = function() {
     shareOnWhatsApp();
   };
+
+  const btnGenerateShareFromPreview = document.getElementById('btnGenerateShareFromPreview');
+  const btnCopyShareFromPreview = document.getElementById('btnCopyShareFromPreview');
+  const previewShareUrl = document.getElementById('previewShareUrl');
+  const syncPreviewShareControls = () => {
+    const allQuotations = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
+    const quotation = allQuotations.find(q => q.id === currentQuotationId);
+    const shareUrl = quotation?.sharePublicUrl || (quotation?.shareLinkId ? getQuotationPublicUrl(quotation.id, quotation.shareLinkId) : '');
+    if (previewShareUrl) previewShareUrl.value = shareUrl || '';
+    if (btnGenerateShareFromPreview) btnGenerateShareFromPreview.disabled = !!quotation?.shareLinkId;
+    if (btnCopyShareFromPreview) btnCopyShareFromPreview.disabled = !shareUrl;
+  };
+
+  if (btnGenerateShareFromPreview) {
+    btnGenerateShareFromPreview.onclick = () => {
+      handleGenerateQuotationLink({
+        requirePreview: true,
+        onComplete: syncPreviewShareControls
+      });
+    };
+  }
+
+  if (btnCopyShareFromPreview) {
+    btnCopyShareFromPreview.onclick = () => {
+      if (previewShareUrl && previewShareUrl.value) {
+        navigator.clipboard?.writeText(previewShareUrl.value).then(() => {
+          showNotification('Share link copied to clipboard.', 'success');
+        }).catch(() => {
+          showNotification('Unable to copy link. Please copy manually.', 'warning');
+        });
+      } else {
+        showNotification('Nothing to copy yet. Generate the share link first.', 'warning');
+      }
+    };
+  }
+
+  syncPreviewShareControls();
 
   // Close button
   document.getElementById('closeQuotationBtn').onclick = function() {
@@ -7446,6 +7537,14 @@ const customSectionsData = {
     // Always upsert by id to avoid stale records after remove/edit actions.
     const targetQuotationId = currentQuotationId || quotationData.id;
     quotationData.id = targetQuotationId;
+    if (existingQuotation?.status === 'booked') {
+      quotationData.status = 'pending';
+      quotationData.customerNeedsReaccept = true;
+      quotationData.customerAcceptance = null;
+      quotationData.agentApproval = null;
+      quotationData.shareLinkId = null;
+      quotationData.sharePublicUrl = '';
+    }
     if (existingQuotation?.shareLinkId) {
       const oldLinkId = existingQuotation.shareLinkId;
       quotationData.shareLinkId = null;

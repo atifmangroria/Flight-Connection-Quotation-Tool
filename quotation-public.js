@@ -33,6 +33,23 @@ const quotationKey = params.get('key');
 let quotationDoc = null;
 let quotationCollection = null;
 
+const publicAcceptanceReminder = `By accepting this quotation, I confirm that I have:
+
+- Read and understood the quotation details
+- Checked all inclusions and exclusions
+- Verified the total amount
+- Confirmed travel dates and all provided information
+- Confirmed the number of passengers
+
+Important:
+Accepting this quotation does not mean booking is confirmed with Flight Connection Travel & Tours. Our agent will check availability and contact you.
+
+Booking will only be confirmed after:
+- Availability is verified
+- Full payment is received
+
+This action will be treated as my consent and agreement with Flight Connection Travel & Tours.`;
+
 const collectionMap = {
   umrah: 'umrah_quotations',
   domestic: 'domestic_quotations',
@@ -200,12 +217,6 @@ function buildQuotation() {
     } else {
       breakdownSection = renderSection('Price Breakdown', `<div style="color:#444;line-height:1.6;">${sanitize(String(breakdownItems))}</div>`);
     }
-  } else if (priceBreakdownHidden) {
-    breakdownSection = `
-      <div style="margin-bottom:20px;border:1px solid #eee;padding:18px;border-radius:10px;">
-        <h2 style="margin:0 0 12px;color:#0b76d1;font-size:18px;">Price Breakdown</h2>
-        <div style="color:#555;">Price breakdown is hidden by the agent.</div>
-      </div>`;
   }
 
   const packageSection = (q.packageSelection || q.package || q.packageName) ? renderSection('Package Details', renderDataRows([
@@ -258,9 +269,10 @@ function renderQuotation() {
   btnOpenTerms.style.display = q.terms ? 'inline-flex' : 'none';
 
   const termsText = q.terms || q.termsAndConditions || q.customTerms || q.termsText || 'Terms and conditions are not available for this quotation.';
-  customerTermsEl.value = termsText;
+  customerTermsEl.value = [termsText.trim(), publicAcceptanceReminder].filter(Boolean).join('\n\n');
 
-  quotationContent.innerHTML = buildQuotation();
+  const sharedSnapshot = typeof q.publicQuotationHtml === 'string' ? q.publicQuotationHtml.trim() : '';
+  quotationContent.innerHTML = sharedSnapshot || buildQuotation();
 
   if (isBooked) {
     setMessage('This quotation is already booked and cannot be accepted again.', 'success');
