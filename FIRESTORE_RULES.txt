@@ -29,6 +29,23 @@ service cloud.firestore {
       
       // Admins can delete user documents when removing agents/users
       allow delete: if isAdmin();
+      
+      match /notificationLogs/{logId} {
+        allow create: if request.auth.uid == userId;
+        allow read: if request.auth.uid == userId || isAdmin();
+      }
+      
+      match /data/{dataId} {
+        allow read, create, update, delete: if request.auth.uid == userId || isAdmin();
+      }
+    }
+    
+    match /roles/{roleId} {
+      // Only admin users can manage role definitions
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
     
     // ==================== AGENTS COLLECTION ====================
@@ -47,6 +64,10 @@ service cloud.firestore {
       
       // Users can delete agents they own
       allow delete: if request.auth.uid == resource.data.ownerId;
+      
+      match /data/{dataId} {
+        allow read, create, update, delete: if request.auth.uid == agentId || isAdmin();
+      }
     }
     
     // ==================== UMRAH QUOTATIONS ====================

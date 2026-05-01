@@ -107,12 +107,12 @@
     return 'No Meals';
   }
 
-  function getHotelMealLabel(hotel, isArrivalDay, isDepartureDay) {
+  function getHotelMealLabel(hotel, isCheckInDay, isDepartureDay) {
     if (!hotel) return 'No Meals';
     var baseMeal = getHotelMeal(hotel);
-    if (isArrivalDay) {
-      if (baseMeal === 'Full Board') return 'Dinner';
-      if (baseMeal === 'Half Board') return 'Lunch';
+    if (isCheckInDay) {
+      if (baseMeal === 'Full Board') return 'Lunch and Dinner';
+      if (baseMeal === 'Half Board') return 'Dinner';
       return 'No Meals';
     }
     if (isDepartureDay) {
@@ -233,6 +233,33 @@
     return line;
   }
 
+  function getHotelDepartureTransferLine(transfer, isoDate, fromCity, currentHotelName) {
+    if (!transfer) return '';
+    var tDate = toIsoDate(transfer.date);
+    var rDate = toIsoDate(transfer.returnDate);
+    var vehicle = normalizeText(transfer.vehicle || transfer.type);
+    var fromValue = getTransferMatchValue(transfer, 'from');
+    var toValue = getTransferMatchValue(transfer, 'to');
+
+    // If this transfer is a return leg on the hotel-change date, keep the hotel->airport direction.
+    if (isReturnTransfer(transfer)) {
+      if (tDate === isoDate && matchesLocationValue(fromValue, fromCity, currentHotelName) && isAirportLocation(toValue)) {
+        var route = [normalizeText(transfer.from), normalizeText(transfer.to)].filter(Boolean).join(' to ');
+        var line = 'Return Transfer: ' + (route || '');
+        if (vehicle) line += ' by ' + vehicle;
+        return line;
+      }
+      if (rDate === isoDate && tDate !== isoDate && matchesLocationValue(toValue, fromCity, currentHotelName) && isAirportLocation(fromValue)) {
+        var revRoute = [normalizeText(transfer.to), normalizeText(transfer.from)].filter(Boolean).join(' to ');
+        var line = 'Return Transfer: ' + (revRoute || '');
+        if (vehicle) line += ' by ' + vehicle;
+        return line;
+      }
+    }
+
+    return getTransferLine(transfer);
+  }
+
   function ensureDay(dayMap, isoDate) {
     if (!dayMap[isoDate]) {
       dayMap[isoDate] = { date: isoDate, activities: [], meals: new Set() };
@@ -282,8 +309,8 @@
       else others.push(act);
     });
 
-    if (hasCheckOut && hasCheckIn && hasTour && hasReturnTransfer) {
-      return checkOut.concat(tours, returnTransfers, checkIn, transfers, flights, others);
+    if (hasCheckOut && hasCheckIn && hasReturnTransfer) {
+      return checkOut.concat(tours, returnTransfers, transfers, flights, checkIn, others);
     }
 
     if (hasCheckIn && hasTour && hasTransfer && !hasCheckOut) {
@@ -446,18 +473,9 @@
                    (toIsoDate(t.returnDate) === changeDate && matchesLocationValue(fromValue, fromCity, normalizeText(currentHotel.name)));
           });
           if (preFlightTransfer) {
-            addActivity(dayMap, changeDate, getTransferLine(preFlightTransfer));
+            addActivity(dayMap, changeDate, getHotelDepartureTransferLine(preFlightTransfer, changeDate, fromCity, normalizeText(currentHotel.name)));
           } else {
-            addActivity(dayMap, changeDate, 'Transfer: ' + (normalizeText(currentHotel.name) || 'Hotel') + ' to ' + toCity + ' Airport by Sedan');
-          }
-
-          if (detail) {
-            var flightDetail = parseFlightInfo(detail);
-            var flightLine = 'Flight: ' + fromCity + ' to ' + toCity;
-            if (flightDetail) flightLine += ' - ' + flightDetail;
-            addActivity(dayMap, changeDate, flightLine);
-          } else {
-            addActivity(dayMap, changeDate, 'Flight: ' + fromCity + ' to ' + toCity);
+            addActivity(dayMap, changeDate, 'Transfer: ' + (normalizeText(currentHotel.name) || 'Hotel') + ' to ' + fromCity + ' Airport by Sedan');
           }
 
           var postFlightTransfer = findTransferByDate(transfers, changeDate, function (t) {
@@ -516,7 +534,8 @@
         }
       }
       var hotelOnDate = findHotelForMealDate(validHotels, date);
-      var mealLabel = getHotelMealLabel(hotelOnDate, date === tripStart, date === tripEnd);
+      var isCheckInDay = day.activities.some(function (act) { return /^check-in/i.test(act); });
+      var mealLabel = getHotelMealLabel(hotelOnDate, isCheckInDay, date === tripEnd);
       day.meals.add(mealLabel);
       if (!day.meals.size) day.meals.add('No Meals');
     });

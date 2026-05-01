@@ -183,11 +183,13 @@
   .notification-dropdown .notification-header{margin-bottom:12px}
   .notification-dropdown .notification-list{max-height:320px;overflow-y:auto}
   .notification-dropdown .notification-item{cursor:pointer}
-  .btn-notification{position:relative;border:1px solid #ddd;background:#fff;color:#111;border-radius:6px;padding:10px;cursor:pointer;font-size:18px;display:inline-flex;align-items:center;justify-content:center;min-width:50px;min-height:50px}
-  .btn-notification:hover{background:#f3f6fb}
-  .notification-badge{position:absolute;top:8px;right:8px;width:10px;height:10px;border-radius:50%;background:#e74c3c;display:none;box-shadow:0 0 0 2px #fff}
-  .btn-notification.has-unread .notification-badge{display:block;animation:bell-pulse 1.2s ease-in-out infinite}
-  @keyframes bell-pulse{0%{transform:scale(1)}50%{transform:scale(1.3)}100%{transform:scale(1)}}
+  .btn-notification{position:relative;border:none;background:linear-gradient(135deg,#0b76d1,#085ea3);color:#fff;border-radius:999px;padding:8px 14px;cursor:pointer;font-size:13px;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;box-shadow:0 10px 18px rgba(11,118,209,0.16);transition:transform 0.2s ease,box-shadow 0.2s ease,background 0.2s ease}
+  .btn-notification:hover{transform:translateY(-1px);box-shadow:0 12px 22px rgba(11,118,209,0.2);background:linear-gradient(135deg,#0d86ff,#064c8a)}
+  .bell-icon{font-size:16px;line-height:1}
+  .notification-text{font-weight:700;letter-spacing:0.02em;white-space:nowrap}
+  .notification-badge{position:absolute;top:6px;right:6px;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:#ff4d4f;color:#fff;display:none;align-items:center;justify-content:center;font-size:12px;font-weight:800;box-shadow:0 0 0 4px rgba(255,255,255,0.4)}
+  .btn-notification.has-unread .notification-badge{display:flex;animation:bell-pulse 1.2s ease-in-out infinite}
+  @keyframes bell-pulse{0%{transform:scale(1)}50%{transform:scale(1.2)}100%{transform:scale(1)}}
   @media print{.no-print{display:none!important}}
   .status-select{padding:4px 8px;border:1px solid #ddd;border-radius:4px;font-size:12px;cursor:pointer}
   .quotation-type-badge{padding:2px 6px;border-radius:4px;font-size:11px;font-weight:bold;margin-left:5px}
@@ -442,19 +444,11 @@
       <div class="small" id="agentInfo">Loading agent information...</div>
     </div>
     <div class="header-right no-print">
-      <button id="notificationBell" class="btn-notification" type="button" title="View notifications">
+      <button id="notificationButton" class="btn-notification" type="button" title="Open notifications">
         <span class="bell-icon">🔔</span>
+        <span class="notification-text">Notifications</span>
         <span class="notification-badge" id="notificationCountBadge"></span>
       </button>
-      <div class="notification-dropdown" id="notificationDropdown" style="display:none;">
-        <div class="notification-header">
-          <h2>Notifications</h2>
-          <div class="notification-summary" id="notificationSummary">Checking reminders...</div>
-        </div>
-        <ul class="notification-list" id="notificationList">
-          <li class="notification-item">Generating reminders for quotations and vouchers...</li>
-        </ul>
-      </div>
       <button onclick="showQuotationTypeModal()" class="btn-primary">Create Quotation</button>
       <div class="tools-dropdown">
         <button class="btn-primary" onclick="toggleToolsMenu(event)">Tools &#9660;</button>
@@ -1249,10 +1243,7 @@ document.getElementById('packageForm').addEventListener('submit', async function
 let currentPage = 1;
 const itemsPerPage = 10;
 let filteredAllQuotations = [];
-const notificationDropdown = document.getElementById('notificationDropdown');
-const notificationList = document.getElementById('notificationList');
-const notificationSummary = document.getElementById('notificationSummary');
-const notificationBell = document.getElementById('notificationBell');
+const notificationButton = document.getElementById('notificationButton');
 const notificationCountBadge = document.getElementById('notificationCountBadge');
 let allUmrahQuotations = [];
 let allInternationalQuotations = [];
@@ -1545,45 +1536,6 @@ function getVoucherIdForQuotation(quotation) {
   return maps[quotation.id] || '';
 }
 
-function renderNotifications(items) {
-  if (!notificationDropdown || !notificationList || !notificationSummary) return;
-  notificationList.innerHTML = '';
-  if (!items.length) {
-    notificationSummary.textContent = 'No reminders at the moment.';
-    notificationList.innerHTML = '<li class="notification-item">All clear. No urgent follow-ups or voucher reminders.</li>';
-    return;
-  }
-  notificationSummary.textContent = `${items.length} reminder${items.length === 1 ? '' : 's'} generated`;
-  items.forEach((item, index) => {
-    const li = document.createElement('li');
-    li.className = 'notification-item';
-    li.innerHTML = `<strong>${item.title}</strong>${item.message}`;
-    li.addEventListener('click', () => handleNotificationClick(item, index));
-    notificationList.appendChild(li);
-  });
-}
-
-function handleNotificationClick(item, index) {
-  if (!item) return;
-  markNotificationsRead();
-  if (notificationDropdown) {
-    notificationDropdown.style.display = 'none';
-  }
-  if (item.quotationId && item.quotationType) {
-    const ownerId = item.ownerId ? `&owner=${encodeURIComponent(item.ownerId)}` : '';
-    const url = item.quotationType === 'umrah'
-      ? `index.html?edit=${encodeURIComponent(item.quotationId)}${ownerId}`
-      : item.quotationType === 'domestic'
-        ? `Domestic Quotation Tool.html?edit=${encodeURIComponent(item.quotationId)}${ownerId}`
-        : `International Quotation Tool.html?edit=${encodeURIComponent(item.quotationId)}${ownerId}`;
-    window.open(url, '_blank');
-  }
-  if (notificationDropdown && notificationList) {
-    const removed = notificationList.querySelectorAll('.notification-item')[index];
-    if (removed) removed.remove();
-  }
-}
-
 async function buildNotifications() {
   const ownQuotations = [...allUmrahQuotations, ...allInternationalQuotations, ...allDomesticQuotations];
   const now = new Date();
@@ -1597,13 +1549,26 @@ async function buildNotifications() {
     const voucherId = voucherMap[q.id] || '';
     const status = String(q.status || '').toLowerCase();
     const quoteLabel = `#${q.id} (${q.type || 'quotation'})`;
+    const clientName = q.clientData?.name || '';
+    const contactNumber = q.clientData?.phone || q.clientData?.mobile || q.clientData?.contact || q.clientData?.phoneNumber || '';
+    const notificationBase = {
+      quotationId: q.id,
+      quotationType: q.type,
+      ownerId: q.agentId,
+      contactNumber,
+      clientName,
+      quoteLabel,
+      quotation: q
+    };
 
     if (createdAt) {
       const hoursSinceCreate = Math.floor((now - createdAt) / (1000 * 60 * 60));
       if (hoursSinceCreate >= 24 && !['booked', 'cancelled', 'expired', 'followup'].includes(status)) {
         notifications.push({
+          ...notificationBase,
           title: 'Follow-up Reminder',
-          message: `Quotation ${quoteLabel} was created ${hoursSinceCreate} hours ago and still not moved to Follow Up. Please contact the client.`
+          message: `Quotation ${quoteLabel} was created ${hoursSinceCreate} hours ago and still not moved to Follow Up. Please contact the client.`,
+          type: 'followup'
         });
       }
     }
@@ -1612,8 +1577,10 @@ async function buildNotifications() {
       const hoursSinceFollowup = Math.floor((now - updatedAt) / (1000 * 60 * 60));
       if (hoursSinceFollowup >= 24) {
         notifications.push({
+          ...notificationBase,
           title: 'Follow-up Status Pending',
-          message: `Quotation ${quoteLabel} has been on Follow Up for ${hoursSinceFollowup} hours. Review and update its status.`
+          message: `Quotation ${quoteLabel} has been on Follow Up for ${hoursSinceFollowup} hours. Review and update its status.`,
+          type: 'followup'
         });
       }
     }
@@ -1622,14 +1589,18 @@ async function buildNotifications() {
       const daysToTravel = getDaysBetween(now, dateFrom);
       if (daysToTravel <= 15 && daysToTravel >= 0 && !voucherId) {
         notifications.push({
+          ...notificationBase,
           title: 'Create Voucher',
-          message: `Booked quotation ${quoteLabel} departs in ${daysToTravel} day${daysToTravel === 1 ? '' : 's'} and no voucher exists yet. Create the voucher before travel.`
+          message: `Booked quotation ${quoteLabel} departs in ${daysToTravel} day${daysToTravel === 1 ? '' : 's'} and no voucher exists yet. Create the voucher before travel.`,
+          type: 'booked'
         });
       }
       if (daysToTravel <= 3 && daysToTravel >= 0) {
         notifications.push({
+          ...notificationBase,
           title: 'Travel Imminent',
-          message: `Quotation ${quoteLabel} has travel in ${daysToTravel} day${daysToTravel === 1 ? '' : 's'}. Make sure the voucher and service details are ready.`
+          message: `Quotation ${quoteLabel} has travel in ${daysToTravel} day${daysToTravel === 1 ? '' : 's'}. Make sure the voucher and service details are ready.`,
+          type: 'booked'
         });
       }
     }
@@ -1638,33 +1609,39 @@ async function buildNotifications() {
       const hoursToTravel = Math.floor((dateFrom - now) / (1000 * 60 * 60));
       if (hoursToTravel <= 24 && hoursToTravel >= 0) {
         notifications.push({
+          ...notificationBase,
           title: 'Voucher Data Check',
-          message: `Voucher for quotation ${quoteLabel} departs within 24 hours. Verify hotel, transfer, tour and driver details and update any TBA fields.`
+          message: `Voucher for quotation ${quoteLabel} departs within 24 hours. Verify hotel, transfer, tour and driver details and update any TBA fields.`,
+          type: 'voucher'
         });
       }
     }
   });
 
-  renderNotifications(notifications);
   updateNotificationBell(notifications.length);
   if (notifications.length) {
     showNotification(`${notifications.length} reminder${notifications.length === 1 ? '' : 's'} generated`, 'info');
   }
+  return notifications;
 }
 
 function updateNotificationBell(count) {
-  if (!notificationBell) return;
-  notificationBell.classList.toggle('has-unread', count > 0);
+  if (!notificationButton || !notificationCountBadge) return;
+  notificationButton.classList.toggle('has-unread', count > 0);
   if (count > 0) {
-    notificationCountBadge.style.display = 'block';
+    notificationCountBadge.style.display = 'flex';
+    notificationCountBadge.textContent = count > 99 ? '99+' : String(count);
+    notificationButton.setAttribute('aria-label', `You have ${count} notification${count === 1 ? '' : 's'}`);
   } else {
     notificationCountBadge.style.display = 'none';
+    notificationCountBadge.textContent = '';
+    notificationButton.setAttribute('aria-label', 'Notifications');
   }
 }
 
 function markNotificationsRead() {
-  if (!notificationBell) return;
-  notificationBell.classList.remove('has-unread');
+  if (!notificationButton) return;
+  notificationButton.classList.remove('has-unread');
   notificationCountBadge.style.display = 'none';
 }
 
@@ -2623,9 +2600,6 @@ document.addEventListener('click', function(e) {
   if (dd && !dd.contains(e.target)) {
     document.getElementById('toolsMenu').classList.remove('open');
   }
-  if (notificationDropdown && notificationBell && !notificationDropdown.contains(e.target) && !notificationBell.contains(e.target)) {
-    notificationDropdown.style.display = 'none';
-  }
 });
 window.showPackageModal = showPackageModal;
 window.closePackageModal = closePackageModal;
@@ -2647,13 +2621,9 @@ document.addEventListener('DOMContentLoaded', async function() {
   loadAgentInfo();
   await loadAllQuotations();
 
-  if (notificationBell) {
-    notificationBell.addEventListener('click', (event) => {
-      event.stopPropagation();
-      if (!notificationDropdown) return;
-      const isHidden = notificationDropdown.style.display === 'none' || !notificationDropdown.style.display;
-      notificationDropdown.style.display = isHidden ? 'block' : 'none';
-      if (isHidden) markNotificationsRead();
+  if (notificationButton) {
+    notificationButton.addEventListener('click', () => {
+      window.location.href = 'notifications.html';
     });
   }
 

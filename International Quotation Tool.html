@@ -4653,14 +4653,19 @@ async function performCalculation() {
     const vehicle = document.getElementById(`tourVehicle_${idx}`)?.value || "Not specified";
     const pricing = getTourPricing(idx, false, paxData);
     
+    const tourAdultPKR = convertToPKR(numVal(`tourShareCostAdult_${idx}`) + numVal(`tourShareSvcAdult_${idx}`), pricing.currency);
+    const tourChildPKR = convertToPKR(numVal(`tourShareCostChild_${idx}`) + numVal(`tourShareSvcChild_${idx}`), pricing.currency);
+    const tourInfantPKR = convertToPKR(numVal(`tourShareCostInf_${idx}`) + numVal(`tourShareSvcInf_${idx}`), pricing.currency);
+    const tourPrivateTotalPKR = convertToPKR(pricing.costOrig + pricing.svcOrig, pricing.currency);
+
     const details = `Date: ${formatDateToDMY(date)}<br>
                     City: ${city}<br>
                     Duration: ${duration}<br>
                     Mode: ${mode}<br>
                     Vehicle: ${vehicle}<br>
                     ${pricing.mode === 'sharing'
-                      ? `Rate: ${pricing.currency} Adult ${fmt(numVal(`tourShareCostAdult_${idx}`))} + Svc ${fmt(numVal(`tourShareSvcAdult_${idx}`))}, Child ${fmt(numVal(`tourShareCostChild_${idx}`))} + Svc ${fmt(numVal(`tourShareSvcChild_${idx}`))}, Infant ${fmt(numVal(`tourShareCostInf_${idx}`))} + Svc ${fmt(numVal(`tourShareSvcInf_${idx}`))}<br>Charged by passenger type`
-                      : `Rate: ${pricing.currency} ${fmt(pricing.costOrig)} + Service ${fmt(pricing.svcOrig)} (Private total distributed per pax)<br>Charged to: All passengers (${paxData.adults + paxData.childBed + paxData.childNoBed + paxData.infants})`
+                      ? `Rate: PKR Adult ${fmt(tourAdultPKR)}, Child ${fmt(tourChildPKR)}, Infant ${fmt(tourInfantPKR)}<br>Charged by passenger type`
+                      : `Rate: PKR ${fmt(tourPrivateTotalPKR)} total distributed per pax<br>Charged to: All passengers (${paxData.adults + paxData.childBed + paxData.childNoBed + paxData.infants})`
                     }`;
 
     let perPersonText = [];
@@ -4916,61 +4921,52 @@ async function performCalculation() {
   // --- MEAL TYPE ADD-ONS ---
   document.querySelectorAll("[id^='mealAddon_']").forEach((el, i) => {
     const idx = i + 1;
-    const selects = el.querySelectorAll('select');
     const inputs = el.querySelectorAll("input[type='number']");
-    
-    const hotel = selects[0]?.value || 'Not specified';
-    const mealType = selects[1]?.value || "Not specified";
-    const currency = el.querySelector("select[id^='mealCurrency']")?.value || "USD";
-    
-    let costPerPaxPerNight = 0; 
+
+    const hotelIndex = el.querySelector("select[id^='mealHotel_']")?.value || '';
+    const hotelName = document.getElementById(`hotelName_${hotelIndex}`)?.value || 'Not specified';
+    const mealType = el.querySelector("select[id^='mealType_']")?.value || "Not specified";
+    const currency = el.querySelector("select[id^='mealCurrency_']")?.value || "USD";
+
+    let costPerPaxPerNight = 0;
     let svcPerPaxPerNight = 0;
-    
+
     if (inputs.length >= 2) {
       costPerPaxPerNight = parseFloat(inputs[0].value || 0);
       svcPerPaxPerNight = parseFloat(inputs[1].value || 0);
     }
-    
-    let cityNights = 0;
-    if (hotel.includes('Madina')) {
-      cityNights = parseInt(document.getElementById('nightsMadina')?.value || 0); 
-    } else if (hotel.includes('Makkah')) {
-      cityNights = parseInt(document.getElementById('nightsMakkah')?.value || 0);
-    } else {
-      const dateFrom = document.getElementById("dateFrom");
-      const dateTo = document.getElementById("dateTo");
-      if (dateFrom.value && dateTo.value) {
-          const d1 = new Date(dateFrom.value);
-          const d2 = new Date(dateTo.value);
-          cityNights = Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
+
+    let totalNights = parseInt(document.getElementById(`hotelNights_${hotelIndex}`)?.value || 0);
+    if (!totalNights) {
+      const checkIn = document.getElementById(`hotelCheckIn_${hotelIndex}`)?.value || '';
+      const checkOut = document.getElementById(`hotelCheckOut_${hotelIndex}`)?.value || '';
+      if (checkIn && checkOut) {
+        totalNights = Math.round((new Date(checkOut) - new Date(checkIn)) / (1000 * 60 * 60 * 24));
       }
     }
-    
-    const totalNights = cityNights > 0 ? cityNights : 0; 
-    const payingPax = numAdult + numChildBed;
-    const effectivePax = payingPax > 0 ? payingPax : 1; 
 
-    // Calculate total cost in ORIGINAL currency
+    const payingPax = numAdult + numChildBed;
+    const effectivePax = payingPax > 0 ? payingPax : 1;
     const totalCostOrig = costPerPaxPerNight * effectivePax * totalNights;
     const totalSvcOrig = svcPerPaxPerNight * effectivePax * totalNights;
-    
-    const perPersonCost = effectivePax > 0 ? convertToPKR(costPerPaxPerNight + svcPerPaxPerNight, currency) : 0;
-    const perAdult = numAdult > 0 ? perPersonCost : 0;
-    const perChildBed = numChildBed > 0 ? perPersonCost : 0;
-    
+
+    const perNightCost = effectivePax > 0 ? convertToPKR(costPerPaxPerNight + svcPerPaxPerNight, currency) : 0;
+    const perAdult = numAdult > 0 ? perNightCost : 0;
+    const perChildBed = numChildBed > 0 ? perNightCost : 0;
+
     if (totalCostOrig + totalSvcOrig > 0 && totalNights > 0) {
-      const details = `${hotel} - ${mealType}<br>
+      const details = `${hotelName} - ${mealType}<br>
                       ${effectivePax} pax × ${totalNights} nights<br>
                       Cost: ${currency} ${fmt(costPerPaxPerNight)}/pax/night<br>
                       Service: ${currency} ${fmt(svcPerPaxPerNight)}/pax/night<br>
                       Charged to: Adults (${numAdult}) + Children with bed (${numChildBed})`;
-      
+
       let perPersonText = [];
-      if (numAdult > 0) perPersonText.push(`Adult x${numAdult}: PKR ${fmt(perAdult)}`);
-      if (numChildBed > 0) perPersonText.push(`Child (with bed) x${numChildBed}: PKR ${fmt(perChildBed)}`);
+      if (numAdult > 0) perPersonText.push(`Adult x${numAdult}: PKR ${fmt(perAdult)} x ${totalNights}`);
+      if (numChildBed > 0) perPersonText.push(`Child (with bed) x${numChildBed}: PKR ${fmt(perChildBed)} x ${totalNights}`);
       perPersonText = perPersonText.join(', ');
-      
-      addDetailedRow(`Add-on - Meal Type ${idx}`, `${hotel} ${mealType}`, details, currency, totalCostOrig, totalSvcOrig, perPersonText, true);
+
+      addDetailedRow(`Add-on - Meal Type ${idx}`, `${hotelName} ${mealType}`, details, currency, totalCostOrig, totalSvcOrig, perPersonText, true);
     }
   });
 
@@ -4985,14 +4981,19 @@ async function performCalculation() {
     const tourVehicle = document.getElementById(`tourAddonVehicle_${idx}`)?.value || 'Not specified';
     const pricing = getTourPricing(idx, true, paxData);
     
+    const tourAddonAdultPKR = convertToPKR(numVal(`tourAddonShareCostAdult_${idx}`) + numVal(`tourAddonShareSvcAdult_${idx}`), pricing.currency);
+    const tourAddonChildPKR = convertToPKR(numVal(`tourAddonShareCostChild_${idx}`) + numVal(`tourAddonShareSvcChild_${idx}`), pricing.currency);
+    const tourAddonInfantPKR = convertToPKR(numVal(`tourAddonShareCostInf_${idx}`) + numVal(`tourAddonShareSvcInf_${idx}`), pricing.currency);
+    const tourAddonPrivateTotalPKR = convertToPKR(pricing.costOrig + pricing.svcOrig, pricing.currency);
+
     const details = `Date: ${formatDateToDMY(tourDate)}<br>
                     City: ${tourCity}<br>
                     Duration: ${tourDuration}<br>
                     Mode: ${tourMode}<br>
                     Vehicle: ${tourVehicle}<br>
                     ${pricing.mode === 'sharing'
-                      ? `Rate: ${pricing.currency} Adult ${fmt(numVal(`tourAddonShareCostAdult_${idx}`))} + Svc ${fmt(numVal(`tourAddonShareSvcAdult_${idx}`))}, Child ${fmt(numVal(`tourAddonShareCostChild_${idx}`))} + Svc ${fmt(numVal(`tourAddonShareSvcChild_${idx}`))}, Infant ${fmt(numVal(`tourAddonShareCostInf_${idx}`))} + Svc ${fmt(numVal(`tourAddonShareSvcInf_${idx}`))}<br>Charged by passenger type`
-                      : `Rate: ${pricing.currency} ${fmt(pricing.costOrig)} + Service ${fmt(pricing.svcOrig)} (Private total distributed per pax)<br>Charged to: All passengers (${paxData.adults + paxData.childBed + paxData.childNoBed + paxData.infants})`
+                      ? `Rate: PKR Adult ${fmt(tourAddonAdultPKR)}, Child ${fmt(tourAddonChildPKR)}, Infant ${fmt(tourAddonInfantPKR)}<br>Charged by passenger type`
+                      : `Rate: PKR ${fmt(tourAddonPrivateTotalPKR)} total distributed per pax<br>Charged to: All passengers (${paxData.adults + paxData.childBed + paxData.childNoBed + paxData.infants})`
                     }`;
     
     let perPersonText = [];
@@ -6052,14 +6053,36 @@ addBreakdownRow(
 const hasAddons = document.querySelectorAll("[id^='dfAddon_'], [id^='mealAddon_'], [id^='tourAddon_']").length > 0;
 
 if (hasAddons) {
+    const breakdownShowChildBed = numChildBed > 0;
+    const breakdownShowChildNoBed = numChildNoBed > 0;
+    const breakdownShowInfant = numInfant > 0;
+
+    const buildAddonCell = (amount, count) => {
+      if (!count || count <= 0) return '<td style="padding:6px;border:1px solid #dbe6f3;color:#777;text-align:right;">-</td>';
+      return `<td style="padding:6px;border:1px solid #dbe6f3;text-align:right;">${fmt(amount)}</td>`;
+    };
+
     quotationHTML += `
       <div style="margin-bottom: 10px; border: 1px solid #c8e6c9; padding: 8px 12px; border-radius: 6px; background:#fff;">
         <h3 style="margin-top: 0; color: #28a745; border-bottom: 2px solid #28a745; padding-bottom: 3px; margin-bottom: 6px;">Add-Ons (Optional)</h3>
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;background:#fff;">
+            <thead>
+              <tr style="background:#eef5ff;">
+                <th style="padding:6px;border:1px solid #dbe6f3;text-align:left;">Service</th>
+                <th style="padding:6px;border:1px solid #dbe6f3;text-align:left;">Details</th>
+                <th style="padding:6px;border:1px solid #dbe6f3;text-align:right;">Adult</th>
+                ${breakdownShowChildBed ? '<th style="padding:6px;border:1px solid #dbe6f3;text-align:right;">Child (bed)</th>' : ''}
+                ${breakdownShowChildNoBed ? '<th style="padding:6px;border:1px solid #dbe6f3;text-align:right;">Child (no bed)</th>' : ''}
+                ${breakdownShowInfant ? '<th style="padding:6px;border:1px solid #dbe6f3;text-align:right;">Infant</th>' : ''}
+                <th style="padding:6px;border:1px solid #dbe6f3;text-align:right;">Line Total</th>
+              </tr>
+            </thead>
+            <tbody>
     `;
-    
+
     // Direct Flight Add-ons
     document.querySelectorAll("[id^='dfAddon_']").forEach((el, i) => {
-      const idx = i + 1;
       const name = "Upgraded Flight";
       const currency = el.querySelector("select")?.value || "USD";
       
@@ -6068,78 +6091,99 @@ if (hasAddons) {
       const svc = parseFloat(inputs[1]?.value || 0);
       
       const totalCost = convertToPKR(cost + svc, currency);
-      
-      // Calculate per person costs
       const costPerAdult = numAdult > 0 ? totalCost / numAdult : 0;
       const costPerChildBed = numChildBed > 0 ? totalCost / numChildBed : 0;
       const costPerChildNoBed = numChildNoBed > 0 ? totalCost / numChildNoBed : 0;
       const costPerInfant = numInfant > 0 ? totalCost / numInfant : 0;
-      
+
       quotationHTML += `
-        <div style="margin:2px 0;padding:4px 8px;background:#f8fff8;border-left:3px solid #28a745;border-radius:3px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
-          <span><b>✈️ ${name} ${idx}</b> &mdash; Flight Upgrade (${currency}) &nbsp; <span style="color:#555;font-size:11px;">${numAdult>0?`Adult: PKR ${fmt(costPerAdult)}`:''}${numChildBed>0?` &bull; Child(bed): PKR ${fmt(costPerChildBed)}`:''}${numChildNoBed>0?` &bull; Child(no bed): PKR ${fmt(costPerChildNoBed)}`:''}${numInfant>0?` &bull; Infant: PKR ${fmt(costPerInfant)}`:''}</span></span>
-          <b style="color:#28a745;white-space:nowrap;">PKR ${fmt(totalCost)}</b>
-        </div>
+      <tr>
+        <td style="padding:6px;border:1px solid #dbe6f3;font-weight:600;">${name}</td>
+        <td style="padding:6px;border:1px solid #dbe6f3;">Flight Upgrade (PKR)</td>
+        ${buildAddonCell(costPerAdult, numAdult)}
+        ${breakdownShowChildBed ? buildAddonCell(costPerChildBed, numChildBed) : ''}
+        ${breakdownShowChildNoBed ? buildAddonCell(costPerChildNoBed, numChildNoBed) : ''}
+        ${breakdownShowInfant ? buildAddonCell(costPerInfant, numInfant) : ''}
+        <td style="padding:6px;border:1px solid #dbe6f3;text-align:right;font-weight:700;color:#0b76d1;">${fmt(totalCost)}</td>
+      </tr>
       `;
     });
-    
+
     // Meal Type Add-ons
     document.querySelectorAll("[id^='mealAddon_']").forEach((el, i) => {
-      const idx = i + 1;
-      const name = "Meal Type";
-      const hotelIndex = el.querySelector("select")?.value || 'Not specified';
+      const mealType = el.querySelector("select[id^='mealType_']")?.value || 'Meal';
+      const hotelIndex = el.querySelector("select[id^='mealHotel_']")?.value || '';
       const hotelName = document.getElementById(`hotelName_${hotelIndex}`)?.value || 'Not specified';
       const inputs = el.querySelectorAll("input[type='number']");
       const cost = parseFloat(inputs[0]?.value || 0);
       const svc = parseFloat(inputs[1]?.value || 0);
-      const currency = el.querySelector("select[id^='mealCurrency']")?.value || "USD";
-      
-      const totalCost = convertToPKR(cost + svc, currency);
-      
-      // FIXED: Only Adults and Children with bed pay for meals
+      const currency = el.querySelector("select[id^='mealCurrency_']")?.value || "USD";
+
+      let totalNights = parseInt(document.getElementById(`hotelNights_${hotelIndex}`)?.value || 0);
+      if (!totalNights) {
+        const checkIn = document.getElementById(`hotelCheckIn_${hotelIndex}`)?.value || '';
+        const checkOut = document.getElementById(`hotelCheckOut_${hotelIndex}`)?.value || '';
+        if (checkIn && checkOut) {
+          totalNights = Math.round((new Date(checkOut) - new Date(checkIn)) / (1000 * 60 * 60 * 24));
+        }
+      }
+
       const payingPax = numAdult + numChildBed;
-      const perPersonCost = payingPax > 0 ? totalCost / payingPax : 0;
-      
-      const costPerAdult = numAdult > 0 ? perPersonCost : 0;
-      const costPerChildBed = numChildBed > 0 ? perPersonCost : 0;
-      const costPerChildNoBed = 0; // Children without bed don't pay for meals
-      const costPerInfant = 0; // Infants don't pay for meals
-      
+      const perPersonTotal = payingPax > 0 ? (cost + svc) * totalNights : 0;
+      const totalCost = convertToPKR(perPersonTotal * payingPax, currency);
+      const perNightPKR = convertToPKR(cost + svc, currency);
+      const perPersonPKR = convertToPKR(perPersonTotal, currency);
+      const costPerAdult = numAdult > 0 ? perPersonPKR : 0;
+      const costPerChildBed = numChildBed > 0 ? perPersonPKR : 0;
+      const costPerChildNoBed = 0;
+      const costPerInfant = 0;
+      const adultLabel = numAdult > 0 ? `${fmt(perNightPKR)} x ${totalNights}` : '-';
+      const childBedLabel = numChildBed > 0 ? `PKR ${fmt(perNightPKR)} x ${totalNights}` : '-';
+
       quotationHTML += `
-        <div style="margin:2px 0;padding:4px 8px;background:#f8fff8;border-left:3px solid #28a745;border-radius:3px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
-          <span><b>🍽️ ${name} ${idx}</b> &mdash; ${hotelName} Meal (${currency}) &nbsp; <span style="color:#555;font-size:11px;">${numAdult>0?`Adult: PKR ${fmt(costPerAdult)}`:''}${numChildBed>0?` &bull; Child(bed): PKR ${fmt(costPerChildBed)}`:''}</span></span>
-          <b style="color:#28a745;white-space:nowrap;">PKR ${fmt(totalCost)}</b>
-        </div>
+      <tr>
+        <td style="padding:6px;border:1px solid #dbe6f3;font-weight:600;">Meal Type (${sanitizeInput(mealType)})</td>
+        <td style="padding:6px;border:1px solid #dbe6f3;">${sanitizeInput(hotelName)} Meal (PKR)</td>
+        <td style="padding:6px;border:1px solid #dbe6f3;text-align:right;">${adultLabel}</td>
+        ${breakdownShowChildBed ? `<td style="padding:6px;border:1px solid #dbe6f3;text-align:right;">${childBedLabel}</td>` : ''}
+        ${breakdownShowChildNoBed ? buildAddonCell(costPerChildNoBed, numChildNoBed) : ''}
+        ${breakdownShowInfant ? buildAddonCell(costPerInfant, numInfant) : ''}
+        <td style="padding:6px;border:1px solid #dbe6f3;text-align:right;font-weight:700;color:#0b76d1;">${fmt(totalCost)}</td>
+      </tr>
       `;
     });
-    
+
     // Tour Add-ons
     document.querySelectorAll("[id^='tourAddon_']").forEach((el, i) => {
-      const idx = i + 1;
       const name = "Tour";
+      const idx = i + 1;
       const tourName = document.getElementById(`tourAddonName_${idx}`)?.value || 'Not specified';
       const pricing = getTourPricing(idx, true, { adults: numAdult, childBed: numChildBed, childNoBed: numChildNoBed, infants: numInfant });
       const totalCost = convertToPKR(pricing.costOrig + pricing.svcOrig, pricing.currency);
-      const costPerAdult = pricing.perAdultPKR;
-      const costPerChildBed = pricing.perChildPKR;
-      const costPerChildNoBed = pricing.perChildPKR;
-      const costPerInfant = pricing.perInfantPKR;
-      
+
       quotationHTML += `
-        <div style="margin:2px 0;padding:4px 8px;background:#f8fff8;border-left:3px solid #28a745;border-radius:3px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
-          <span><b>🏛️ ${name} ${idx}</b> &mdash; ${tourName} (${pricing.currency}) &nbsp; <span style="color:#555;font-size:11px;">${numAdult>0?`Adult: PKR ${fmt(costPerAdult)}`:''}${numChildBed>0?` &bull; Child(bed): PKR ${fmt(costPerChildBed)}`:''}${numChildNoBed>0?` &bull; Child(no bed): PKR ${fmt(costPerChildNoBed)}`:''}${numInfant>0?` &bull; Infant: PKR ${fmt(costPerInfant)}`:''}</span></span>
-          <b style="color:#28a745;white-space:nowrap;">PKR ${fmt(totalCost)}</b>
-        </div>
+      <tr>
+        <td style="padding:6px;border:1px solid #dbe6f3;font-weight:600;">${sanitizeInput(name)}</td>
+        <td style="padding:6px;border:1px solid #dbe6f3;">${sanitizeInput(tourName)} (PKR)</td>
+        ${buildAddonCell(0, 0)}
+        ${breakdownShowChildBed ? buildAddonCell(0, 0) : ''}
+        ${breakdownShowChildNoBed ? buildAddonCell(0, 0) : ''}
+        ${breakdownShowInfant ? buildAddonCell(0, 0) : ''}
+        <td style="padding:6px;border:1px solid #dbe6f3;text-align:right;font-weight:700;color:#0b76d1;">${fmt(totalCost)}</td>
+      </tr>
       `;
     });
-    
+
     quotationHTML += `
-<div style="background-color:#e8f5e9;border-radius:6px;padding:8px 12px;margin-top:8px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;">
-  <span style="color:#2e7d32;font-weight:600;">Package Total: PKR ${fmt(finalTotalSellPKR)}</span>
-  <span style="color:#2e7d32;font-weight:600;">Add-ons: PKR ${fmt(addonCostPKR + addonServicePKR)}</span>
-  <span style="color:#2e7d32;font-weight:700;font-size:13px;">Grand Total: PKR ${fmt(finalTotalSellPKR + addonCostPKR + addonServicePKR)}</span>
-</div>
-</div>
+            </tbody>
+          </table>
+        </div>
+        <div style="background-color:#e8f5e9;border-radius:6px;padding:8px 12px;margin-top:8px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;">
+          <span style="color:#2e7d32;font-weight:600;">Package Total: PKR ${fmt(finalTotalSellPKR)}</span>
+          <span style="color:#2e7d32;font-weight:600;">Add-ons: PKR ${fmt(addonCostPKR + addonServicePKR)}</span>
+          <span style="color:#2e7d32;font-weight:700;font-size:13px;">Grand Total: PKR ${fmt(finalTotalSellPKR + addonCostPKR + addonServicePKR)}</span>
+        </div>
+      </div>
     `;
   }
 
