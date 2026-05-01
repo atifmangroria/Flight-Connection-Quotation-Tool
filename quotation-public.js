@@ -366,14 +366,18 @@ function renderQuotation() {
   const sharedSnapshot = typeof q.publicQuotationHtml === 'string' ? q.publicQuotationHtml.trim() : '';
   quotationContent.innerHTML = sharedSnapshot || buildQuotation();
 
-  const toggleItineraryBtn = document.getElementById('toggleDaywiseItineraryBtn');
+  const toggleItineraryBtn = document.getElementById('toggleDaywiseItineraryBtn') || document.getElementById('toggleItineraryBtn');
   if (toggleItineraryBtn) {
     toggleItineraryBtn.addEventListener('click', () => {
-      const container = document.getElementById('daywiseItineraryTableContainer');
+      const container = document.getElementById('daywiseItineraryTableContainer') || document.getElementById('itineraryTableContainer');
       if (!container) return;
       const isHidden = container.style.display === 'none';
       container.style.display = isHidden ? 'block' : 'none';
-      toggleItineraryBtn.textContent = isHidden ? 'Hide Day Wise Table' : 'Show Day Wise Table';
+      if (toggleItineraryBtn.id === 'toggleDaywiseItineraryBtn') {
+        toggleItineraryBtn.textContent = isHidden ? 'Hide Day Wise Table' : 'Show Day Wise Table';
+      } else {
+        toggleItineraryBtn.textContent = isHidden ? 'Hide Itinerary' : 'Show Itinerary';
+      }
     });
   }
 
