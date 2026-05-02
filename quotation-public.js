@@ -184,7 +184,7 @@ function buildDaywiseItinerarySection(quotation) {
     <div style="margin-bottom:20px;border:1px solid #eee;padding:18px;border-radius:10px;">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
         <h2 style="margin:0 0 12px;color:#0b76d1;font-size:18px;">Day Wise Itinerary</h2>
-        <button id="toggleDaywiseItineraryBtn" type="button" class="secondary" style="padding:8px 12px;font-size:13px;">Show Day Wise Table</button>
+        <button id="toggleDaywiseItineraryBtn" type="button" class="blue-btn" style="padding:8px 12px;font-size:13px;">Show Day Wise Table</button>
       </div>
       <div id="daywiseItineraryTableContainer" style="display:none;margin-top:14px;">${tableHtml}</div>
     </div>`;
@@ -397,7 +397,7 @@ function buildPublicDaywiseItinerarySection(quotation) {
     <div id="publicDaywiseSection" style="margin-top:20px;border:1px solid #eee;padding:18px;border-radius:10px;background:#fff;">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
         <h2 style="margin:0 0 12px;color:#0b76d1;font-size:18px;">Day Wise Itinerary</h2>
-        <button id="publicToggleDaywiseBtn" type="button" class="secondary" style="padding:8px 12px;font-size:13px;">Show Day Wise Table</button>
+        <button id="publicToggleDaywiseBtn" type="button" class="blue-btn" style="padding:8px 12px;font-size:13px;">Show Day Wise Table</button>
       </div>
       <div id="publicDaywiseTableContainer" style="display:none;margin-top:14px;">${tableHtml}</div>
     </div>`;
@@ -412,6 +412,17 @@ function attachPublicDaywiseToggle() {
     const isHidden = container.style.display === 'none';
     container.style.display = isHidden ? 'block' : 'none';
     toggleBtn.textContent = isHidden ? 'Hide Day Wise Table' : 'Show Day Wise Table';
+  });
+}
+
+function attachSnapshotItineraryToggle() {
+  const toggleBtn = quotationContent.querySelector('#toggleItineraryBtn');
+  const container = quotationContent.querySelector('#itineraryTableContainer');
+  if (!toggleBtn || !container) return;
+  toggleBtn.addEventListener('click', () => {
+    const isHidden = container.style.display === 'none';
+    container.style.display = isHidden ? 'block' : 'none';
+    toggleBtn.textContent = isHidden ? 'Hide Itinerary' : 'Show Itinerary';
   });
 }
 
@@ -436,6 +447,7 @@ function renderQuotation() {
     quotationContent.insertAdjacentHTML('afterend', daywiseHtml);
     attachPublicDaywiseToggle();
   }
+  attachSnapshotItineraryToggle();
 
   if (isBooked) {
     setMessage('This quotation is already booked and cannot be accepted again.', 'success');
