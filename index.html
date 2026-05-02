@@ -9130,7 +9130,11 @@ function getPublicQuotationPreviewHtml() {
   const itineraryWrapper = previewClone.querySelector('#itinerarySectionWrapper');
   const itineraryContainer = previewClone.querySelector('#itineraryTableContainer');
   if (itineraryWrapper && (itineraryWrapper.classList.contains('itinerary-hidden') || (itineraryContainer && itineraryContainer.style.display === 'none'))) {
-    itineraryWrapper.remove();
+    itineraryWrapper.classList.remove('itinerary-hidden');
+    itineraryWrapper.style.display = 'block';
+    if (itineraryContainer) {
+      itineraryContainer.style.display = 'block';
+    }
   }
 
   return previewClone.outerHTML;
