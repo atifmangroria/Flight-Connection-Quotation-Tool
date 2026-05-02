@@ -441,9 +441,25 @@ function renderQuotation() {
   const sharedSnapshot = typeof q.publicQuotationHtml === 'string' ? q.publicQuotationHtml.trim() : '';
   quotationContent.innerHTML = sharedSnapshot || buildQuotation();
 
-  if (!sharedSnapshot) {
+  if (sharedSnapshot) {
+    const snapshotItinerary = quotationContent.querySelector('#itinerarySectionWrapper');
+    if (snapshotItinerary) {
+      snapshotItinerary.remove();
+    }
+    const serviceHeading = Array.from(quotationContent.querySelectorAll('h2')).find(h => h.textContent.trim() === 'Service Details');
+    const daywiseHtml = buildDaywiseItinerarySection(q);
+    if (daywiseHtml) {
+      if (serviceHeading && serviceHeading.parentElement) {
+        serviceHeading.parentElement.insertAdjacentHTML('afterend', daywiseHtml);
+      } else {
+        quotationContent.insertAdjacentHTML('beforeend', daywiseHtml);
+      }
+      attachPublicDaywiseToggle();
+    }
+  } else {
     attachPublicDaywiseToggle();
   }
+
   attachSnapshotItineraryToggle();
 
   if (isBooked) {
