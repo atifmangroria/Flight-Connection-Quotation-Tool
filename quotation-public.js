@@ -318,8 +318,9 @@ function buildQuotation() {
   ])) : '';
 
   const serviceSection = buildServiceSection(q);
+  const daywiseSection = buildDaywiseItinerarySection(q);
 
-  return `${header}${renderSection('Quotation Summary', summaryRows)}${renderSection('Client Details', clientRows)}${renderSection('Travel Details', travelRows)}${packageSection}${serviceSection}${priceSection}${breakdownSection}`;
+  return `${header}${renderSection('Quotation Summary', summaryRows)}${renderSection('Client Details', clientRows)}${renderSection('Travel Details', travelRows)}${packageSection}${serviceSection}${daywiseSection}${priceSection}${breakdownSection}`;
 }
 
 function buildCustomerAcceptanceSection(quotation) {
@@ -440,11 +441,7 @@ function renderQuotation() {
   const sharedSnapshot = typeof q.publicQuotationHtml === 'string' ? q.publicQuotationHtml.trim() : '';
   quotationContent.innerHTML = sharedSnapshot || buildQuotation();
 
-  const existingPublicSection = document.getElementById('publicDaywiseSection');
-  if (existingPublicSection) existingPublicSection.remove();
-  const daywiseHtml = buildPublicDaywiseItinerarySection(q);
-  if (daywiseHtml) {
-    quotationContent.insertAdjacentHTML('afterend', daywiseHtml);
+  if (!sharedSnapshot) {
     attachPublicDaywiseToggle();
   }
   attachSnapshotItineraryToggle();

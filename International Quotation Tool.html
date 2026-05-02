@@ -1141,7 +1141,10 @@ function getPublicQuotationPreviewHtml() {
   if (!compactQuotation) return '';
 
   const previewClone = compactQuotation.cloneNode(true);
-  previewClone.querySelectorAll('button, script').forEach(el => el.remove());
+  previewClone.querySelectorAll('button, script').forEach(el => {
+    if (el.id === 'toggleItineraryBtn') return;
+    el.remove();
+  });
   previewClone.querySelectorAll('.it-edit-icon').forEach(el => el.remove());
 
   const priceBreakdownSection = previewClone.querySelector('#calculationSummarySection');
