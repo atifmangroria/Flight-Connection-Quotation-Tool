@@ -5132,11 +5132,18 @@ function updateQuotationStatus(quotationId, newStatus) {
       quotation.status = newStatus;
       quotation.updatedAt = new Date().toISOString();
       
-      if (newStatus !== 'booked') {
-        if (quotation.customerAcceptance || quotation.agentApproval || quotation.shareLinkId) {
-          quotation.customerNeedsReaccept = true;
-          quotation.agentApproval = null;
+      if (newStatus !== 'booked' && quotation.shareLinkId) {
+        const editAt = new Date().toISOString();
+        if (quotation.customerAcceptance) {
+          quotation.lastCustomerAcceptance = quotation.customerAcceptance;
         }
+        appendPublicEditLog(quotation, ['Status Edit'], editAt);
+        quotation.customerNeedsReaccept = true;
+        quotation.agentApproval = null;
+        quotation.customerAcceptance = null;
+        quotation.shareVersion = (quotation.shareVersion || 0) + 1;
+        quotation.shareUpdatedAt = editAt;
+        quotation.sharePublicUrl = getQuotationPublicUrl(quotation.id, quotation.shareLinkId);
       }
       
       // Save back to localStorage and Firebase
@@ -5314,6 +5321,84 @@ function createShareKey() {
   return `q-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
+function normalizeShareDiffValue(value) {
+  if (value === null || value === undefined) return null;
+  if (Array.isArray(value)) return value.map(normalizeShareDiffValue);
+  if (typeof value === 'object') {
+    const keys = Object.keys(value).sort();
+    const out = {};
+    keys.forEach(key => {
+      out[key] = normalizeShareDiffValue(value[key]);
+    });
+    return out;
+  }
+  return value;
+}
+
+function isShareSectionChanged(previousValue, nextValue) {
+  return JSON.stringify(normalizeShareDiffValue(previousValue)) !== JSON.stringify(normalizeShareDiffValue(nextValue));
+}
+
+function getPublicQuotationEditLabels(previousQuotation, nextQuotation) {
+  const labels = [];
+  const previous = previousQuotation || {};
+  const next = nextQuotation || {};
+
+  const rateFields = ['totalAmount', 'finalTotalSellPKR', 'grandTotalPKR', 'grandTotal', 'packageTotalPKR', 'packageTotalAmount', 'priceBreakdown', 'calculationSummary', 'priceDetails', 'priceBreakup', 'breakdown', 'pricingSettings'];
+  if (rateFields.some(field => isShareSectionChanged(previous[field], next[field]))) {
+    labels.push('Flight rates Edit');
+  }
+
+  if (isShareSectionChanged({
+    flights: previous.flights,
+    hotels: previous.hotels,
+    transfers: previous.transfers,
+    tours: previous.tours,
+    visa: previous.visa,
+    addons: previous.addons,
+    services: previous.services,
+    flightSegments: previous.flightSegments,
+    packageSelection: previous.packageSelection
+  }, {
+    flights: next.flights,
+    hotels: next.hotels,
+    transfers: next.transfers,
+    tours: next.tours,
+    visa: next.visa,
+    addons: next.addons,
+    services: next.services,
+    flightSegments: next.flightSegments,
+    packageSelection: next.packageSelection
+  })) {
+    labels.push('Service details Edit');
+  }
+
+  if (isShareSectionChanged(previous.itineraryData, next.itineraryData)) {
+    labels.push('Daywise itinerary Edit');
+  }
+
+  if (isShareSectionChanged(previous.clientData, next.clientData)) {
+    labels.push('Travel details Edit');
+  }
+
+  if (isShareSectionChanged(previous.terms, next.terms) || isShareSectionChanged(previous.termsAndConditions, next.termsAndConditions)) {
+    labels.push('Terms Edit');
+  }
+
+  return labels;
+}
+
+function appendPublicEditLog(quotation, labels, atIso) {
+  if (!quotation || !Array.isArray(labels) || !labels.length) return;
+  const at = atIso || new Date().toISOString();
+  const existing = Array.isArray(quotation.publicEditLog) ? quotation.publicEditLog.slice() : [];
+  labels.forEach(label => {
+    if (!label) return;
+    existing.push({ label, at });
+  });
+  quotation.publicEditLog = existing.slice(-30);
+}
+
 function getPublicQuotationPreviewHtml() {
   const modalContent = document.getElementById('quotationModalContent');
   const compactQuotation = modalContent?.querySelector('.compact-quotation');
@@ -5358,16 +5443,14 @@ function handleGenerateQuotationLink(options = {}) {
     return;
   }
 
-  if (quotation.shareLinkId) {
-    showNotification('Quotation already shared. Copy the existing link.');
-    if (typeof options.onComplete === 'function') options.onComplete();
-    return;
-  }
+  const nowIso = new Date().toISOString();
   quotation.publicQuotationHtml = previewHtml || quotation.publicQuotationHtml || '';
-  quotation.publicQuotationSnapshotAt = new Date().toISOString();
-  quotation.shareLinkId = createShareKey();
+  quotation.publicQuotationSnapshotAt = nowIso;
+  if (!quotation.shareLinkId) {
+    quotation.shareLinkId = createShareKey();
+  }
   quotation.shareVersion = (quotation.shareVersion || 0) + 1;
-  quotation.shareUpdatedAt = new Date().toISOString();
+  quotation.shareUpdatedAt = nowIso;
   quotation.sharePublicUrl = getQuotationPublicUrl(quotation.id, quotation.shareLinkId);
   allQuotations = allQuotations.filter(q => q.id !== quotation.id);
   allQuotations.push(quotation);
@@ -5387,7 +5470,7 @@ function handleGenerateQuotationLink(options = {}) {
     }).catch(err => console.error('Firebase share link save error:', err));
   }
 
-  showNotification('Shareable quotation link generated. Send this to your customer.', 'success');
+  showNotification('Share link is ready. The same customer URL is kept and updated with latest preview.', 'success');
   showStatusSection();
   if (typeof options.onComplete === 'function') options.onComplete();
 }
@@ -6716,7 +6799,7 @@ setTimeout(() => {
     const quotation = allQuotations.find(q => q.id === currentQuotationId);
     const shareUrl = quotation?.sharePublicUrl || (quotation?.shareLinkId ? getQuotationPublicUrl(quotation.id, quotation.shareLinkId) : '');
     if (previewShareUrl) previewShareUrl.value = shareUrl || '';
-    if (btnGenerateShareFromPreview) btnGenerateShareFromPreview.disabled = !!quotation?.shareLinkId;
+    if (btnGenerateShareFromPreview) btnGenerateShareFromPreview.disabled = false;
     if (btnCopyShareFromPreview) btnCopyShareFromPreview.disabled = !shareUrl;
   };
 
@@ -7416,22 +7499,23 @@ const customSectionsData = {
       quotationData.customerNeedsReaccept = true;
       quotationData.customerAcceptance = null;
       quotationData.agentApproval = null;
-      quotationData.shareLinkId = null;
-      quotationData.sharePublicUrl = '';
     }
     if (existingQuotation?.shareLinkId) {
-      const oldLinkId = existingQuotation.shareLinkId;
-      quotationData.shareLinkId = null;
-      quotationData.sharePublicUrl = '';
-      quotationData.shareVersion = existingQuotation.shareVersion || 0;
-      quotationData.shareUpdatedAt = '';
+      const editAt = new Date().toISOString();
+      const hadCustomerAcceptance = !!(existingQuotation.customerAcceptance || existingQuotation.lastCustomerAcceptance);
+      const editLabels = getPublicQuotationEditLabels(existingQuotation, quotationData);
+
+      quotationData.shareLinkId = existingQuotation.shareLinkId;
+      quotationData.sharePublicUrl = getQuotationPublicUrl(targetQuotationId, existingQuotation.shareLinkId);
+      quotationData.shareVersion = (existingQuotation.shareVersion || 0) + 1;
+      quotationData.shareUpdatedAt = editAt;
+      quotationData.lastCustomerAcceptance = existingQuotation.customerAcceptance || existingQuotation.lastCustomerAcceptance || null;
       quotationData.customerAcceptance = null;
       quotationData.agentApproval = null;
-      if (window.firebaseDB) {
-        window.firebaseDB.saveData('quotation_links', oldLinkId, {
-          invalidated: true,
-          invalidatedAt: new Date().toISOString()
-        }).catch(err => console.error('Firebase invalidate share link error:', err));
+      quotationData.customerNeedsReaccept = true;
+      quotationData.publicEditLog = Array.isArray(existingQuotation.publicEditLog) ? existingQuotation.publicEditLog.slice() : [];
+      if (hadCustomerAcceptance && editLabels.length) {
+        appendPublicEditLog(quotationData, editLabels, editAt);
       }
     } else if (quotationData.shareLinkId) {
       quotationData.shareVersion = (quotationData.shareVersion || 0) + 1;

@@ -58,9 +58,36 @@ const collectionMap = {
 
 function setMessage(text, type = 'info') {
   if (!quoteMessage) return;
-  quoteMessage.textContent = text;
+  quoteMessage.innerHTML = sanitize(text).replace(/\n/g, '<br>');
   quoteMessage.className = `message ${type}`;
   quoteMessage.style.display = 'block';
+}
+
+function formatEditLogDate(value) {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString('en-US', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  });
+}
+
+function buildPublicReviewMessage(quotation) {
+  const baseMessage = 'Review the quotation preview and accept if everything is correct.';
+  const hadAcceptedBefore = !!quotation?.lastCustomerAcceptance;
+  if (!hadAcceptedBefore) return baseMessage;
+
+  const logs = Array.isArray(quotation?.publicEditLog)
+    ? quotation.publicEditLog.filter(item => item && item.label && item.at)
+    : [];
+  if (!logs.length) return baseMessage;
+
+  const detailLines = logs.slice(-8).map(item => `${item.label} on ${formatEditLogDate(item.at)}`);
+  return `${baseMessage}\n\n${detailLines.join('\n')}`;
 }
 
 function formatDate(value) {
@@ -139,9 +166,13 @@ function getItineraryItemDescription(item) {
 function getDaywiseItineraryRows(quotation) {
   const rawRows = Array.isArray(quotation.itineraryData?.rows)
     ? quotation.itineraryData.rows
-    : Array.isArray(quotation.itinerary)
-      ? quotation.itinerary
-      : [];
+    : Array.isArray(quotation.itineraryRows)
+      ? quotation.itineraryRows
+      : Array.isArray(quotation.daywiseItinerary)
+        ? quotation.daywiseItinerary
+        : Array.isArray(quotation.itinerary)
+          ? quotation.itinerary
+          : [];
   if (!rawRows || !rawRows.length) return [];
 
   return rawRows.map((item, index) => {
@@ -181,12 +212,12 @@ function buildDaywiseItinerarySection(quotation) {
     : `<div style="color:#444;line-height:1.7;">Day wise itinerary details are available.</div>`;
 
   return `
-    <div style="margin-bottom:20px;border:1px solid #eee;padding:18px;border-radius:10px;">
+    <div id="itinerarySectionWrapper" style="margin-bottom:12px;border:1px solid #eee;padding:10px 12px;border-radius:6px;background:#fff;">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
-        <h2 style="margin:0 0 12px;color:#0b76d1;font-size:18px;">Day Wise Itinerary</h2>
-        <button id="toggleDaywiseItineraryBtn" type="button" class="blue-btn" style="padding:8px 12px;font-size:13px;">Show Day Wise Table</button>
+        <h3 style="margin:0;color:#0b76d1;border-bottom:2px solid #0b76d1;padding-bottom:3px;">Day Wise Itinerary</h3>
+        <button id="toggleItineraryBtn" type="button" class="blue-btn" style="padding:4px 10px;font-size:12px;">Show Itinerary</button>
       </div>
-      <div id="daywiseItineraryTableContainer" style="display:none;margin-top:14px;">${tableHtml}</div>
+      <div id="itineraryTableContainer" style="display:none;margin-top:8px;">${tableHtml}</div>
     </div>`;
 }
 
@@ -234,10 +265,6 @@ function buildServiceSection(quotation) {
   }
   if (quotation.hotelDetails && typeof quotation.hotelDetails === 'object') {
     blocks.push(renderSection('Hotel Details', renderDataRows(Object.entries(quotation.hotelDetails).map(([key, value]) => [key, Array.isArray(value) ? normalizeArray(value).join(', ') : value]))));
-  }
-  const itinerarySection = buildItinerarySection(quotation);
-  if (itinerarySection) {
-    blocks.push(renderSection('Itinerary', itinerarySection));
   }
   if (quotation.itinerary && typeof quotation.itinerary === 'string') {
     blocks.push(renderSection('Itinerary', `<div style="color:#444;line-height:1.7;">${sanitize(quotation.itinerary)}</div>`));
@@ -353,77 +380,27 @@ function sanitize(value) {
   return String(value).replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function getPublicDaywiseItineraryRows(quotation) {
-  const rawRows = Array.isArray(quotation.itineraryData?.rows)
-    ? quotation.itineraryData.rows
-    : Array.isArray(quotation.itinerary)
-      ? quotation.itinerary
-      : [];
-
-  return rawRows.map((item, index) => {
-    if (typeof item === 'string') {
-      return {
-        day: index + 1,
-        date: '',
-        activity: item,
-        meals: 'No Meals'
-      };
-    }
-    if (item && typeof item === 'object') {
-      return {
-        day: item.day || item.dayNumber || item.dayNo || item.dayLabel || index + 1,
-        date: item.date || item.dayDate || item.travelDate || '',
-        activity: item.activity || item.title || item.name || item.description || '',
-        meals: item.meals || item.mealsIncluded || item.meal || 'No Meals'
-      };
-    }
-    return {
-      day: index + 1,
-      date: '',
-      activity: String(item),
-      meals: 'No Meals'
-    };
-  }).filter(row => row.activity || row.date);
-}
-
-function buildPublicDaywiseItinerarySection(quotation) {
-  const rows = getPublicDaywiseItineraryRows(quotation);
-  if (!rows.length) return '';
-
-  const tableHtml = (window.ItineraryComponent && typeof window.ItineraryComponent.renderItineraryTable === 'function')
-    ? window.ItineraryComponent.renderItineraryTable(rows, { editable: false })
-    : `<div style="color:#444;line-height:1.7;">Day wise itinerary details are available.</div>`;
-
-  return `
-    <div id="publicDaywiseSection" style="margin-top:20px;border:1px solid #eee;padding:18px;border-radius:10px;background:#fff;">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
-        <h2 style="margin:0 0 12px;color:#0b76d1;font-size:18px;">Day Wise Itinerary</h2>
-        <button id="publicToggleDaywiseBtn" type="button" class="blue-btn" style="padding:8px 12px;font-size:13px;">Show Day Wise Table</button>
-      </div>
-      <div id="publicDaywiseTableContainer" style="display:none;margin-top:14px;">${tableHtml}</div>
-    </div>`;
-}
-
-function attachPublicDaywiseToggle() {
-  const toggleBtn = document.getElementById('publicToggleDaywiseBtn');
-  if (!toggleBtn) return;
-  toggleBtn.addEventListener('click', () => {
-    const container = document.getElementById('publicDaywiseTableContainer');
-    if (!container) return;
-    const isHidden = container.style.display === 'none';
-    container.style.display = isHidden ? 'block' : 'none';
-    toggleBtn.textContent = isHidden ? 'Hide Day Wise Table' : 'Show Day Wise Table';
-  });
-}
-
 function attachSnapshotItineraryToggle() {
   const toggleBtn = quotationContent.querySelector('#toggleItineraryBtn');
   const container = quotationContent.querySelector('#itineraryTableContainer');
+  const section = quotationContent.querySelector('#itinerarySectionWrapper');
   if (!toggleBtn || !container) return;
+
+  if (!container.style.display) {
+    container.style.display = 'none';
+  }
+  toggleBtn.textContent = container.style.display === 'none' ? 'Show Itinerary' : 'Hide Itinerary';
+  if (section) {
+    section.classList.toggle('itinerary-hidden', container.style.display === 'none');
+  }
+
   toggleBtn.addEventListener('click', () => {
     const isHidden = container.style.display === 'none';
     container.style.display = isHidden ? 'block' : 'none';
     toggleBtn.textContent = isHidden ? 'Hide Itinerary' : 'Show Itinerary';
+    if (section) {
+      section.classList.toggle('itinerary-hidden', !isHidden);
+    }
   });
 }
 
@@ -442,22 +419,29 @@ function renderQuotation() {
   quotationContent.innerHTML = sharedSnapshot || buildQuotation();
 
   if (sharedSnapshot) {
-    const snapshotItinerary = quotationContent.querySelector('#itinerarySectionWrapper');
-    if (snapshotItinerary) {
-      snapshotItinerary.remove();
-    }
-    const serviceHeading = Array.from(quotationContent.querySelectorAll('h2')).find(h => h.textContent.trim() === 'Service Details');
-    const daywiseHtml = buildDaywiseItinerarySection(q);
-    if (daywiseHtml) {
-      if (serviceHeading && serviceHeading.parentElement) {
-        serviceHeading.parentElement.insertAdjacentHTML('afterend', daywiseHtml);
-      } else {
-        quotationContent.insertAdjacentHTML('beforeend', daywiseHtml);
+    let itinerarySection = quotationContent.querySelector('#itinerarySectionWrapper');
+    if (!itinerarySection) {
+      const daywiseHtml = buildDaywiseItinerarySection(q);
+      if (daywiseHtml) {
+        const serviceHeading = Array.from(quotationContent.querySelectorAll('h2, h3'))
+          .find(h => h.textContent.trim().toLowerCase() === 'service details');
+        if (serviceHeading && serviceHeading.parentElement) {
+          serviceHeading.parentElement.insertAdjacentHTML('afterend', daywiseHtml);
+        } else {
+          quotationContent.insertAdjacentHTML('beforeend', daywiseHtml);
+        }
       }
-      attachPublicDaywiseToggle();
+      itinerarySection = quotationContent.querySelector('#itinerarySectionWrapper');
     }
-  } else {
-    attachPublicDaywiseToggle();
+
+    const itineraryContainer = quotationContent.querySelector('#itineraryTableContainer');
+    const daywiseRows = getDaywiseItineraryRows(q);
+    if (itinerarySection && itineraryContainer && !itineraryContainer.innerHTML.trim() && daywiseRows.length) {
+      itineraryContainer.innerHTML = (window.ItineraryComponent && typeof window.ItineraryComponent.renderItineraryTable === 'function')
+        ? window.ItineraryComponent.renderItineraryTable(daywiseRows, { editable: false })
+        : `<div style="color:#444;line-height:1.7;">Day wise itinerary details are available.</div>`;
+      itineraryContainer.style.display = 'none';
+    }
   }
 
   attachSnapshotItineraryToggle();
@@ -465,7 +449,7 @@ function renderQuotation() {
   if (isBooked) {
     setMessage('This quotation is already booked and cannot be accepted again.', 'success');
   } else if (q.customerNeedsReaccept) {
-    setMessage('This quotation was updated after sharing. Please review and accept the latest version again.', 'warning');
+    setMessage(buildPublicReviewMessage(q), 'warning');
   } else if (customerAccepted) {
     setMessage('Quotation accepted by customer. Waiting for agent approval.', 'info');
   } else {
@@ -558,6 +542,13 @@ async function submitCustomerAcceptance() {
       acceptedAt: now,
       shareVersion: quotationDoc.shareVersion || 1
     },
+    lastCustomerAcceptance: {
+      name,
+      phone,
+      acceptedAt: now,
+      shareVersion: quotationDoc.shareVersion || 1
+    },
+    publicEditLog: [],
     status: 'pending',
     customerNeedsReaccept: false,
     agentApproval: quotationDoc.agentApproval || null
