@@ -6938,7 +6938,10 @@ setTimeout(() => {
     const quotation = allQuotations.find(q => q.id === currentQuotationId);
     const shareUrl = quotation?.sharePublicUrl || (quotation?.shareLinkId ? getQuotationPublicUrl(quotation.id, quotation.shareLinkId) : '');
     if (previewShareUrl) previewShareUrl.value = shareUrl || '';
-    if (btnGenerateShareFromPreview) btnGenerateShareFromPreview.disabled = false;
+    if (btnGenerateShareFromPreview) {
+      btnGenerateShareFromPreview.disabled = !!shareUrl;
+      btnGenerateShareFromPreview.style.display = shareUrl ? 'none' : 'inline-block';
+    }
     if (btnCopyShareFromPreview) btnCopyShareFromPreview.disabled = !shareUrl;
   };
 

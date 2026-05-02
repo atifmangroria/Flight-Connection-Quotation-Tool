@@ -380,6 +380,43 @@ function sanitize(value) {
   return String(value).replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+async function getGeneratedDaywiseRows(quotation) {
+  if (!window.ItineraryComponent || typeof window.ItineraryComponent.generateItinerary !== 'function') return [];
+  try {
+    const generated = await window.ItineraryComponent.generateItinerary({
+      clientData: quotation?.clientData || quotation?.customer || {},
+      hotels: Array.isArray(quotation?.hotels) ? quotation.hotels : [],
+      transfers: Array.isArray(quotation?.transfers) ? quotation.transfers : [],
+      tours: Array.isArray(quotation?.tours) ? quotation.tours : [],
+      flightSegments: quotation?.itineraryFlightSegments || quotation?.itineraryData?.flightSegments || {}
+    });
+    return Array.isArray(generated?.rows) ? generated.rows : [];
+  } catch (error) {
+    console.error('Error generating public itinerary rows:', error);
+    return [];
+  }
+}
+
+async function ensurePublicItineraryTableContent(container, quotation) {
+  if (!container) return false;
+  if (container.innerHTML.trim()) return true;
+
+  let rows = getDaywiseItineraryRows(quotation);
+  if (!rows.length) {
+    rows = await getGeneratedDaywiseRows(quotation);
+  }
+
+  if (!rows.length) {
+    container.innerHTML = `<div style="color:#666;line-height:1.7;">No day wise itinerary available.</div>`;
+    return false;
+  }
+
+  container.innerHTML = (window.ItineraryComponent && typeof window.ItineraryComponent.renderItineraryTable === 'function')
+    ? window.ItineraryComponent.renderItineraryTable(rows, { editable: false })
+    : `<div style="color:#444;line-height:1.7;">Day wise itinerary details are available.</div>`;
+  return true;
+}
+
 function attachSnapshotItineraryToggle() {
   const toggleBtn = quotationContent.querySelector('#toggleItineraryBtn');
   const container = quotationContent.querySelector('#itineraryTableContainer');
@@ -394,8 +431,11 @@ function attachSnapshotItineraryToggle() {
     section.classList.toggle('itinerary-hidden', container.style.display === 'none');
   }
 
-  toggleBtn.addEventListener('click', () => {
+  toggleBtn.addEventListener('click', async () => {
     const isHidden = container.style.display === 'none';
+    if (isHidden) {
+      await ensurePublicItineraryTableContent(container, quotationDoc || {});
+    }
     container.style.display = isHidden ? 'block' : 'none';
     toggleBtn.textContent = isHidden ? 'Hide Itinerary' : 'Show Itinerary';
     if (section) {
@@ -435,12 +475,10 @@ function renderQuotation() {
     }
 
     const itineraryContainer = quotationContent.querySelector('#itineraryTableContainer');
-    const daywiseRows = getDaywiseItineraryRows(q);
-    if (itinerarySection && itineraryContainer && !itineraryContainer.innerHTML.trim() && daywiseRows.length) {
-      itineraryContainer.innerHTML = (window.ItineraryComponent && typeof window.ItineraryComponent.renderItineraryTable === 'function')
-        ? window.ItineraryComponent.renderItineraryTable(daywiseRows, { editable: false })
-        : `<div style="color:#444;line-height:1.7;">Day wise itinerary details are available.</div>`;
-      itineraryContainer.style.display = 'none';
+    if (itinerarySection && itineraryContainer && !itineraryContainer.innerHTML.trim()) {
+      ensurePublicItineraryTableContent(itineraryContainer, q).then(() => {
+        itineraryContainer.style.display = 'none';
+      });
     }
   }
 
