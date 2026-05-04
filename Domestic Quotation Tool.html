@@ -8,6 +8,7 @@
 <!-- Libraries for PDF/Image/Excel -->
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="accounts-summary-pdf.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <script>
@@ -22,50 +23,30 @@
   import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
   import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
   import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
-
   // Your web app's Firebase configuration
   const firebaseConfig = {
     apiKey: "AIzaSyDx3Qxt84vJlz_-mXuxiC0W2flaLadr9Ws",
     authDomain: "fc-quotation-tool.firebaseapp.com",
     projectId: "fc-quotation-tool",
     storageBucket: "fc-quotation-tool.firebasestorage.app",
-    messagingSenderId: "370566945624",
     appId: "1:370566945624:web:a84b20d5a8f99d20a6e32d"
   };
 
   // Initialize Firebase
   const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
-  const auth = getAuth(app);
 
   // Make db and auth global
-  window.db = db;
   window.auth = auth;
 
   // ========== Firebase Cloud Storage Utility Functions ==========
   window.firebaseDB = {
     // Save data to Firestore
-    async saveData(collection_name, docId, data) {
       try {
-        await setDoc(doc(db, collection_name, docId), data, { merge: true });
-        return true;
-      } catch (error) {
-        console.error(`Error saving to ${collection_name}:`, error);
         return false;
       }
     },
 
     // Get data from Firestore
-    async getData(collection_name, docId) {
-      try {
-        const docSnap = await getDoc(doc(db, collection_name, docId));
-        return docSnap.exists() ? docSnap.data() : null;
-      } catch (error) {
-        if (error?.code === 'permission-denied' || /insufficient permissions/i.test(error?.message || '')) {
-          console.debug(`Skipping Firebase read for ${collection_name}; using local fallback.`);
-          return null;
-        }
-        console.error(`Error getting from ${collection_name}:`, error);
         return null;
       }
     },
@@ -3987,12 +3968,19 @@ function removeAddon(id){
 <div class="section" id="calcSectionWrapper">
   <div class="actions">
     <button type="button" id="btnCalculate" class="green-btn">💰 Calculate Package</button>
+    <button type="button" id="btnRecalculate" class="blue-btn" style="display:none;">🔁 Recalculate Package</button>
     <button type="button" id="btnGenerateQuotation" class="blue-btn" style="display:none;">📄 Generate Quotation</button>
+    <button type="button" id="btnExportExcel" class="green-btn" style="display:none;">📊 Export Cost Sheet</button>
   </div>
 </div>
 
 <div id="calcSummarySection" class="section" style="display:none;">
-  <h3>📊 Package Calculation Summary</h3>
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+    <h3 style="margin:0;">📊 Package Calculation Summary</h3>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button type="button" id="btnDownloadAccountsPdf" class="green-btn" style="display:none;">📥 Download Accounts Summary PDF</button>
+    </div>
+  </div>
 
   <div class="grid">
     <div>
@@ -4059,25 +4047,290 @@ function removeAddon(id){
   
   <div id="calcTotals" style="margin-top:14px;font-weight:bold;"></div>
 
-<div class="actions" style="margin-top:14px;">
-  <button type="button" id="btnRecalculate" class="blue-btn">🔁 Recalculate</button>
-  <button type="button" id="btnGenerateQuotation2" class="blue-btn" onclick="showQuotationModal()">📄 Generate Quotation</button>
-  <button type="button" id="btnExportExcel" class="green-btn">📊 Export Cost Sheet</button>
-  <button type="button" id="btnCloseSummary" class="ghost">❌ Close Summary</button>
-</div>
-
 <script>
 const btnCalculate = document.getElementById("btnCalculate");
 const calcSummarySection = document.getElementById("calcSummarySection");
 const calcSummaryBody = document.getElementById("calcSummaryBody");
 const calcSummaryFooter = document.getElementById("calcSummaryFooter");
 const calcTotalsDiv = document.getElementById("calcTotals");
-const btnCloseSummary = document.getElementById("btnCloseSummary");
 const btnRecalculate = document.getElementById("btnRecalculate");
 const btnGenerateQuotation = document.getElementById("btnGenerateQuotation");
 const btnExportExcel = document.getElementById("btnExportExcel");
+const btnDownloadAccountsPdf = document.getElementById("btnDownloadAccountsPdf");
 const baseCurrencyInput = document.getElementById("baseCurrency");
 const usdToPkrRateInput = document.getElementById("usdToPkrRate");
+let isCalculationDirty = true;
+let hasCalculatedOnce = false;
+let accountsSupplierMap = {};
+
+function getCurrentQuotationForAccounts() {
+  if (typeof getCurrentDomesticQuotation === 'function') {
+    return getCurrentDomesticQuotation();
+  }
+  const allQuotations = JSON.parse(localStorage.getItem('savedQuotations_domestic')) || [];
+  return allQuotations.find(q => q.id === currentQuotationId) || null;
+}
+
+function isCurrentQuotationBookedForAccounts() {
+  const quotation = getCurrentQuotationForAccounts();
+  return String(quotation?.status || '').trim().toLowerCase() === 'booked';
+}
+
+function getSummaryRowsForAccounts() {
+  const rows = [];
+  document.querySelectorAll('#calcSummaryBody tr').forEach((row, index) => {
+    const cells = row.querySelectorAll('td');
+    if (!cells || cells.length < 5) return;
+    const section = normalizePdfText(cells[0]?.innerText || '');
+    const normalizedSection = section.toLowerCase();
+    if (normalizedSection === 'package totals' || normalizedSection.includes('agent service fee')) return;
+    const description = normalizePdfText(cells[1]?.innerText || '');
+    const cost = normalizePdfText(cells[5]?.innerText || cells[2]?.innerText || '');
+    const service = normalizePdfText(cells[6]?.innerText || cells[3]?.innerText || '');
+    const selling = normalizePdfText(cells[7]?.innerText || cells[4]?.innerText || '');
+    const key = `${section}||${description || index}`;
+    rows.push({ key, section, description, cost, service, selling });
+  });
+  return rows;
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function saveAccountsSuppliersToCurrentQuotation() {
+  if (!currentQuotationId) return;
+  const allQuotations = JSON.parse(localStorage.getItem('savedQuotations_domestic')) || [];
+  const idx = allQuotations.findIndex(q => q.id === currentQuotationId);
+  if (idx === -1) return;
+  allQuotations[idx].accountsSuppliers = { ...accountsSupplierMap };
+  allQuotations[idx].updatedAt = new Date().toISOString();
+  localStorage.setItem('savedQuotations_domestic', JSON.stringify(allQuotations));
+  // Also save to Firebase
+  const agent = getCurrentAgent();
+  const agentDocId = agent?.id || agent?.uid || '';
+  if (agentDocId && window.firebaseDB) {
+    window.firebaseDB.saveData('domestic_quotations', agentDocId, {
+      quotations: allQuotations,
+      updatedAt: new Date(),
+      agentId: agentDocId
+    }).catch(err => console.error('Firebase accounts suppliers save error:', err));
+  }
+}
+
+function buildAccountsSummaryPdf(rows, supplierMap) {
+  const quotation = getCurrentQuotationForAccounts();
+  const client = quotation?.clientData || JSON.parse(localStorage.getItem('savedClientData_domestic')) || {};
+  const agent = (typeof getCurrentAgent === 'function' ? getCurrentAgent() : null) || quotation?.agentData || {};
+
+  renderAccountsSummaryPdf({
+    rows,
+    supplierMap,
+    quotation,
+    client,
+    agent,
+    reportTitle: 'Accounts Cost Summary',
+    packageLabel: normalizePdfText(client?.tourDestination || 'Domestic Tour'),
+    currencyLabel: 'PKR'
+  });
+}
+
+function openAccountsSupplierModal() {
+  if (!isCurrentQuotationBookedForAccounts()) {
+    showNotification('Accounts summary is available only for booked quotations.', 'warning');
+    return;
+  }
+  const rows = getSummaryRowsForAccounts();
+  if (!rows.length) {
+    showNotification('No summary rows found. Please calculate first.', 'warning');
+    return;
+  }
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay visible no-print';
+  modal.innerHTML = `
+    <div class="modal-content" style="max-width:900px;max-height:85vh;overflow:auto;">
+      <h3 style="margin-top:0;">Accounts Supplier Details</h3>
+      <p class="small" style="margin-top:-6px;color:#666;">Enter supplier name for each service row before downloading PDF.</p>
+      <div style="overflow:auto;max-height:55vh;border:1px solid #e5e5e5;border-radius:8px;">
+        <table style="width:100%;border-collapse:collapse;">
+          <thead style="background:#f5f8fc;position:sticky;top:0;">
+            <tr>
+              <th style="text-align:left;padding:8px;border-bottom:1px solid #ddd;">Service</th>
+              <th style="text-align:left;padding:8px;border-bottom:1px solid #ddd;">Description</th>
+              <th style="text-align:left;padding:8px;border-bottom:1px solid #ddd;">Supplier Name</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(row => `
+              <tr>
+                <td style="padding:8px;border-bottom:1px solid #eee;vertical-align:top;">${escapeHtml(row.section)}</td>
+                <td style="padding:8px;border-bottom:1px solid #eee;vertical-align:top;">${escapeHtml(row.description)}</td>
+                <td style="padding:8px;border-bottom:1px solid #eee;">
+                  <input type="text" data-supplier-key="${escapeHtml(row.key)}" value="${escapeHtml(accountsSupplierMap[row.key] || '')}" placeholder="Supplier name" style="width:100%;" />
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div id="supplierMissingMsg" class="small" style="color:#c0392b;margin-top:8px;display:none;"></div>
+      <div class="actions" style="margin-top:12px;justify-content:flex-end;">
+        <button type="button" id="btnCancelAccountsSupplier" class="ghost">Cancel</button>
+        <button type="button" id="btnDownloadAccountsPdfNow" class="green-btn">Download PDF</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const closeModal = () => modal.remove();
+  modal.querySelector('#btnCancelAccountsSupplier')?.addEventListener('click', closeModal);
+
+  const handleDownloadClick = () => {
+    const inputs = Array.from(modal.querySelectorAll('input[data-supplier-key]'));
+    const missing = [];
+    const nextMap = {};
+    inputs.forEach((input) => {
+      const key = input.getAttribute('data-supplier-key') || '';
+      const value = (input.value || '').trim();
+      if (!value) missing.push(input);
+      if (key) nextMap[key] = value;
+    });
+
+    if (missing.length) {
+      const msg = modal.querySelector('#supplierMissingMsg');
+      if (msg) {
+        msg.style.display = 'block';
+        msg.textContent = `${missing.length} supplier field(s) are missing.`;
+      }
+      missing[0]?.focus();
+      return;
+    }
+
+    accountsSupplierMap = { ...accountsSupplierMap, ...nextMap };
+    saveAccountsSuppliersToCurrentQuotation();
+
+    try {
+      buildAccountsSummaryPdf(rows, accountsSupplierMap);
+    } catch (error) {
+      console.error('Accounts PDF download error:', error);
+      const errMsg = error?.message ? `PDF Error: ${error.message}` : 'Unable to generate Accounts PDF. Please recalculate and try again.';
+      if (typeof showNotification === 'function') {
+        showNotification(errMsg, 'error');
+      }
+      return;
+    }
+
+    closeModal();
+  };
+
+  const downloadButton = modal.querySelector('#btnDownloadAccountsPdfNow');
+  if (downloadButton) {
+    downloadButton.addEventListener('click', handleDownloadClick);
+  } else {
+    modal.addEventListener('click', (event) => {
+      if (event.target && event.target.id === 'btnDownloadAccountsPdfNow') {
+        handleDownloadClick();
+      }
+    });
+  }
+}
+
+function refreshCalculationActionButtons() {
+  const isBooked = isCurrentQuotationBookedForAccounts();
+  if (btnCalculate) btnCalculate.style.display = (!hasCalculatedOnce && isCalculationDirty) ? 'inline-block' : 'none';
+  if (btnRecalculate) btnRecalculate.style.display = (hasCalculatedOnce && isCalculationDirty) ? 'inline-block' : 'none';
+  if (btnGenerateQuotation) btnGenerateQuotation.style.display = hasCalculatedOnce ? 'inline-block' : 'none';
+  if (btnExportExcel) btnExportExcel.style.display = hasCalculatedOnce ? 'inline-block' : 'none';
+  if (btnDownloadAccountsPdf) btnDownloadAccountsPdf.style.display = (hasCalculatedOnce && !isCalculationDirty && isBooked) ? 'inline-block' : 'none';
+}
+
+function isCalculationTrackedField(target) {
+  if (!target || !target.tagName) return false;
+  const tag = target.tagName.toUpperCase();
+  if (!["INPUT", "SELECT", "TEXTAREA"].includes(tag)) return false;
+  if (target.closest('#statusSection')) return false;
+  if (target.closest('#calcSummarySection')) return false;
+  if (target.closest('[data-supplier-key]')) return false;
+  return true;
+}
+
+function markCalculationDirty() {
+  if (isCalculationDirty && !hasCalculatedOnce) return;
+  isCalculationDirty = true;
+  if (calcSummarySection) calcSummarySection.style.display = 'none';
+  if (calcSummaryBody) calcSummaryBody.innerHTML = '';
+  if (calcSummaryFooter) calcSummaryFooter.innerHTML = '';
+  if (calcTotalsDiv) calcTotalsDiv.innerHTML = '';
+  refreshCalculationActionButtons();
+}
+
+function markCalculationReady() {
+  isCalculationDirty = false;
+  hasCalculatedOnce = true;
+  refreshCalculationActionButtons();
+}
+
+function getCalculationSnapshot() {
+  return {
+    isCalculated: !isCalculationDirty,
+    summaryBodyHtml: calcSummaryBody?.innerHTML || '',
+    totalsHtml: calcTotalsDiv?.innerHTML || '',
+    updatedAt: new Date().toISOString()
+  };
+}
+
+function applyCalculationSnapshot(snapshot) {
+  if (snapshot && snapshot.isCalculated && (snapshot.summaryBodyHtml || snapshot.totalsHtml)) {
+    if (calcSummaryBody) calcSummaryBody.innerHTML = snapshot.summaryBodyHtml || '';
+    if (calcTotalsDiv) calcTotalsDiv.innerHTML = snapshot.totalsHtml || '';
+    if (calcSummarySection) calcSummarySection.style.display = 'block';
+    hasCalculatedOnce = true;
+    markCalculationReady();
+    return;
+  }
+  hasCalculatedOnce = false;
+  markCalculationDirty();
+}
+
+function isCalculationRequired() {
+  return isCalculationDirty || !hasCalculatedOnce;
+}
+
+function withCalculationSummaryAvailable(action) {
+  const runAction = () => {
+    try {
+      action();
+    } catch (error) {
+      console.error('Error opening quotation preview:', error);
+      showAlert('Failed to open quotation preview. Please try again.', 'Error');
+    }
+  };
+
+  if (!calcSummarySection || calcSummarySection.style.display !== 'none') {
+    runAction();
+    return;
+  }
+
+  const previousVisibility = calcSummarySection.style.visibility;
+  calcSummarySection.style.visibility = 'hidden';
+  calcSummarySection.style.display = 'block';
+  refreshCalculationActionButtons();
+
+  requestAnimationFrame(() => {
+    runAction();
+    requestAnimationFrame(() => {
+      calcSummarySection.style.display = 'none';
+      calcSummarySection.style.visibility = previousVisibility;
+      refreshCalculationActionButtons();
+    });
+  });
+}
 
 // --- UPDATED CURRENCY CONVERSION FUNCTION ---
 function convertToPKR(amount, currency) {
@@ -4902,7 +5155,7 @@ async function performCalculation() {
   showStatusSection();
 
   calcSummarySection.style.display = "block";
-  btnGenerateQuotation.style.display = "inline-block";
+  markCalculationReady();
   
   // Auto-save quotation after calculation
   saveQuotation();
@@ -5041,7 +5294,7 @@ btnRecalculate.addEventListener("click", () => {
   document.activeElement = btnRecalculate;
   performCalculation();
 });
-btnCloseSummary.addEventListener("click", () => (calcSummarySection.style.display = "none"));
+btnDownloadAccountsPdf?.addEventListener('click', openAccountsSupplierModal);
 
 ['numAdult', 'numChildBed', 'numChildNoBed', 'numInfant'].forEach((id) => {
   const el = document.getElementById(id);
@@ -5055,6 +5308,19 @@ btnCloseSummary.addEventListener("click", () => (calcSummarySection.style.displa
 });
 
 updateServiceChargeVisibility();
+refreshCalculationActionButtons();
+
+document.addEventListener('input', (event) => {
+  if (isCalculationTrackedField(event.target)) {
+    markCalculationDirty();
+  }
+});
+
+document.addEventListener('change', (event) => {
+  if (isCalculationTrackedField(event.target)) {
+    markCalculationDirty();
+  }
+});
 </script>
 
 <script>
@@ -5115,6 +5381,46 @@ function syncCreateVoucherButton(statusValue) {
   voucherBtn.style.display = shouldShow ? 'inline-block' : 'none';
 }
 
+function setBookedEditLockStateDomestic(isLocked) {
+  const mainForm = document.getElementById('mainForm');
+  if (!mainForm) return;
+  const allowedButtonIds = new Set([
+    'btnReopenPending',
+    'btnCreateVoucher',
+    'btnGenerateQuotation',
+    'btnExportExcel',
+    'btnDownloadAccountsPdf',
+    'btnDashboard',
+    'btnLoadQuotation',
+    'btnSaveQuotation'
+  ]);
+  const shouldKeepEnabled = (el) => {
+    if (!el) return false;
+    if (el.id && allowedButtonIds.has(el.id)) return true;
+    if (el.classList && el.classList.contains('service-tab')) return true;
+    if (el.closest('#statusSection')) return true;
+    return false;
+  };
+  mainForm.querySelectorAll('input, select, textarea, button').forEach((el) => {
+    const tag = (el.tagName || '').toUpperCase();
+    const isField = tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA';
+    const shouldDisableWhenLocked = isField || (tag === 'BUTTON' && !shouldKeepEnabled(el));
+    if (isLocked) {
+      if (!el.hasAttribute('data-booked-lock-prev-disabled')) {
+        el.setAttribute('data-booked-lock-prev-disabled', el.disabled ? '1' : '0');
+      }
+      if (shouldDisableWhenLocked) {
+        el.disabled = true;
+      }
+      return;
+    }
+    if (el.hasAttribute('data-booked-lock-prev-disabled')) {
+      el.disabled = el.getAttribute('data-booked-lock-prev-disabled') === '1';
+      el.removeAttribute('data-booked-lock-prev-disabled');
+    }
+  });
+}
+
 function updateQuotationStatus(quotationId, newStatus) {
   try {
     if (newStatus === 'booked') {
@@ -5163,17 +5469,43 @@ function updateQuotationStatus(quotationId, newStatus) {
       // Trigger dashboard refresh
       sessionStorage.setItem('refreshDashboard_domestic', 'true');
       
-      showNotification(`Quotation status updated to: ${newStatus}. This quotation now requires customer re-acceptance before booking.`, "success");
-      
-      // Add this to ensure status section is visible after update
-      showStatusSection();
-      syncCreateVoucherButton(newStatus);
+      // Notify user and refresh UI, but do not fail the status save if UI refresh fails
+      try {
+        showNotification(`Quotation status updated to: ${newStatus}. This quotation now requires customer re-acceptance before booking.`, "success");
+      } catch (uiError) {
+        console.error('Failed to show status update notification:', uiError);
+      }
+      try {
+        showStatusSection();
+      } catch (uiError) {
+        console.error('Failed to refresh status section after update:', uiError);
+      }
+      try {
+        syncCreateVoucherButton(newStatus);
+      } catch (uiError) {
+        console.error('Failed to refresh voucher button after update:', uiError);
+      }
       
       return true;
     }
     return false;
   } catch (error) {
     console.error('Error updating quotation status:', error);
+    try {
+      const allSavedQuotations = JSON.parse(localStorage.getItem('savedQuotations_domestic')) || [];
+      const persisted = allSavedQuotations.find(q => q.id === quotationId);
+      if (persisted && String(persisted.status || '').toLowerCase() === String(newStatus || '').toLowerCase()) {
+        console.warn('Quotation status persisted in localStorage despite update error:', quotationId, newStatus);
+        try {
+          showStatusSection();
+        } catch (uiError) {
+          console.error('Failed to refresh status section after persisted update:', uiError);
+        }
+        return true;
+      }
+    } catch (verifyError) {
+      console.error('Error verifying persisted quotation status after update failure:', verifyError);
+    }
     showAlert("Failed to update quotation status. Please try again.", "Error");
     return false;
   }
@@ -5242,25 +5574,30 @@ function showStatusSection() {
     const btnUpdateStatus = document.getElementById('btnUpdateStatus');
     const btnReopenPending = document.getElementById('btnReopenPending');
     if (quotation && currentStatus === 'booked') {
+      setBookedEditLockStateDomestic(true);
       if (btnUpdateStatus) {
         btnUpdateStatus.style.display = 'none';
         btnUpdateStatus.disabled = true;
       }
       if (btnReopenPending) {
+        btnReopenPending.textContent = '✏️ Edit Quotation';
         btnReopenPending.style.display = 'inline-block';
         btnReopenPending.disabled = false;
       }
     } else {
+      setBookedEditLockStateDomestic(false);
       if (btnUpdateStatus) {
         btnUpdateStatus.style.display = 'inline-block';
         btnUpdateStatus.disabled = false;
       }
       if (btnReopenPending) {
+        btnReopenPending.textContent = '↩ Reopen as Pending';
         btnReopenPending.style.display = 'none';
         btnReopenPending.disabled = true;
       }
     }
   } else {
+      setBookedEditLockStateDomestic(false);
       statusSection.style.display = 'none';
       syncCreateVoucherButton('');
       if (btnApproveCustomer) btnApproveCustomer.style.display = 'none';
@@ -5271,6 +5608,9 @@ function showStatusSection() {
         btnReopenPending.disabled = true;
       }
     }
+  if (typeof refreshCalculationActionButtons === 'function') {
+    refreshCalculationActionButtons();
+  }
   }
 
 // Add a small delay to ensure all elements are loaded
@@ -5289,12 +5629,17 @@ document.getElementById('btnUpdateStatus').addEventListener('click', () => {
   updateQuotationStatus(currentQuotationId, newStatus);
 });
 
-document.getElementById('btnReopenPending')?.addEventListener('click', () => {
+document.getElementById('btnReopenPending')?.addEventListener('click', async () => {
   if (!currentQuotationId) {
     showAlert("No quotation selected. Please save or load a quotation first.");
     return;
   }
-  updateQuotationStatus(currentQuotationId, 'pending');
+  const proceed = await showConfirm('Editing a booked quotation will move it to Pending. New Acceptance would require. Continue?', 'Enable Editing');
+  if (!proceed) return;
+  const updated = updateQuotationStatus(currentQuotationId, 'pending');
+  if (updated && typeof markCalculationDirty === 'function') {
+    markCalculationDirty();
+  }
 });
 
 document.getElementById('quotationStatus')?.addEventListener('change', (event) => {
@@ -6696,7 +7041,6 @@ quotationHTML += `
 modalButtons.innerHTML = `
   <button id="printQuotationBtn" class="green-btn" style="margin-right: 10px;">🖨️ Print Quotation</button>
   <button id="shareWhatsAppBtn" class="whatsapp-btn">📱 Share on WhatsApp</button>
-  <button id="btnGenerateShareFromPreview" class="blue-btn">🔗 Generate Customer Link</button>
   <button id="btnCopyShareFromPreview" class="ghost">📋 Copy Link</button>
   <input id="previewShareUrl" type="text" readonly style="min-width:280px;flex:1;background:#f7f9fc;border:1px solid #d1d9e5;border-radius:8px;padding:10px;" placeholder="Share link will appear here">
   <button id="closeQuotationBtn" class="ghost">Close</button>
@@ -6791,7 +7135,6 @@ setTimeout(() => {
     shareOnWhatsApp();
   };
 
-  const btnGenerateShareFromPreview = document.getElementById('btnGenerateShareFromPreview');
   const btnCopyShareFromPreview = document.getElementById('btnCopyShareFromPreview');
   const previewShareUrl = document.getElementById('previewShareUrl');
   const syncPreviewShareControls = () => {
@@ -6799,21 +7142,8 @@ setTimeout(() => {
     const quotation = allQuotations.find(q => q.id === currentQuotationId);
     const shareUrl = quotation?.sharePublicUrl || (quotation?.shareLinkId ? getQuotationPublicUrl(quotation.id, quotation.shareLinkId) : '');
     if (previewShareUrl) previewShareUrl.value = shareUrl || '';
-    if (btnGenerateShareFromPreview) {
-      btnGenerateShareFromPreview.disabled = !!shareUrl;
-      btnGenerateShareFromPreview.style.display = shareUrl ? 'none' : 'inline-block';
-    }
     if (btnCopyShareFromPreview) btnCopyShareFromPreview.disabled = !shareUrl;
   };
-
-  if (btnGenerateShareFromPreview) {
-    btnGenerateShareFromPreview.onclick = () => {
-      handleGenerateQuotationLink({
-        requirePreview: true,
-        onComplete: syncPreviewShareControls
-      });
-    };
-  }
 
   if (btnCopyShareFromPreview) {
     btnCopyShareFromPreview.onclick = () => {
@@ -6830,6 +7160,15 @@ setTimeout(() => {
   }
 
   syncPreviewShareControls();
+
+  // Auto-generate share link if not yet created
+  {
+    const _allQ = JSON.parse(localStorage.getItem('savedQuotations_domestic')) || [];
+    const _q = _allQ.find(q => q.id === currentQuotationId);
+    if (!_q?.shareLinkId) {
+      handleGenerateQuotationLink({ requirePreview: false, onComplete: syncPreviewShareControls });
+    }
+  }
 
   // Close button
   document.getElementById('closeQuotationBtn').onclick = function() {
@@ -7011,12 +7350,12 @@ btnGenerateQuotation.addEventListener('click', () => {
   }
   
   // Check if calculation has been performed
-  if (calcSummarySection.style.display === 'none') {
+  if (isCalculationRequired()) {
     showAlert("Please calculate the package before generating a quotation.");
     return;
   }
   
-  showQuotationModal();
+  withCalculationSummaryAvailable(() => showQuotationModal());
 });
 
 // Export to Excel functionality
@@ -7151,7 +7490,7 @@ function saveQuotation() {
     }
     
     // Check if calculation has been performed
-    if (calcSummarySection.style.display === 'none') {
+    if (isCalculationRequired()) {
       showNotification("Please calculate the package before saving the quotation.", "error");
       return;
     }
@@ -7464,7 +7803,9 @@ const customSectionsData = {
       visa: visaData,
       addons: addonsData,
       itineraryData: itineraryEditorState,
-      customSections: customSectionsData  // Add this line
+      customSections: customSectionsData,
+      calculationSnapshot: getCalculationSnapshot(),
+      accountsSuppliers: { ...accountsSupplierMap }
     };
 
     upsertCustomerFromQuotation(quotationData.clientData, {
@@ -7495,6 +7836,7 @@ const customSectionsData = {
     }
     
     // Always upsert by id to avoid stale records after remove/edit actions.
+    let bookedMovedToPendingByEdit = false;
     const targetQuotationId = currentQuotationId || quotationData.id;
     quotationData.id = targetQuotationId;
     if (existingQuotation?.status === 'booked') {
@@ -7502,6 +7844,7 @@ const customSectionsData = {
       quotationData.customerNeedsReaccept = true;
       quotationData.customerAcceptance = null;
       quotationData.agentApproval = null;
+      bookedMovedToPendingByEdit = true;
     }
     if (existingQuotation?.shareLinkId) {
       const editAt = new Date().toISOString();
@@ -7562,6 +7905,9 @@ const customSectionsData = {
     savedQuotations = allQuotations;
     
     showNotification("Quotation saved successfully!", "success");
+    if (bookedMovedToPendingByEdit) {
+      showNotification('Booked quotation moved to Pending due to edits. New acceptance would be required.', 'warning');
+    }
     showStatusSection();
     
   } catch (error) {
@@ -8144,6 +8490,11 @@ function loadQuotation(quotationId) {
     
     // Show status section
     showStatusSection();
+    applyCalculationSnapshot(quotation.calculationSnapshot);
+    accountsSupplierMap = quotation?.accountsSuppliers && typeof quotation.accountsSuppliers === 'object'
+      ? { ...quotation.accountsSuppliers }
+      : {};
+    refreshCalculationActionButtons();
 
     // Keep loaded values but do not auto-open quotation preview/cost sheet on reload
     updateServiceChargeVisibility();

@@ -8,6 +8,7 @@
 <!-- Libraries for PDF/Image/Excel -->
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="accounts-summary-pdf.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <!-- Firebase SDK -->
@@ -16,50 +17,30 @@
   import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
   import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
   import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
-
   // Your web app's Firebase configuration
   const firebaseConfig = {
     apiKey: "AIzaSyDx3Qxt84vJlz_-mXuxiC0W2flaLadr9Ws",
     authDomain: "fc-quotation-tool.firebaseapp.com",
     projectId: "fc-quotation-tool",
-    storageBucket: "fc-quotation-tool.firebasestorage.app",
     messagingSenderId: "370566945624",
     appId: "1:370566945624:web:a84b20d5a8f99d20a6e32d"
   };
 
   // Initialize Firebase
   const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
-  const auth = getAuth(app);
 
   // Make db and auth global
-  window.db = db;
   window.auth = auth;
 
   // ========== Firebase Cloud Storage Utility Functions ==========
   window.firebaseDB = {
     // Save data to Firestore
-    async saveData(collection_name, docId, data) {
       try {
-        await setDoc(doc(db, collection_name, docId), data, { merge: true });
-        return true;
-      } catch (error) {
-        console.error(`Error saving to ${collection_name}:`, error);
         return false;
       }
     },
 
     // Get data from Firestore
-    async getData(collection_name, docId) {
-      try {
-        const docSnap = await getDoc(doc(db, collection_name, docId));
-        return docSnap.exists() ? docSnap.data() : null;
-      } catch (error) {
-        console.error(`Error getting from ${collection_name}:`, error);
-        return null;
-      }
-    },
-
     // Get all documents from a collection
     async getAll(collection_name) {
       try {
@@ -947,6 +928,49 @@ function syncCreateVoucherButton(statusValue) {
   voucherBtn.style.display = shouldShow ? 'inline-block' : 'none';
 }
 
+function setBookedEditLockStateInternational(isLocked) {
+  const mainForm = document.getElementById('mainForm');
+  if (!mainForm) return;
+  const allowedButtonIds = new Set([
+    'btnReopenPending',
+    'btnCreateVoucher',
+    'btnGenerateQuotation',
+    'btnExportExcel',
+    'btnDownloadAccountsPdf',
+    'btnDashboard',
+    'btnLoadQuotation',
+    'btnSaveQuotation'
+  ]);
+  const shouldKeepEnabled = (el) => {
+    if (!el) return false;
+    if (el.id && allowedButtonIds.has(el.id)) return true;
+    if (el.classList && el.classList.contains('service-tab')) return true;
+    if (el.closest('#statusSection')) return true;
+    return false;
+  };
+  mainForm.querySelectorAll('input, select, textarea, button').forEach((el) => {
+    const tag = (el.tagName || '').toUpperCase();
+    const isField = tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA';
+    const shouldDisableWhenLocked = isField || (tag === 'BUTTON' && !shouldKeepEnabled(el));
+    if (isLocked) {
+      if (!el.hasAttribute('data-booked-lock-prev-disabled')) {
+        el.setAttribute('data-booked-lock-prev-disabled', el.disabled ? '1' : '0');
+      }
+      if (shouldDisableWhenLocked) {
+        el.disabled = true;
+      } else {
+        // Keep non-edit controls (service tabs, reports, edit gate) interactive in booked mode.
+        el.disabled = false;
+      }
+      return;
+    }
+    if (el.hasAttribute('data-booked-lock-prev-disabled')) {
+      el.disabled = el.getAttribute('data-booked-lock-prev-disabled') === '1';
+      el.removeAttribute('data-booked-lock-prev-disabled');
+    }
+  });
+}
+
 function showStatusSection() {
   const statusSection = document.getElementById('statusSection');
   const quotationStatus = document.getElementById('quotationStatus');
@@ -1008,25 +1032,30 @@ function showStatusSection() {
     const btnUpdateStatus = document.getElementById('btnUpdateStatus');
     const btnReopenPending = document.getElementById('btnReopenPending');
     if (quotation && currentStatus === 'booked') {
+      setBookedEditLockStateInternational(true);
       if (btnUpdateStatus) {
         btnUpdateStatus.style.display = 'none';
         btnUpdateStatus.disabled = true;
       }
       if (btnReopenPending) {
+        btnReopenPending.textContent = '✏️ Edit Quotation';
         btnReopenPending.style.display = 'inline-block';
         btnReopenPending.disabled = false;
       }
     } else {
+      setBookedEditLockStateInternational(false);
       if (btnUpdateStatus) {
         btnUpdateStatus.style.display = 'inline-block';
         btnUpdateStatus.disabled = false;
       }
       if (btnReopenPending) {
+        btnReopenPending.textContent = '↩ Reopen as Pending';
         btnReopenPending.style.display = 'none';
         btnReopenPending.disabled = true;
       }
     }
   } else {
+    setBookedEditLockStateInternational(false);
     statusSection.style.display = 'none';
     if (btnApproveCustomer) btnApproveCustomer.style.display = 'none';
     if (btnSelfBook) btnSelfBook.style.display = 'none';
@@ -1036,6 +1065,9 @@ function showStatusSection() {
       btnReopenPending.style.display = 'none';
       btnReopenPending.disabled = true;
     }
+  }
+  if (typeof refreshCalculationActionButtons === 'function') {
+    refreshCalculationActionButtons();
   }
 }
 
@@ -1085,12 +1117,17 @@ async function updateQuotationStatus() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('btnReopenPending')?.addEventListener('click', () => {
+  document.getElementById('btnReopenPending')?.addEventListener('click', async () => {
     if (!currentQuotationId) {
       showAlert("No quotation selected. Please save or load a quotation first.");
       return;
     }
-    updateQuotationStatus(currentQuotationId, 'pending');
+    const proceed = await showConfirm('Editing a booked quotation will move it to Pending. New Acceptance would require. Continue?', 'Enable Editing');
+    if (!proceed) return;
+    const updated = updateQuotationStatus(currentQuotationId, 'pending');
+    if (updated && typeof markCalculationDirty === 'function') {
+      markCalculationDirty();
+    }
   });
 
   document.getElementById('btnApproveCustomer')?.addEventListener('click', () => {
@@ -1738,7 +1775,7 @@ async function applyPackageToForm(pkg) {
     }
     if (document.getElementById(`airline_${idx}`)) document.getElementById(`airline_${idx}`).value = flight.airline || '';
     if (document.getElementById(`flightDirect_${idx}`)) document.getElementById(`flightDirect_${idx}`).value = mapFlightType(flight.type);
-    if (document.getElementById(`flightCurrency_${idx}`)) document.getElementById(`flightCurrency_${idx}`).value = flight.currency || 'USD';
+    if (document.getElementById(`flightCurrency_${idx}`)) document.getElementById(`flightCurrency_${idx}`).value = normalizeCurrency(flight.currency);
     if (document.getElementById(`flightCostAdult_${idx}`)) document.getElementById(`flightCostAdult_${idx}`).value = flight.priceAdult || 0;
     if (document.getElementById(`flightCostChildBed_${idx}`)) document.getElementById(`flightCostChildBed_${idx}`).value = flight.priceChild || 0;
     if (document.getElementById(`flightCostChildNoBed_${idx}`)) document.getElementById(`flightCostChildNoBed_${idx}`).value = flight.priceChild || 0;
@@ -1774,7 +1811,7 @@ async function applyPackageToForm(pkg) {
       if (roomsEl) roomsEl.value = hotel.rooms || 1;
       if (serviceEl) serviceEl.value = mapMealPlan(hotel.mealPlan);
       if (costNightEl) costNightEl.value = hotel.doubleRate || hotel.tripleRate || hotel.quadRate || 0;
-      if (currencyEl) currencyEl.value = hotel.currency || 'USD';
+      if (currencyEl) currencyEl.value = normalizeCurrency(hotel.currency);
       if (svcNightEl) svcNightEl.value = 0;
     }
 
@@ -1806,7 +1843,7 @@ async function applyPackageToForm(pkg) {
     if (document.getElementById(`tShareCostAdult_${idx}`)) document.getElementById(`tShareCostAdult_${idx}`).value = transfer.priceAdult || 0;
     if (document.getElementById(`tShareCostChild_${idx}`)) document.getElementById(`tShareCostChild_${idx}`).value = transfer.priceChild || 0;
     if (document.getElementById(`tShareCostInf_${idx}`)) document.getElementById(`tShareCostInf_${idx}`).value = transfer.priceInfant || 0;
-    if (document.getElementById(`tCurrency_${idx}`)) document.getElementById(`tCurrency_${idx}`).value = transfer.currency || 'USD';
+    if (document.getElementById(`tCurrency_${idx}`)) document.getElementById(`tCurrency_${idx}`).value = normalizeCurrency(transfer.currency);
     if (document.getElementById(`tSvc_${idx}`)) document.getElementById(`tSvc_${idx}`).value = 0;
     if (document.getElementById(`tShareSvcAdult_${idx}`)) document.getElementById(`tShareSvcAdult_${idx}`).value = 0;
     if (document.getElementById(`tShareSvcChild_${idx}`)) document.getElementById(`tShareSvcChild_${idx}`).value = 0;
@@ -1833,7 +1870,7 @@ async function applyPackageToForm(pkg) {
     if (document.getElementById(`tourShareCostAdult_${idx}`)) document.getElementById(`tourShareCostAdult_${idx}`).value = tour.priceAdult || 0;
     if (document.getElementById(`tourShareCostChild_${idx}`)) document.getElementById(`tourShareCostChild_${idx}`).value = tour.priceChild || 0;
     if (document.getElementById(`tourShareCostInf_${idx}`)) document.getElementById(`tourShareCostInf_${idx}`).value = tour.priceInfant || 0;
-    if (document.getElementById(`tourCurrency_${idx}`)) document.getElementById(`tourCurrency_${idx}`).value = tour.currency || 'USD';
+    if (document.getElementById(`tourCurrency_${idx}`)) document.getElementById(`tourCurrency_${idx}`).value = normalizeCurrency(tour.currency);
     if (document.getElementById(`tourSvc_${idx}`)) document.getElementById(`tourSvc_${idx}`).value = 0;
     if (document.getElementById(`tourShareSvcAdult_${idx}`)) document.getElementById(`tourShareSvcAdult_${idx}`).value = 0;
     if (document.getElementById(`tourShareSvcChild_${idx}`)) document.getElementById(`tourShareSvcChild_${idx}`).value = 0;
@@ -1847,7 +1884,7 @@ async function applyPackageToForm(pkg) {
     const visa = pkg.visas[0];
     if (document.getElementById('visaCountry')) document.getElementById('visaCountry').value = visa.country || 'Other';
     if (document.getElementById('visaCost')) document.getElementById('visaCost').value = visa.priceAdult || 0;
-    if (document.getElementById('visaCurrency')) document.getElementById('visaCurrency').value = visa.currency || 'USD';
+    if (document.getElementById('visaCurrency')) document.getElementById('visaCurrency').value = normalizeCurrency(visa.currency);
     if (document.getElementById('visaSvc')) document.getElementById('visaSvc').value = 0;
   }
 
@@ -2895,8 +2932,6 @@ async function addFlight() {
         <label>Flight Currency</label>
         <select id="flightCurrency_${nextFlightNumber}">
           <option value="USD">USD</option>
-          <option value="EUR">EUR</option>
-          <option value="GBP">GBP</option>
           <option value="PKR">PKR</option>
         </select>
       </div>
@@ -3173,7 +3208,7 @@ async function createHotelSection(index){
       <div><label>Rooms count</label><input type="number" class="hotelRoomsInp" name="hotelRoomsInp_${hotelIdx}" value="1" min="1"></div>
       <div><label>Service Type</label><select class="hotelServiceSel" name="hotelServiceSel_${hotelIdx}"><option>Room Only</option><option>With Breakfast</option><option>Half Board</option><option>Full Board</option></select></div>
       <div><label>Cost per night</label><input type="number" class="hotelCostNightInp" name="hotelCostNightInp_${hotelIdx}" value="0" min="0"></div>
-      <div><label>Hotel Currency</label><select class="hotelCurrencySel" name="hotelCurrencySel_${hotelIdx}"><option value="USD">USD</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="PKR">PKR</option></select></div>
+      <div><label>Hotel Currency</label><select class="hotelCurrencySel" name="hotelCurrencySel_${hotelIdx}"><option value="USD">USD</option><option value="PKR">PKR</option></select></div>
       <div><label>Service per night</label><input type="number" class="hotelSvcNightInp" name="hotelSvcNightInp_${hotelIdx}" value="0" min="0"></div>
       <div style="display:flex;align-items:end;justify-content:end"><button type="button" class="remove-btn" onclick="removeRoomTypeRow(${hotelIdx},${roomIdx})">❌ Remove</button></div>
     </div>`;
@@ -3600,8 +3635,6 @@ async function addTransfer(){
         <label>Currency</label>
         <select id="tCurrency_${nextTransferNumber}">
           <option value="USD">USD</option>
-          <option value="EUR">EUR</option>
-          <option value="GBP">GBP</option>
           <option value="PKR">PKR</option>
         </select>
       </div>
@@ -3806,8 +3839,6 @@ async function addTour(){
         <label>Currency</label>
         <select id="tourCurrency_${nextTourNumber}">
           <option value="USD">USD</option>
-          <option value="EUR">EUR</option>
-          <option value="GBP">GBP</option>
           <option value="PKR">PKR</option>
         </select>
       </div>
@@ -3947,8 +3978,6 @@ async function addVisa(){
         <label>Visa Currency</label>
         <select id="visaCurrency">
           <option value="USD">USD</option>
-          <option value="EUR">EUR</option>
-          <option value="GBP">GBP</option>
           <option value="PKR">PKR</option>
         </select>
       </div>
@@ -4162,7 +4191,7 @@ async function addDirectFlightAddon(){
         <option>Turkish Airlines (TK)</option>
       </datalist>
       <label>Flight Currency</label>
-      <select><option value="USD">USD</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="PKR">PKR</option></select>
+      <select><option value="USD">USD</option><option value="PKR">PKR</option></select>
 <!-- PAX-FIELDS-START -->
 <div class="upgrade-flight-costs">
   <h5 style="margin-bottom: 10px; color: #007bff;">Enter Upgrade Flight Costs (System will calculate difference)</h5>
@@ -4251,7 +4280,7 @@ async function addMealTypeAddon(){
       <div class="inline-input">
         <label>Cost per pax/night</label><input type="number" value="0">
         <label>Service per pax/night</label><input type="number" value="0">
-        <label>Currency</label><select id="mealCurrency_${mealIndex}"><option value="USD">USD</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="PKR">PKR</option></select>
+        <label>Currency</label><select id="mealCurrency_${mealIndex}"><option value="USD">USD</option><option value="PKR">PKR</option></select>
       </div>
     </div>
   `;
@@ -4345,8 +4374,6 @@ async function addTourAddon(){
         <label>Currency</label>
         <select id="tourAddonCurrency_${tourIndex}">
           <option value="USD">USD</option>
-          <option value="EUR">EUR</option>
-          <option value="GBP">GBP</option>
           <option value="PKR">PKR</option>
         </select>
       </div>
@@ -4450,7 +4477,9 @@ function removeAddon(id){
 <div class="section" id="calcSectionWrapper">
   <div class="actions">
     <button type="button" id="btnCalculate" class="green-btn">💰 Calculate Package</button>
+    <button type="button" id="btnRecalculate" class="blue-btn" style="display:none;">🔁 Recalculate Package</button>
     <button type="button" id="btnGenerateQuotation" class="blue-btn" style="display:none;">📄 Generate Quotation</button>
+    <button type="button" id="btnExportExcel" class="green-btn" style="display:none;">📊 Export Cost Sheet</button>
   </div>
 </div>
 
@@ -4471,7 +4500,12 @@ function removeAddon(id){
 </div>
 
 <div id="calcSummarySection" class="section" style="display:none;">
-  <h3>📊 Package Calculation Summary</h3>
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+    <h3 style="margin:0;">📊 Package Calculation Summary</h3>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button type="button" id="btnDownloadAccountsPdf" class="green-btn" style="display:none;">📥 Download Accounts Summary PDF</button>
+    </div>
+  </div>
 
   <div class="grid">
     <div>
@@ -4538,25 +4572,351 @@ function removeAddon(id){
   
   <div id="calcTotals" style="margin-top:14px;font-weight:bold;"></div>
 
-<div class="actions" style="margin-top:14px;">
-  <button type="button" id="btnRecalculate" class="blue-btn">🔁 Recalculate</button>
-  <button type="button" id="btnGenerateQuotation2" class="blue-btn" onclick="showQuotationModal()">📄 Generate Quotation</button>
-  <button type="button" id="btnExportExcel" class="green-btn">📊 Export Cost Sheet</button>
-  <button type="button" id="btnCloseSummary" class="ghost">❌ Close Summary</button>
-</div>
-
 <script>
 const btnCalculate = document.getElementById("btnCalculate");
 const calcSummarySection = document.getElementById("calcSummarySection");
 const calcSummaryBody = document.getElementById("calcSummaryBody");
 const calcSummaryFooter = document.getElementById("calcSummaryFooter");
 const calcTotalsDiv = document.getElementById("calcTotals");
-const btnCloseSummary = document.getElementById("btnCloseSummary");
 const btnRecalculate = document.getElementById("btnRecalculate");
 const btnGenerateQuotation = document.getElementById("btnGenerateQuotation");
 const btnExportExcel = document.getElementById("btnExportExcel");
+const btnDownloadAccountsPdf = document.getElementById("btnDownloadAccountsPdf");
 const baseCurrencyInput = document.getElementById("baseCurrency");
 const usdToPkrRateInput = document.getElementById("usdToPkrRate");
+let lastHandledUsdRoeValue = parseFloat(usdToPkrRateInput?.value || 0) || 0;
+let isCalculationDirty = true;
+let hasCalculatedOnce = false;
+let accountsSupplierMap = {};
+
+function downgradeBookedQuotationForRoeChangeIntl() {
+  if (!currentQuotationId) return false;
+  const allQuotations = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
+  const idx = allQuotations.findIndex(q => q.id === currentQuotationId);
+  if (idx === -1) return false;
+
+  const quotation = allQuotations[idx];
+  if (String(quotation?.status || '').toLowerCase() !== 'booked') return false;
+
+  const editAt = new Date().toISOString();
+  quotation.status = 'pending';
+  quotation.updatedAt = editAt;
+  quotation.customerNeedsReaccept = true;
+  quotation.agentApproval = null;
+  if (quotation.customerAcceptance) {
+    quotation.lastCustomerAcceptance = quotation.customerAcceptance;
+  }
+  quotation.customerAcceptance = null;
+
+  if (quotation.shareLinkId) {
+    appendPublicEditLog(quotation, ['ROE Changed'], editAt);
+    quotation.shareVersion = (quotation.shareVersion || 0) + 1;
+    quotation.shareUpdatedAt = editAt;
+    quotation.sharePublicUrl = getQuotationPublicUrl(quotation.id, quotation.shareLinkId);
+  }
+
+  localStorage.setItem('savedQuotations_international', JSON.stringify(allQuotations));
+
+  const agent = getCurrentAgent();
+  const ownerDocId = quotation?.agentData?.id || quotation?.agentData?.uid || agent?.id;
+  if (ownerDocId && window.firebaseDB) {
+    const ownerQuotations = allQuotations.filter(q => ((q?.agentData?.id || q?.agentData?.uid) === ownerDocId));
+    window.firebaseDB.saveData('international_quotations', ownerDocId, {
+      quotations: ownerQuotations,
+      updatedAt: new Date(),
+      agentId: ownerDocId
+    }).catch(err => console.error('Firebase ROE status downgrade error:', err));
+  }
+
+  return true;
+}
+
+function handleUsdRoeValueChange() {
+  const nextRoe = parseFloat(usdToPkrRateInput?.value || 0) || 0;
+  if (nextRoe === lastHandledUsdRoeValue) return;
+  lastHandledUsdRoeValue = nextRoe;
+
+  const wasDowngraded = downgradeBookedQuotationForRoeChangeIntl();
+  markCalculationDirty();
+  if (wasDowngraded) {
+    showNotification('ROE changed. Booked quotation moved to Pending. New acceptance would be required.', 'warning');
+    showStatusSection();
+  }
+}
+
+function getCurrentQuotationForAccounts() {
+  const allQuotations = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
+  return allQuotations.find(q => q.id === currentQuotationId) || null;
+}
+
+function isCurrentQuotationBookedForAccounts() {
+  const quotation = getCurrentQuotationForAccounts();
+  return String(quotation?.status || '').trim().toLowerCase() === 'booked';
+}
+
+function getSummaryRowsForAccounts() {
+  const rows = [];
+  document.querySelectorAll('#calcSummaryBody tr').forEach((row, index) => {
+    const cells = row.querySelectorAll('td');
+    if (!cells || cells.length < 5) return;
+    const section = normalizePdfText(cells[0]?.innerText || '');
+    const normalizedSection = section.toLowerCase();
+    if (normalizedSection === 'package totals' || normalizedSection.includes('agent service fee')) return;
+    const description = normalizePdfText(cells[1]?.innerText || '');
+    const cost = normalizePdfText(cells[5]?.innerText || cells[2]?.innerText || '');
+    const service = normalizePdfText(cells[6]?.innerText || cells[3]?.innerText || '');
+    const selling = normalizePdfText(cells[7]?.innerText || cells[4]?.innerText || '');
+    const key = `${section}||${description || index}`;
+    rows.push({ key, section, description, cost, service, selling });
+  });
+  return rows;
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function saveAccountsSuppliersToCurrentQuotation() {
+  if (!currentQuotationId) return;
+  const allQuotations = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
+  const idx = allQuotations.findIndex(q => q.id === currentQuotationId);
+  if (idx === -1) return;
+  allQuotations[idx].accountsSuppliers = { ...accountsSupplierMap };
+  allQuotations[idx].updatedAt = new Date().toISOString();
+  localStorage.setItem('savedQuotations_international', JSON.stringify(allQuotations));
+  // Also save to Firebase
+  const agent = getCurrentAgent();
+  const agentDocId = agent?.id || agent?.uid || '';
+  if (agentDocId && window.firebaseDB) {
+    window.firebaseDB.saveData('international_quotations', agentDocId, {
+      quotations: allQuotations,
+      updatedAt: new Date(),
+      agentId: agentDocId
+    }).catch(err => console.error('Firebase accounts suppliers save error:', err));
+  }
+}
+
+function normalizeCurrency(currency) {
+  const c = String(currency || '').toUpperCase().trim();
+  if (c === 'USD' || c === 'PKR') return c;
+  return 'USD';
+}
+
+function buildAccountsSummaryPdf(rows, supplierMap) {
+  const quotation = getCurrentQuotationForAccounts();
+  const client = quotation?.clientData || JSON.parse(localStorage.getItem('savedClientData_international')) || {};
+  const agent = (typeof getCurrentAgent === 'function' ? getCurrentAgent() : null) || quotation?.agentData || {};
+
+  const roeVal = parseFloat(document.getElementById('usdToPkrRate')?.value || 0) || 0;
+  renderAccountsSummaryPdf({
+    rows,
+    supplierMap,
+    quotation,
+    client,
+    agent,
+    reportTitle: 'Accounts Cost Summary',
+    packageLabel: normalizePdfText(client?.tourDestination || 'International Tour'),
+    currencyLabel: 'PKR',
+    roe: roeVal > 0 ? { rate: roeVal, foreignCurrency: 'USD' } : null
+  });
+}
+
+function openAccountsSupplierModal() {
+  if (!isCurrentQuotationBookedForAccounts()) {
+    showNotification('Accounts summary is available only for booked quotations.', 'warning');
+    return;
+  }
+  const rows = getSummaryRowsForAccounts();
+  if (!rows.length) {
+    showNotification('No summary rows found. Please calculate first.', 'warning');
+    return;
+  }
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay visible no-print';
+  modal.innerHTML = `
+    <div class="modal-content" style="max-width:900px;max-height:85vh;overflow:auto;">
+      <h3 style="margin-top:0;">Accounts Supplier Details</h3>
+      <p class="small" style="margin-top:-6px;color:#666;">Enter supplier name for each service row before downloading PDF.</p>
+      <div style="overflow:auto;max-height:55vh;border:1px solid #e5e5e5;border-radius:8px;">
+        <table style="width:100%;border-collapse:collapse;">
+          <thead style="background:#f5f8fc;position:sticky;top:0;">
+            <tr>
+              <th style="text-align:left;padding:8px;border-bottom:1px solid #ddd;">Service</th>
+              <th style="text-align:left;padding:8px;border-bottom:1px solid #ddd;">Description</th>
+              <th style="text-align:left;padding:8px;border-bottom:1px solid #ddd;">Supplier Name</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(row => `
+              <tr>
+                <td style="padding:8px;border-bottom:1px solid #eee;vertical-align:top;">${escapeHtml(row.section)}</td>
+                <td style="padding:8px;border-bottom:1px solid #eee;vertical-align:top;">${escapeHtml(row.description)}</td>
+                <td style="padding:8px;border-bottom:1px solid #eee;">
+                  <input type="text" data-supplier-key="${escapeHtml(row.key)}" value="${escapeHtml(accountsSupplierMap[row.key] || '')}" placeholder="Supplier name" style="width:100%;" />
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div id="supplierMissingMsg" class="small" style="color:#c0392b;margin-top:8px;display:none;"></div>
+      <div class="actions" style="margin-top:12px;justify-content:flex-end;">
+        <button type="button" id="btnCancelAccountsSupplier" class="ghost">Cancel</button>
+        <button type="button" id="btnDownloadAccountsPdfNow" class="green-btn">Download PDF</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const closeModal = () => modal.remove();
+  modal.querySelector('#btnCancelAccountsSupplier')?.addEventListener('click', closeModal);
+
+  const handleDownloadClick = () => {
+    const inputs = Array.from(modal.querySelectorAll('input[data-supplier-key]'));
+    const missing = [];
+    const nextMap = {};
+    inputs.forEach((input) => {
+      const key = input.getAttribute('data-supplier-key') || '';
+      const value = (input.value || '').trim();
+      if (!value) missing.push(input);
+      if (key) nextMap[key] = value;
+    });
+
+    if (missing.length) {
+      const msg = modal.querySelector('#supplierMissingMsg');
+      if (msg) {
+        msg.style.display = 'block';
+        msg.textContent = `${missing.length} supplier field(s) are missing.`;
+      }
+      missing[0]?.focus();
+      return;
+    }
+
+    accountsSupplierMap = { ...accountsSupplierMap, ...nextMap };
+    saveAccountsSuppliersToCurrentQuotation();
+
+    try {
+      buildAccountsSummaryPdf(rows, accountsSupplierMap);
+    } catch (error) {
+      console.error('Accounts PDF download error:', error);
+      const errMsg = error?.message ? `PDF Error: ${error.message}` : 'Unable to generate Accounts PDF. Please recalculate and try again.';
+      if (typeof showNotification === 'function') {
+        showNotification(errMsg, 'error');
+      }
+      return;
+    }
+
+    closeModal();
+  };
+
+  const downloadButton = modal.querySelector('#btnDownloadAccountsPdfNow');
+  if (downloadButton) {
+    downloadButton.addEventListener('click', handleDownloadClick);
+  } else {
+    modal.addEventListener('click', (event) => {
+      if (event.target && event.target.id === 'btnDownloadAccountsPdfNow') {
+        handleDownloadClick();
+      }
+    });
+  }
+}
+
+function refreshCalculationActionButtons() {
+  const isBooked = isCurrentQuotationBookedForAccounts();
+  if (btnCalculate) btnCalculate.style.display = (!hasCalculatedOnce && isCalculationDirty) ? 'inline-block' : 'none';
+  if (btnRecalculate) btnRecalculate.style.display = (hasCalculatedOnce && isCalculationDirty) ? 'inline-block' : 'none';
+  if (btnGenerateQuotation) btnGenerateQuotation.style.display = hasCalculatedOnce ? 'inline-block' : 'none';
+  if (btnExportExcel) btnExportExcel.style.display = hasCalculatedOnce ? 'inline-block' : 'none';
+  if (btnDownloadAccountsPdf) btnDownloadAccountsPdf.style.display = (hasCalculatedOnce && !isCalculationDirty && isBooked) ? 'inline-block' : 'none';
+}
+
+function isCalculationTrackedField(target) {
+  if (!target || !target.tagName) return false;
+  const tag = target.tagName.toUpperCase();
+  if (!["INPUT", "SELECT", "TEXTAREA"].includes(tag)) return false;
+  if (target.closest('#statusSection')) return false;
+  if (target.closest('#calcSummarySection')) return false;
+  if (target.closest('[data-supplier-key]')) return false;
+  return true;
+}
+
+function markCalculationDirty() {
+  if (isCalculationDirty && !hasCalculatedOnce) return;
+  isCalculationDirty = true;
+  if (calcSummarySection) calcSummarySection.style.display = 'none';
+  if (calcSummaryBody) calcSummaryBody.innerHTML = '';
+  if (calcSummaryFooter) calcSummaryFooter.innerHTML = '';
+  if (calcTotalsDiv) calcTotalsDiv.innerHTML = '';
+  refreshCalculationActionButtons();
+}
+
+function markCalculationReady() {
+  isCalculationDirty = false;
+  hasCalculatedOnce = true;
+  refreshCalculationActionButtons();
+}
+
+function getCalculationSnapshot() {
+  return {
+    isCalculated: !isCalculationDirty,
+    summaryBodyHtml: calcSummaryBody?.innerHTML || '',
+    totalsHtml: calcTotalsDiv?.innerHTML || '',
+    updatedAt: new Date().toISOString()
+  };
+}
+
+function applyCalculationSnapshot(snapshot) {
+  if (snapshot && snapshot.isCalculated && (snapshot.summaryBodyHtml || snapshot.totalsHtml)) {
+    if (calcSummaryBody) calcSummaryBody.innerHTML = snapshot.summaryBodyHtml || '';
+    if (calcTotalsDiv) calcTotalsDiv.innerHTML = snapshot.totalsHtml || '';
+    if (calcSummarySection) calcSummarySection.style.display = 'block';
+    hasCalculatedOnce = true;
+    markCalculationReady();
+    return;
+  }
+  hasCalculatedOnce = false;
+  markCalculationDirty();
+}
+
+function isCalculationRequired() {
+  return isCalculationDirty || !hasCalculatedOnce;
+}
+
+function withCalculationSummaryAvailable(action) {
+  const runAction = () => {
+    try {
+      action();
+    } catch (error) {
+      console.error('Error opening quotation preview:', error);
+      showAlert('Failed to open quotation preview. Please try again.', 'Error');
+    }
+  };
+
+  if (!calcSummarySection || calcSummarySection.style.display !== 'none') {
+    runAction();
+    return;
+  }
+
+  const previousVisibility = calcSummarySection.style.visibility;
+  calcSummarySection.style.visibility = 'hidden';
+  calcSummarySection.style.display = 'block';
+  refreshCalculationActionButtons();
+
+  requestAnimationFrame(() => {
+    runAction();
+    requestAnimationFrame(() => {
+      calcSummarySection.style.display = 'none';
+      calcSummarySection.style.visibility = previousVisibility;
+      refreshCalculationActionButtons();
+    });
+  });
+}
 
 // --- UPDATED CURRENCY CONVERSION FUNCTION ---
 // --- Hotel Price Mode Toggle Event ---
@@ -5471,7 +5831,7 @@ async function performCalculation() {
   showStatusSection();
 
   calcSummarySection.style.display = "block";
-  btnGenerateQuotation.style.display = "inline-block";
+  markCalculationReady();
   
   // Auto-save quotation after calculation
   saveQuotation();
@@ -5606,7 +5966,7 @@ btnRecalculate.addEventListener("click", () => {
   document.activeElement = btnRecalculate;
   performCalculation();
 });
-btnCloseSummary.addEventListener("click", () => (calcSummarySection.style.display = "none"));
+btnDownloadAccountsPdf?.addEventListener('click', openAccountsSupplierModal);
 
 ['numAdult', 'numChildBed', 'numChildNoBed', 'numInfant'].forEach((id) => {
   const el = document.getElementById(id);
@@ -5620,6 +5980,23 @@ btnCloseSummary.addEventListener("click", () => (calcSummarySection.style.displa
 });
 
 updateServiceChargeVisibility();
+refreshCalculationActionButtons();
+
+document.addEventListener('input', (event) => {
+  if (isCalculationTrackedField(event.target)) {
+    markCalculationDirty();
+  }
+});
+
+document.addEventListener('change', (event) => {
+  if (isCalculationTrackedField(event.target)) {
+    markCalculationDirty();
+  }
+});
+
+if (usdToPkrRateInput) {
+  usdToPkrRateInput.addEventListener('change', handleUsdRoeValueChange);
+}
 </script>
 
 <script>
@@ -5672,16 +6049,38 @@ function updateQuotationStatus(quotationId, newStatus) {
       // Trigger dashboard refresh
       sessionStorage.setItem('refreshDashboard_international', 'true');
       
-      showNotification(`Quotation status updated to: ${newStatus}. This quotation now requires customer re-acceptance before booking.`, "success");
-      
-      // Add this to ensure status section is visible after update
-      showStatusSection();
+      // Notify user and refresh UI, but do not fail the status save if UI refresh fails
+      try {
+        showNotification(`Quotation status updated to: ${newStatus}. This quotation now requires customer re-acceptance before booking.`, "success");
+      } catch (uiError) {
+        console.error('Failed to show status update notification:', uiError);
+      }
+      try {
+        showStatusSection();
+      } catch (uiError) {
+        console.error('Failed to refresh status section after update:', uiError);
+      }
       
       return true;
     }
     return false;
   } catch (error) {
     console.error('Error updating quotation status:', error);
+    try {
+      const allSavedQuotations = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
+      const persisted = allSavedQuotations.find(q => q.id === quotationId);
+      if (persisted && String(persisted.status || '').toLowerCase() === String(newStatus || '').toLowerCase()) {
+        console.warn('Quotation status persisted in localStorage despite update error:', quotationId, newStatus);
+        try {
+          showStatusSection();
+        } catch (uiError) {
+          console.error('Failed to refresh status section after persisted update:', uiError);
+        }
+        return true;
+      }
+    } catch (verifyError) {
+      console.error('Error verifying persisted quotation status after update failure:', verifyError);
+    }
     showAlert("Failed to update quotation status. Please try again.", "Error");
     return false;
   }
@@ -6835,7 +7234,6 @@ quotationHTML += `
 modalButtons.innerHTML = `
   <button id="printQuotationBtn" class="green-btn" style="margin-right: 10px;">🖨️ Print Quotation</button>
   <button id="shareWhatsAppBtn" class="whatsapp-btn">📱 Share on WhatsApp</button>
-  <button id="btnGenerateShareFromPreview" class="blue-btn">🔗 Generate Customer Link</button>
   <button id="btnCopyShareFromPreview" class="ghost">📋 Copy Link</button>
   <input id="previewShareUrl" type="text" readonly style="min-width:280px;flex:1;background:#f7f9fc;border:1px solid #d1d9e5;border-radius:8px;padding:10px;" placeholder="Share link will appear here">
   <button id="closeQuotationBtn" class="ghost">Close</button>
@@ -6930,7 +7328,6 @@ setTimeout(() => {
     shareOnWhatsApp();
   };
 
-  const btnGenerateShareFromPreview = document.getElementById('btnGenerateShareFromPreview');
   const btnCopyShareFromPreview = document.getElementById('btnCopyShareFromPreview');
   const previewShareUrl = document.getElementById('previewShareUrl');
   const syncPreviewShareControls = () => {
@@ -6938,21 +7335,8 @@ setTimeout(() => {
     const quotation = allQuotations.find(q => q.id === currentQuotationId);
     const shareUrl = quotation?.sharePublicUrl || (quotation?.shareLinkId ? getQuotationPublicUrl(quotation.id, quotation.shareLinkId) : '');
     if (previewShareUrl) previewShareUrl.value = shareUrl || '';
-    if (btnGenerateShareFromPreview) {
-      btnGenerateShareFromPreview.disabled = !!shareUrl;
-      btnGenerateShareFromPreview.style.display = shareUrl ? 'none' : 'inline-block';
-    }
     if (btnCopyShareFromPreview) btnCopyShareFromPreview.disabled = !shareUrl;
   };
-
-  if (btnGenerateShareFromPreview) {
-    btnGenerateShareFromPreview.onclick = () => {
-      handleGenerateQuotationLink({
-        requirePreview: true,
-        onComplete: syncPreviewShareControls
-      });
-    };
-  }
 
   if (btnCopyShareFromPreview) {
     btnCopyShareFromPreview.onclick = () => {
@@ -6969,6 +7353,15 @@ setTimeout(() => {
   }
 
   syncPreviewShareControls();
+
+  // Auto-generate share link if not yet created
+  {
+    const _allQ = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
+    const _q = _allQ.find(q => q.id === currentQuotationId);
+    if (!_q?.shareLinkId) {
+      handleGenerateQuotationLink({ requirePreview: false, onComplete: syncPreviewShareControls });
+    }
+  }
 
   // Close button
   document.getElementById('closeQuotationBtn').onclick = function() {
@@ -7130,12 +7523,12 @@ btnGenerateQuotation.addEventListener('click', () => {
   }
   
   // Check if calculation has been performed
-  if (calcSummarySection.style.display === 'none') {
+  if (isCalculationRequired()) {
     showAlert("Please calculate the package before generating a quotation.");
     return;
   }
   
-  showQuotationModal();
+  withCalculationSummaryAvailable(() => showQuotationModal());
 });
 
 // Export to Excel functionality
@@ -7270,7 +7663,7 @@ function saveQuotation() {
     }
     
     // Check if calculation has been performed
-    if (calcSummarySection.style.display === 'none') {
+    if (isCalculationRequired()) {
       showNotification("Please calculate the package before saving the quotation.", "error");
       return;
     }
@@ -7600,7 +7993,9 @@ const customSectionsData = {
       visa: visaData,
       addons: addonsData,
       itineraryData: itineraryEditorState,
-      customSections: customSectionsData
+      customSections: customSectionsData,
+      calculationSnapshot: getCalculationSnapshot(),
+      accountsSuppliers: { ...accountsSupplierMap }
     };
 
     upsertCustomerFromQuotation(quotationData.clientData, {
@@ -7631,6 +8026,7 @@ const customSectionsData = {
     }
     
     // Always upsert by id to avoid stale records after remove/edit actions.
+    let bookedMovedToPendingByEdit = false;
     const targetQuotationId = currentQuotationId || quotationData.id;
     quotationData.id = targetQuotationId;
     if (existingQuotation?.status === 'booked') {
@@ -7638,6 +8034,7 @@ const customSectionsData = {
       quotationData.customerNeedsReaccept = true;
       quotationData.customerAcceptance = null;
       quotationData.agentApproval = null;
+      bookedMovedToPendingByEdit = true;
     }
     if (existingQuotation?.shareLinkId) {
       const editAt = new Date().toISOString();
@@ -7698,6 +8095,9 @@ const customSectionsData = {
     savedQuotations = allQuotations;
     
     showNotification("Quotation saved successfully!", "success");
+    if (bookedMovedToPendingByEdit) {
+      showNotification('Booked quotation moved to Pending due to edits. New acceptance would be required.', 'warning');
+    }
     showStatusSection();
     
   } catch (error) {
@@ -7894,8 +8294,8 @@ function loadQuotation(quotationId) {
               document.getElementById(`airline_${idx}`).value = flightData.airline || "";
             if (document.getElementById(`flightDirect_${idx}`)) 
   document.getElementById(`flightDirect_${idx}`).value = flightData.direct || "";  
-            if (document.getElementById(`flightCurrency_${idx}`)) 
-              document.getElementById(`flightCurrency_${idx}`).value = flightData.currency || "USD";
+            if (document.getElementById(`flightCurrency_${idx}`))
+              document.getElementById(`flightCurrency_${idx}`).value = normalizeCurrency(flightData.currency);
             
             // Fill costs
             if (flightData.costs) {
@@ -7925,8 +8325,10 @@ function loadQuotation(quotationId) {
     if (quotation.hotels && Array.isArray(quotation.hotels)) {
       quotation.hotels.forEach((hotelData, hotelIndex) => {
         setTimeout(() => {
-          // Trigger the addHotel function
-          document.getElementById("btnAddHotel").click();
+          // Add hotel section directly (works even when booked lock disables add buttons)
+          nextHotelNumber++;
+          createHotelSection(nextHotelNumber);
+          updateHotelPriceModeVisibility();
           
           // Wait a moment for the hotel to be added
           setTimeout(() => {
@@ -7977,7 +8379,7 @@ function loadQuotation(quotationId) {
               if (roomsEl) roomsEl.value = roomTypeData.rooms || 1;
               if (serviceEl) serviceEl.value = roomTypeData.serviceType || "Room Only";
               if (costNightEl) costNightEl.value = roomTypeData.costNight || 0;
-              if (currencyEl) currencyEl.value = roomTypeData.currency || "USD";
+              if (currencyEl) currencyEl.value = normalizeCurrency(roomTypeData.currency);
               if (svcNightEl) svcNightEl.value = roomTypeData.svcNight || 0;
             });
           }, 100);
@@ -7989,8 +8391,8 @@ function loadQuotation(quotationId) {
     if (quotation.transfers && Array.isArray(quotation.transfers)) {
       quotation.transfers.forEach((transferData, transferIndex) => {
         setTimeout(() => {
-          // Trigger the addTransfer function
-          document.getElementById("btnAddTrans").click();
+          // Add transfer section directly (works even when booked lock disables add buttons)
+          addTransfer();
           
           // Wait a moment for the transfer to be added
           setTimeout(() => {
@@ -8020,7 +8422,7 @@ function loadQuotation(quotationId) {
             if (document.getElementById(`tShareCostInf_${idx}`)) 
               document.getElementById(`tShareCostInf_${idx}`).value = transferData.shareCostInf || 0;
             if (document.getElementById(`tCurrency_${idx}`)) 
-              document.getElementById(`tCurrency_${idx}`).value = transferData.currency || "USD";
+              document.getElementById(`tCurrency_${idx}`).value = normalizeCurrency(transferData.currency);
             if (document.getElementById(`tSvc_${idx}`)) 
               document.getElementById(`tSvc_${idx}`).value = transferData.service || 0;
             if (document.getElementById(`tShareSvcAdult_${idx}`)) 
@@ -8046,8 +8448,8 @@ function loadQuotation(quotationId) {
     if (quotation.tours && Array.isArray(quotation.tours)) {
       quotation.tours.forEach((tourData, tourIndex) => {
         setTimeout(() => {
-          // Trigger the addTour function
-          document.getElementById("btnAddTour").click();
+          // Add tour section directly (works even when booked lock disables add buttons)
+          addTour();
           
           // Wait a moment for the tour to be added
           setTimeout(() => {
@@ -8082,7 +8484,7 @@ function loadQuotation(quotationId) {
             if (document.getElementById(`tourShareCostInf_${idx}`)) 
               document.getElementById(`tourShareCostInf_${idx}`).value = tourData.shareCostInf || 0;
             if (document.getElementById(`tourCurrency_${idx}`)) 
-              document.getElementById(`tourCurrency_${idx}`).value = tourData.currency || "USD";
+              document.getElementById(`tourCurrency_${idx}`).value = normalizeCurrency(tourData.currency);
             if (document.getElementById(`tourSvc_${idx}`)) 
               document.getElementById(`tourSvc_${idx}`).value = tourData.service || 0;
             if (document.getElementById(`tourShareSvcAdult_${idx}`)) 
@@ -8101,8 +8503,8 @@ function loadQuotation(quotationId) {
     // Load visa with proper timing
     if (quotation.visa && quotation.visa.count) {
       setTimeout(() => {
-        // Trigger the addVisa function
-        document.getElementById("btnAddVisa").click();
+        // Add visa section directly (works even when booked lock disables add buttons)
+        addVisa();
         
         // Wait a moment for the visa to be added
         setTimeout(() => {
@@ -8115,7 +8517,7 @@ function loadQuotation(quotationId) {
           if (document.getElementById('visaCost')) 
             document.getElementById('visaCost').value = quotation.visa.cost || 0;
           if (document.getElementById('visaCurrency')) 
-            document.getElementById('visaCurrency').value = quotation.visa.currency || "USD";
+            document.getElementById('visaCurrency').value = normalizeCurrency(quotation.visa.currency);
           if (document.getElementById('visaSvc')) 
             document.getElementById('visaSvc').value = quotation.visa.service || 0;
         }, 100);
@@ -8134,8 +8536,8 @@ function loadQuotation(quotationId) {
               togglePanel('directFlightPanel', document.querySelector('.addon-header'));
             }
             
-            // Trigger the addDirectFlightAddon function
-            document.querySelector('.addon-panel button[onclick*="addDirectFlightAddon"]').click();
+            // Add add-on directly (works even when booked lock disables add buttons)
+            addDirectFlightAddon();
             
             // Wait a moment for the add-on to be added
             setTimeout(() => {
@@ -8151,7 +8553,7 @@ function loadQuotation(quotationId) {
                 if (airlineInput) airlineInput.value = addonData.airline || "";
                 
                 const currencySelect = addonElement.querySelector('select');
-                if (currencySelect) currencySelect.value = addonData.currency || "USD";
+                if (currencySelect) currencySelect.value = normalizeCurrency(addonData.currency);
                 
                 // Fill costs
                 if (addonData.costs) {
@@ -8188,8 +8590,8 @@ function loadQuotation(quotationId) {
               togglePanel('mealTypePanel', document.querySelectorAll('.addon-header')[1]);
             }
             
-            // Trigger the addMealTypeAddon function
-            document.querySelectorAll('.addon-panel button[onclick*="addMealTypeAddon"]')[0].click();
+            // Add add-on directly (works even when booked lock disables add buttons)
+            addMealTypeAddon();
             
             // Wait a moment for the add-on to be added
             setTimeout(() => {
@@ -8205,7 +8607,7 @@ function loadQuotation(quotationId) {
                 if (selects[1]) selects[1].value = addonData.mealType || "";
                 if (inputs[0]) inputs[0].value = addonData.cost || 0;
                 if (inputs[1]) inputs[1].value = addonData.service || 0;
-                if (selects[2]) selects[2].value = addonData.currency || "USD";
+                if (selects[2]) selects[2].value = normalizeCurrency(addonData.currency);
               }
             }, 100);
           }, 300 * (addonIndex + 1));
@@ -8222,8 +8624,8 @@ function loadQuotation(quotationId) {
               togglePanel('toursPanel', document.querySelectorAll('.addon-header')[2]);
             }
             
-            // Trigger the addTourAddon function
-            document.querySelectorAll('.addon-panel button[onclick*="addTourAddon"]')[0].click();
+            // Add add-on directly (works even when booked lock disables add buttons)
+            addTourAddon();
             
             // Wait a moment for the add-on to be added
             setTimeout(() => {
@@ -8258,7 +8660,7 @@ function loadQuotation(quotationId) {
               if (document.getElementById(`tourAddonShareCostInf_${idx}`)) 
                 document.getElementById(`tourAddonShareCostInf_${idx}`).value = addonData.shareCostInf || 0;
               if (document.getElementById(`tourAddonCurrency_${idx}`)) 
-                document.getElementById(`tourAddonCurrency_${idx}`).value = addonData.currency || "USD";
+                document.getElementById(`tourAddonCurrency_${idx}`).value = normalizeCurrency(addonData.currency);
               if (document.getElementById(`tourAddonSvc_${idx}`)) 
                 document.getElementById(`tourAddonSvc_${idx}`).value = addonData.service || 0;
               if (document.getElementById(`tourAddonShareSvcAdult_${idx}`)) 
@@ -8286,6 +8688,11 @@ function loadQuotation(quotationId) {
     // Keep loaded values but do not auto-open quotation preview/cost sheet on reload
     updateServiceChargeVisibility();
     updateHotelPriceModeVisibility();
+    applyCalculationSnapshot(quotation.calculationSnapshot);
+    accountsSupplierMap = quotation?.accountsSuppliers && typeof quotation.accountsSuppliers === 'object'
+      ? { ...quotation.accountsSuppliers }
+      : {};
+    refreshCalculationActionButtons();
     
     showNotification("Quotation loaded successfully!", "success");
     
