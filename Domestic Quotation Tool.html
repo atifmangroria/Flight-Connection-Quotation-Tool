@@ -34,24 +34,34 @@
 
   // Initialize Firebase
   const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const auth = getAuth(app);
 
   // Make db and auth global
   window.auth = auth;
 
   // ========== Firebase Cloud Storage Utility Functions ==========
   window.firebaseDB = {
-    // Save data to Firestore
+    async saveData(collection_name, docId, data) {
       try {
+        await setDoc(doc(db, collection_name, docId), data, { merge: true });
+        return true;
+      } catch (error) {
+        console.error(`Error saving to ${collection_name}:`, error);
         return false;
       }
     },
 
-    // Get data from Firestore
+    async getData(collection_name, docId) {
+      try {
+        const snapshot = await getDoc(doc(db, collection_name, docId));
+        return snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null;
+      } catch (error) {
+        console.error(`Error getting data from ${collection_name}:`, error);
         return null;
       }
     },
 
-    // Get all documents from a collection
     async getAll(collection_name) {
       try {
         const snapshot = await getDocs(collection(db, collection_name));
@@ -62,7 +72,6 @@
       }
     },
 
-    // Delete data from Firestore
     async deleteData(collection_name, docId) {
       try {
         await deleteDoc(doc(db, collection_name, docId));
@@ -73,7 +82,6 @@
       }
     },
 
-    // Update specific fields
     async updateData(collection_name, docId, updates) {
       try {
         await updateDoc(doc(db, collection_name, docId), updates);
