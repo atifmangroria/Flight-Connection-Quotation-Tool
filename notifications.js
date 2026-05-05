@@ -532,6 +532,9 @@ async function computeNotifications(quotations) {
           pushNotification(
             'Follow-up Status Pending',
             `Quotation ${base.quoteLabel} for ${clientName} has been on Follow Up for ${durationText}. Review and update its status.`,
+            'followup'
+          );
+      }
     }
 
     if (q.customerAcceptance && !q.agentApproval?.approvedAt) {
