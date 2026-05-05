@@ -341,27 +341,8 @@ function renderNotificationPage(items) {
     return;
   }
 
-  const table = document.createElement('table');
-  table.className = 'notification-page-table';
-  const thead = document.createElement('thead');
-  thead.innerHTML = `
-    <tr>
-      <th>Type</th>
-      <th>Quotation</th>
-      <th>Client</th>
-      <th>Message</th>
-      <th>Reminder</th>
-      <th>Actions</th>
-    </tr>
-  `;
-  const tbody = document.createElement('tbody');
-
-  const createCell = (text, className = '') => {
-    const td = document.createElement('td');
-    td.textContent = text;
-    if (className) td.className = className;
-    return td;
-  };
+  const grid = document.createElement('div');
+  grid.className = 'notification-card-grid';
 
   items.forEach((item, index) => {
     const itemKey = item.notificationKey || getNotificationKey(item);
@@ -370,27 +351,53 @@ function renderNotificationPage(items) {
     const quotationText = item.quotationId ? `${item.quotationType?.toUpperCase() || 'TYPE'} #${item.quotationId}` : 'N/A';
     const clientText = item.clientName || 'Unknown';
     const messageText = item.message + (reminderState?.final ? ' (FINAL REMINDER)' : '');
+    const reminderText = reminderState?.nextReminderAt ? `${reminderState.final ? 'Final' : 'Next'} reminder · ${new Date(reminderState.nextReminderAt).toLocaleString()}` : 'Immediate';
 
-    const row = document.createElement('tr');
-    if (reminderState?.final) row.classList.add('notification-table-final');
+    const card = document.createElement('article');
+    card.className = 'notification-card';
+    if (reminderState?.final) card.classList.add('notification-card-final');
 
-    row.appendChild(createCell(typeText));
-    row.appendChild(createCell(quotationText));
-    row.appendChild(createCell(clientText));
-    row.appendChild(createCell(messageText, 'message-cell'));
+    const header = document.createElement('div');
+    header.className = 'notification-card-header';
 
-    const reminderCell = document.createElement('td');
-    if (reminderState?.nextReminderAt) {
-      const nextDate = new Date(reminderState.nextReminderAt);
-      reminderCell.innerHTML = `<strong>${reminderState.final ? 'Final' : 'Next'} reminder</strong><br>${nextDate.toLocaleString()}`;
-    } else {
-      reminderCell.textContent = 'Immediate';
-    }
-    row.appendChild(reminderCell);
+    const titleBlock = document.createElement('div');
+    titleBlock.innerHTML = `
+      <div class="notification-card-title">${item.title || 'Notification'}</div>
+      <div class="notification-card-meta">${quotationText}</div>
+    `;
 
-    const actionCell = document.createElement('td');
+    const badge = document.createElement('span');
+    badge.className = `notification-card-badge ${item.type || 'general'}`;
+    badge.textContent = typeText;
+
+    header.appendChild(titleBlock);
+    header.appendChild(badge);
+
+    const body = document.createElement('div');
+    body.className = 'notification-card-body';
+
+    const messageBlock = document.createElement('div');
+    messageBlock.className = 'notification-card-message';
+    messageBlock.textContent = messageText;
+
+    const details = document.createElement('div');
+    details.className = 'notification-card-details';
+    const createDetail = (label, value) => {
+      const detail = document.createElement('div');
+      detail.className = 'notification-detail';
+      detail.innerHTML = `<strong>${label}</strong><span>${value}</span>`;
+      return detail;
+    };
+
+    details.appendChild(createDetail('Client', clientText));
+    details.appendChild(createDetail('Reminder', reminderText));
+
+    const footer = document.createElement('div');
+    footer.className = 'notification-card-footer';
+
     const actions = document.createElement('div');
     actions.className = 'notification-action-group';
+
     const addAction = (label, callback, disabled = false) => {
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -451,15 +458,18 @@ function renderNotificationPage(items) {
       reminderRow.style.display = reminderRow.style.display === 'flex' ? 'none' : 'flex';
     });
 
-    actionCell.appendChild(actions);
-    actionCell.appendChild(reminderRow);
-    row.appendChild(actionCell);
-    tbody.appendChild(row);
+    footer.appendChild(actions);
+    footer.appendChild(reminderRow);
+
+    body.appendChild(messageBlock);
+    body.appendChild(details);
+    card.appendChild(header);
+    card.appendChild(body);
+    card.appendChild(footer);
+    grid.appendChild(card);
   });
 
-  table.appendChild(thead);
-  table.appendChild(tbody);
-  notificationPageList.appendChild(table);
+  notificationPageList.appendChild(grid);
 }
 
 async function markNotificationDone(index) {
