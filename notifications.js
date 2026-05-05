@@ -622,6 +622,7 @@ async function computeNotifications(quotations) {
     const updatedAt = parseDateValue(q.updatedAt || q.createdAt);
     const dateFrom = parseDateValue(q.clientData?.dateFrom || q.dateFrom || q.travelFrom);
     const status = String(q.status || '').toLowerCase();
+    const effectiveStatus = q.agentApproval?.approvedAt ? 'booked' : status;
     const clientName = base.clientName || 'client';
 
     const pushNotification = (title, message, type) => {
@@ -640,7 +641,7 @@ async function computeNotifications(quotations) {
 
     if (createdAt) {
       const hoursSinceCreate = Math.floor((now - createdAt) / (1000 * 60 * 60));
-      if (hoursSinceCreate >= 24 && !['booked', 'cancelled', 'expired', 'followup'].includes(status)) {
+      if (hoursSinceCreate >= 24 && !['booked', 'cancelled', 'expired', 'followup'].includes(effectiveStatus)) {
         const durationText = formatDurationText(hoursSinceCreate);
         pushNotification(
           'Follow-up Reminder',
@@ -650,7 +651,7 @@ async function computeNotifications(quotations) {
       }
     }
 
-    if (status === 'followup' && updatedAt) {
+    if (effectiveStatus === 'followup' && updatedAt) {
       const hoursSinceFollowup = Math.floor((now - updatedAt) / (1000 * 60 * 60));
       if (hoursSinceFollowup >= 24) {
           const durationText = formatDurationText(hoursSinceFollowup);
@@ -678,7 +679,7 @@ async function computeNotifications(quotations) {
       );
     }
 
-    if (status === 'booked' && dateFrom) {
+    if (effectiveStatus === 'booked' && dateFrom) {
       const daysToTravel = getDaysBetween(now, dateFrom);
       if (daysToTravel <= 15 && daysToTravel >= 0 && !voucherId) {
         pushNotification(

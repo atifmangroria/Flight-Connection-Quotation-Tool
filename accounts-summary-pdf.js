@@ -99,7 +99,7 @@ function renderAccountsSummaryPdf(options) {
   const paxStr = `Adults: ${client?.adults || 0}  CWB: ${client?.childBed || 0}  CNB: ${client?.childNoBed || 0}  INF: ${client?.infants || 0}`;
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
+  doc.setFontSize(10);
   doc.setTextColor(40, 40, 40);
 
   doc.text(`Quotation ID: ${qId}`, M, y);
@@ -142,7 +142,7 @@ function renderAccountsSummaryPdf(options) {
   doc.setFillColor(230, 242, 255);
   doc.rect(M, y, W, 22, 'F');
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8.5);
+  doc.setFontSize(10);
   doc.setTextColor(11, 60, 120);
   let cx = M;
   cols.forEach((col) => {
@@ -193,8 +193,8 @@ function renderAccountsSummaryPdf(options) {
       return lines.flatMap(line => doc.splitTextToSize(line, cols[i].width - 8));
     });
     const maxLines  = Math.max(...wrapped.map((w) => w.length), 1);
-    const lineH     = 11;
-    const rowHeight = Math.max(20, maxLines * lineH + 8);
+    const lineH     = 12;
+    const rowHeight = Math.max(24, maxLines * lineH + 8);
 
     y = ensurePageSpace(doc, y, rowHeight + 6, drawHeader);
 
@@ -206,7 +206,7 @@ function renderAccountsSummaryPdf(options) {
     rowIndex++;
 
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
+    doc.setFontSize(10);
     cx = M;
     wrapped.forEach((lines, idx) => {
       lines.forEach((line, li) => {
@@ -242,7 +242,7 @@ function renderAccountsSummaryPdf(options) {
   const lh      = 17;
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9.5);
+  doc.setFontSize(10.5);
   doc.setTextColor(20, 20, 20);
 
   doc.text(`Total Cost (${currencyLabel})`,          labelX, y + 16 + lh);
@@ -268,7 +268,7 @@ function renderAccountsSummaryPdf(options) {
 
   // ── Footer note ───────────────────────────────────────────────────────────────
   doc.setFont('helvetica', 'italic');
-  doc.setFontSize(7.5);
+  doc.setFontSize(8.5);
   doc.setTextColor(100, 100, 100);
   const noteText = '* Service charge is shown per row when applicable. If no per-service charge exists, the overall service charge appears in the summary totals.';
   const noteLines = doc.splitTextToSize(noteText, W);

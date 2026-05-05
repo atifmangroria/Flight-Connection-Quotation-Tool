@@ -6704,14 +6704,14 @@ async function printQuotation() {
   ${document.querySelectorAll("[id^='flightBlock_']").length > 0 ? `
   <div style="margin-bottom: 5px; padding: 4px 6px; background:#f0f7ff; border-left:3px solid #0b76d1; border-radius:3px;">
     <strong>✈️ Flight</strong> &mdash; ${getFlightDetails().airline} &bull; ${getFlightDetails().direct}<br>
-    <span style="font-size:11px;color:#444;white-space:pre-wrap;font-family:monospace;">${getFlightDetails().itinerary}</span>
+    <span style="font-size:13px;color:#444;white-space:pre-wrap;font-family:monospace;">${getFlightDetails().itinerary}</span>
   </div>` : ''}
   ${hotelGroups.length > 0 ? 
     hotelGroups.map((hotel) => `
   <div style="margin-bottom: 5px; padding: 4px 6px; background:#f0f7ff; border-left:3px solid #0b76d1; border-radius:3px;">
     <strong>🏨 ${sanitizeInput(hotel.city)} Hotel</strong> &mdash; ${sanitizeInput(hotel.name)} &bull; ${hotel.nights} nights<br>
-    <span style="font-size:11px;color:#555;">Check-in: ${formatDateToDMY(hotel.checkIn)} &bull; Check-out: ${formatDateToDMY(hotel.checkOut)}</span>
-    <div style="margin-top:4px;font-size:11px;color:#333;">${hotel.roomTypes.map((r) => `${sanitizeInput(r.roomType)}${r.roomName ? ` (${sanitizeInput(r.roomName)})` : ''} x${r.rooms} &bull; ${sanitizeInput(r.serviceType)}`).join('<br>')}</div>
+    <span style="font-size:13px;color:#555;">Check-in: ${formatDateToDMY(hotel.checkIn)} &bull; Check-out: ${formatDateToDMY(hotel.checkOut)}</span>
+    <div style="margin-top:4px;font-size:13px;color:#333;">${hotel.roomTypes.map((r) => `${sanitizeInput(r.roomType)}${r.roomName ? ` (${sanitizeInput(r.roomName)})` : ''} x${r.rooms} &bull; ${sanitizeInput(r.serviceType)}`).join('<br>')}</div>
   </div>
     `).join('') : ''}
   ${document.getElementById('visaBlock') ? `
@@ -6720,7 +6720,7 @@ async function printQuotation() {
   </div>` : ''}
   ${document.querySelectorAll("[id^='transferBlock_']").length > 0 ? `
   <div style="margin-bottom: 5px; padding: 4px 6px; background:#f0f7ff; border-left:3px solid #0b76d1; border-radius:3px;">
-    <strong>🚗 Transfer</strong><br><span style="font-size:11px;color:#444;white-space:pre-wrap;">${getTransferDetails()}</span>
+    <strong>🚗 Transfer</strong><br><span style="font-size:13px;color:#444;white-space:pre-wrap;">${getTransferDetails()}</span>
   </div>` : ''}
   ${document.querySelectorAll("[id^='tourBlock_']").length > 0 ? 
     getTourDetails().map((tour, index) => `
@@ -6734,8 +6734,8 @@ async function printQuotation() {
   <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
     <h3 style="margin:0;color:#0b76d1;border-bottom:2px solid #0b76d1;padding-bottom:3px;">Day Wise Itinerary</h3>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
-      <button id="toggleItineraryBtn" type="button" class="blue-btn" style="padding:4px 10px;font-size:12px;">Show Itinerary</button>
-      <button id="saveItineraryBtn" type="button" class="green-btn" style="padding:4px 10px;font-size:12px;display:none;">Save Itinerary</button>
+      <button id="toggleItineraryBtn" type="button" class="blue-btn" style="padding:6px 12px;font-size:13px;">Show Itinerary</button>
+      <button id="saveItineraryBtn" type="button" class="green-btn" style="padding:6px 12px;font-size:13px;display:none;">Save Itinerary</button>
     </div>
   </div>
   <div id="itineraryTableContainer" style="display:none;margin-top:8px;"></div>
@@ -7270,16 +7270,16 @@ quotationHTML += `
   modalTitle.textContent = "Quotation Preview";
   modalContent.innerHTML = `
     <style>
-      .compact-quotation{font-family:Calibri,Arial,sans-serif;font-size:12px;line-height:1.32;color:#111;text-align:left!important}
+      .compact-quotation{font-family:Calibri,Arial,sans-serif;font-size:15px;line-height:1.5;color:#111;text-align:left!important}
       .compact-quotation > div:first-child{text-align:center!important}
-      .compact-quotation h2{font-size:18px!important;margin:4px 0 6px!important;line-height:1.2}
-      .compact-quotation h3{font-size:14px!important;margin:0 0 6px!important;line-height:1.2}
-      .compact-quotation h4,.compact-quotation h5{font-size:12.5px!important;margin:0 0 4px!important;line-height:1.2}
-      .compact-quotation p{margin:3px 0!important}
-      .compact-quotation ul,.compact-quotation ol{margin:4px 0!important;padding-left:18px!important}
-      .compact-quotation li{margin:1px 0!important}
-      .compact-quotation table{width:100%!important;border-collapse:collapse!important;margin:5px 0 8px!important}
-      .compact-quotation th,.compact-quotation td{padding:5px 6px!important;font-size:11.5px!important;vertical-align:top}
+      .compact-quotation h2{font-size:22px!important;margin:6px 0 8px!important;line-height:1.2}
+      .compact-quotation h3{font-size:18px!important;margin:0 0 10px!important;line-height:1.3}
+      .compact-quotation h4,.compact-quotation h5{font-size:15px!important;margin:0 0 8px!important;line-height:1.35}
+      .compact-quotation p{margin:6px 0!important}
+      .compact-quotation ul,.compact-quotation ol{margin:8px 0!important;padding-left:22px!important}
+      .compact-quotation li{margin:3px 0!important}
+      .compact-quotation table{width:100%!important;border-collapse:collapse!important;margin:10px 0 12px!important}
+      .compact-quotation th,.compact-quotation td{padding:8px 10px!important;font-size:14px!important;vertical-align:top}
       .compact-quotation div[style*="border: 1px solid #eee"],
       .compact-quotation div[style*="border: 1px solid #ddd"],
       .compact-quotation div[style*="border: 1px solid #e3f2fd"],

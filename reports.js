@@ -13,7 +13,28 @@ if (!firebase.apps.length) {
 const db = firebase.firestore();
 
 const DATA_FIELDS = {
-    quotations: ["id", "type", "clientName", "destination", "status", "createdAt", "expiresAt", "amount", "agentId"],
+    quotations: [
+        "id",
+        "type",
+        "clientName",
+        "destination",
+        "status",
+        "workflowStage",
+        "customerAccepted",
+        "customerAcceptedAt",
+        "agentApproved",
+        "agentApprovedAt",
+        "customerNeedsReaccept",
+        "shareLinkId",
+        "shareVersion",
+        "lastCustomerAcceptanceAt",
+        "approvedBy",
+        "selfBooked",
+        "createdAt",
+        "expiresAt",
+        "amount",
+        "agentId"
+    ],
     sales: ["id", "type", "clientName", "destination", "status", "bookedDate", "amount", "agentId"],
     customers: ["customerName", "phone", "email", "totalQuotations", "bookedQuotations", "bookedSales", "lastQuotationDate"]
 };
@@ -26,7 +47,7 @@ const PRESETS = {
     },
     quotation: {
         source: "quotations",
-        fields: ["id", "type", "clientName", "destination", "status", "createdAt", "amount", "agentName"],
+        fields: ["id", "type", "clientName", "destination", "status", "workflowStage", "customerAccepted", "createdAt", "amount", "agentName"],
         filter: ""
     },
     destination: {
@@ -39,6 +60,17 @@ const PRESETS = {
         source: "quotations",
         fields: ["id", "type", "clientName", "destination", "status", "createdAt", "amount", "agentName"],
         filter: ""
+    },
+    workflowFunnel: {
+        source: "quotations",
+        fields: ["workflowStage", "totalQuotations", "bookedQuotations", "pendingQuotations", "followupQuotations", "cancelledQuotations", "expectedSales"],
+        filter: ""
+    },
+    agentPerformance: {
+        source: "quotations",
+        fields: ["agentName", "totalQuotations", "customerAcceptedCount", "agentApprovedCount", "bookedQuotations", "bookedSales", "conversionRate"],
+        filter: "",
+        groupedByAgent: true
     },
     customerActivity: {
         source: "customers",
@@ -131,6 +163,8 @@ function getActiveReportLabel() {
     if (activePreset === "sales") return "Sales Report";
     if (activePreset === "quotation") return "Quotation Report";
     if (activePreset === "bookingSummary") return "Booking Summary Report";
+    if (activePreset === "workflowFunnel") return "Workflow Funnel Report";
+    if (activePreset === "agentPerformance") return "Agent Performance Report";
     if (activePreset === "customerActivity") return "Customer Activity Report";
     if (activePreset === "custom" || selectedFields.length) return customReportName ? `Custom Report: ${customReportName}` : "Custom Report";
     if (currentSource === "sales") return "Sales Data Report";
@@ -204,6 +238,8 @@ function refreshSavedReportControls() {
             { value: "quotation", label: "Quotation Report" },
             { value: "destination", label: "By Destination" },
             { value: "bookingSummary", label: "Booking Summary" },
+            { value: "workflowFunnel", label: "Workflow Funnel Report" },
+            { value: "agentPerformance", label: "Agent Performance Report" },
             { value: "customerActivity", label: "Customer Activity" },
             { value: "custom", label: "Custom Report" }
         ];
@@ -430,6 +466,76 @@ function inferClientName(quotation) {
         || "N/A";
 }
 
+function extractEventTimestamp(eventObject) {
+    if (!eventObject) return null;
+    return eventObject.acceptedAt || eventObject.approvedAt || eventObject.createdAt || eventObject.updatedAt || null;
+}
+
+function getWorkflowStage(quotation) {
+    const status = String(quotation?.status || "pending").toLowerCase();
+    const customerAccepted = !!quotation?.customerAcceptance;
+    const agentApproved = !!quotation?.agentApproval;
+    const needsReaccept = !!quotation?.customerNeedsReaccept;
+    if (status === "booked") return "Booked";
+    if (needsReaccept) return "Needs Re-Accept";
+    if (customerAccepted && !agentApproved) return "Awaiting Agent Approval";
+    if (quotation?.shareLinkId && !customerAccepted) return "Awaiting Customer Acceptance";
+    return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function workflowFunnelSummary(quotations) {
+    const stageMap = new Map();
+    quotations.forEach(q => {
+        const stage = getWorkflowStage(q);
+        const row = stageMap.get(stage) || {
+            workflowStage: stage,
+            totalQuotations: 0,
+            bookedQuotations: 0,
+            pendingQuotations: 0,
+            followupQuotations: 0,
+            cancelledQuotations: 0,
+            expectedSales: 0
+        };
+        row.totalQuotations += 1;
+        row.expectedSales += normalizeMoney(q.amount);
+        if (q.status === "booked") row.bookedQuotations += 1;
+        if (q.status === "pending") row.pendingQuotations += 1;
+        if (q.status === "followup") row.followupQuotations += 1;
+        if (q.status === "cancelled") row.cancelledQuotations += 1;
+        stageMap.set(stage, row);
+    });
+    return Array.from(stageMap.values()).sort((a, b) => b.totalQuotations - a.totalQuotations);
+}
+
+function agentPerformanceSummary(quotations) {
+    const grouped = new Map();
+    quotations.forEach(q => {
+        const agentName = q.agentName || q.agentId || "Unknown";
+        const row = grouped.get(agentName) || {
+            agentName,
+            totalQuotations: 0,
+            customerAcceptedCount: 0,
+            agentApprovedCount: 0,
+            bookedQuotations: 0,
+            bookedSales: 0,
+            conversionRate: 0
+        };
+        row.totalQuotations += 1;
+        if (q.customerAccepted) row.customerAcceptedCount += 1;
+        if (q.agentApproved) row.agentApprovedCount += 1;
+        if (q.status === "booked") {
+            row.bookedQuotations += 1;
+            row.bookedSales += normalizeMoney(q.amount);
+        }
+        grouped.set(agentName, row);
+    });
+    const rows = Array.from(grouped.values());
+    rows.forEach(row => {
+        row.conversionRate = row.totalQuotations > 0 ? `${Math.round((row.bookedQuotations / row.totalQuotations) * 100)}%` : "0%";
+    });
+    return rows.sort((a, b) => b.bookedQuotations - a.bookedQuotations);
+}
+
 function getLoggedInAgent() {
     try {
         return JSON.parse(localStorage.getItem("loggedInAgent")) || null;
@@ -483,19 +589,41 @@ function getLocalQuotationsSnapshot() {
 }
 
 function normalizeQuotationList(list, type, agentId) {
-    return (Array.isArray(list) ? list : []).map(item => ({
-        id: item.id || "",
-        type,
-        clientName: inferClientName(item),
-        destination: inferDestination(item, type),
-        status: String(item.status || "pending").toLowerCase(),
-        createdAt: normalizeDate(item.createdAt),
-        expiresAt: normalizeDate(item.expiresAt),
-        amount: inferAmount(item),
-        agentId: agentId || item.agentId || "",
-        phone: item?.clientData?.phone || item?.phone || "",
-        email: item?.clientData?.email || item?.email || ""
-    }));
+    return (Array.isArray(list) ? list : []).map(item => {
+        const customerAccepted = !!item.customerAcceptance;
+        const agentApproved = !!item.agentApproval;
+        const customerAcceptedAt = extractEventTimestamp(item.customerAcceptance);
+        const agentApprovedAt = extractEventTimestamp(item.agentApproval);
+        const lastCustomerAcceptanceAt = extractEventTimestamp(item.lastCustomerAcceptance);
+        const agentName = item.agentData?.name || item.agentName || "";
+        const workflowStage = getWorkflowStage(item);
+
+        return {
+            id: item.id || "",
+            type,
+            clientName: inferClientName(item),
+            destination: inferDestination(item, type),
+            status: String(item.status || "pending").toLowerCase(),
+            workflowStage,
+            customerAccepted,
+            customerAcceptedAt: customerAcceptedAt ? normalizeDate(customerAcceptedAt) : null,
+            agentApproved,
+            agentApprovedAt: agentApprovedAt ? normalizeDate(agentApprovedAt) : null,
+            customerNeedsReaccept: !!item.customerNeedsReaccept,
+            shareLinkId: item.shareLinkId || "",
+            shareVersion: item.shareVersion || 0,
+            lastCustomerAcceptanceAt: lastCustomerAcceptanceAt ? normalizeDate(lastCustomerAcceptanceAt) : null,
+            approvedBy: item.agentApproval?.approvedBy || item.approvedBy || "",
+            selfBooked: !!item.agentApproval?.selfBooked || !!item.selfBooked,
+            createdAt: normalizeDate(item.createdAt),
+            expiresAt: normalizeDate(item.expiresAt),
+            amount: inferAmount(item),
+            agentId: agentId || item.agentId || "",
+            agentName,
+            phone: item?.clientData?.phone || item?.phone || "",
+            email: item?.clientData?.email || item?.email || ""
+        };
+    });
 }
 
 async function loadQuotationRecords() {
@@ -848,6 +976,10 @@ async function runReport() {
 
         if (activePreset === "destination") {
             rows = destinationSummary(rows);
+        } else if (activePreset === "workflowFunnel") {
+            rows = workflowFunnelSummary(rows);
+        } else if (activePreset === "agentPerformance") {
+            rows = agentPerformanceSummary(rows);
         }
 
         const validFields = selectedFields.filter(field => rows.length === 0 || Object.prototype.hasOwnProperty.call(rows[0], field));
