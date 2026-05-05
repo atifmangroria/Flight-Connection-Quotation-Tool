@@ -984,6 +984,10 @@ function setBookedEditLockStateInternational(isLocked) {
 }
 
 function showStatusSection() {
+  if (isLoadingQuotation) {
+    return;
+  }
+
   const statusSection = document.getElementById('statusSection');
   const quotationStatus = document.getElementById('quotationStatus');
   const btnApproveCustomer = document.getElementById('btnApproveCustomer');
@@ -1451,7 +1455,19 @@ function openAgentApprovalModal(action) {
       ${needsReacceptStatus}
     `;
   }
-  const terms = quotation?.terms || quotation?.termsAndConditions || quotation?.customTerms || quotation?.termsText || 'Terms and conditions are not available for this quotation.';
+  const defaultAgentTerms = `By accepting this quotation on behalf of the customer, I confirm that:
+
+- I have shared the full quotation details with the customer
+- I have explained all inclusions and exclusions
+- I have confirmed the total amount, travel dates, and number of passengers with the customer
+- The customer has verbally or via message agreed to proceed
+
+Important:
+I understand that this does not confirm booking. Booking will only be confirmed after availability is verified and full payment is received.
+
+Declaration:
+This action will be treated as my confirmation that the customer has been properly informed and has agreed to proceed with Flight Connection Travel & Tours.`;
+  const terms = quotation?.terms || quotation?.termsAndConditions || quotation?.customTerms || quotation?.termsText || defaultAgentTerms;
   if (agentApprovalTerms) agentApprovalTerms.value = terms;
   pendingAgentAction = action;
   if (agentAcceptCheck) agentAcceptCheck.checked = false;
@@ -2092,6 +2108,7 @@ document.addEventListener('DOMContentLoaded', function() {
   let isClientDataSaved = false;
   let savedQuotations = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
   let currentQuotationId = null;
+  let isLoadingQuotation = false;
   let lastSavedPax = {};
   let lastSavedDates = {};
   let lastSavedClientInfo = {};
@@ -4472,7 +4489,18 @@ function removeAddon(id){
       <h2 style="margin-top:0;color:#0b76d1;">Agent Terms Confirmation</h2>
       <p style="margin:0 0 16px;color:#333;">Please review and accept the terms before completing this action.</p>
       <div id="agentApprovalSummary" style="margin-bottom:14px;padding:12px;border:1px solid #d9e6f3;border-radius:10px;background:#f7fbff;color:#111;font-size:14px;line-height:1.5;"></div>
-      <textarea id="agentApprovalTerms" readonly style="width:100%;min-height:180px;padding:12px;border:1px solid #ccc;border-radius:10px;background:#f8f9fb;margin-bottom:14px;">By clicking Confirm and Book, you acknowledge that you have reviewed the quotation details, passenger information, and pricing, and that you accept responsibility for finalizing this booking as the agent.</textarea>
+      <textarea id="agentApprovalTerms" readonly style="width:100%;min-height:180px;padding:12px;border:1px solid #ccc;border-radius:10px;background:#f8f9fb;margin-bottom:14px;">By accepting this quotation on behalf of the customer, I confirm that:
+
+- I have shared the full quotation details with the customer
+- I have explained all inclusions and exclusions
+- I have confirmed the total amount, travel dates, and number of passengers with the customer
+- The customer has verbally or via message agreed to proceed
+
+Important:
+I understand that this does not confirm booking. Booking will only be confirmed after availability is verified and full payment is received.
+
+Declaration:
+This action will be treated as my confirmation that the customer has been properly informed and has agreed to proceed with Flight Connection Travel & Tours.</textarea>
       <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:18px;">
         <input id="agentAcceptCheck" type="checkbox" style="width:18px;height:18px;margin-top:4px;" />
         <label for="agentAcceptCheck" style="font-size:14px;color:#333;line-height:1.4;">I have read and accept the terms and conditions.</label>
@@ -4666,14 +4694,14 @@ function isCurrentQuotationBookedForAccounts() {
   return String(quotation?.status || '').trim().toLowerCase() === 'booked';
 }
 
-function getSummaryRowsForAccounts() {
+function getSummaryRowsForAccounts(includeAgentServiceFee = true) {
   const rows = [];
   document.querySelectorAll('#calcSummaryBody tr').forEach((row, index) => {
     const cells = row.querySelectorAll('td');
     if (!cells || cells.length < 5) return;
     const section = normalizePdfText(cells[0]?.innerText || '');
     const normalizedSection = section.toLowerCase();
-    if (normalizedSection === 'package totals' || normalizedSection.includes('agent service fee')) return;
+    if (normalizedSection === 'package totals' || (!includeAgentServiceFee && normalizedSection.includes('agent service fee'))) return;
     const description = normalizePdfText(cells[1]?.innerText || '');
     const cost = normalizePdfText(cells[5]?.innerText || cells[2]?.innerText || '');
     const service = normalizePdfText(cells[6]?.innerText || cells[3]?.innerText || '');
@@ -4743,7 +4771,7 @@ function openAccountsSupplierModal() {
     showNotification('Accounts summary is available only for booked quotations.', 'warning');
     return;
   }
-  const rows = getSummaryRowsForAccounts();
+  const rows = getSummaryRowsForAccounts(false);
   if (!rows.length) {
     showNotification('No summary rows found. Please calculate first.', 'warning');
     return;
@@ -4814,7 +4842,8 @@ function openAccountsSupplierModal() {
     saveAccountsSuppliersToCurrentQuotation();
 
     try {
-      buildAccountsSummaryPdf(rows, accountsSupplierMap);
+      const pdfRows = getSummaryRowsForAccounts();
+      buildAccountsSummaryPdf(pdfRows, accountsSupplierMap);
     } catch (error) {
       console.error('Accounts PDF download error:', error);
       const errMsg = error?.message ? `PDF Error: ${error.message}` : 'Unable to generate Accounts PDF. Please recalculate and try again.';
@@ -5226,26 +5255,35 @@ async function performCalculation() {
     const totalSvcOrig = (svcAdult * p.adults) + (svcChildBed * p.childBed) + (svcChildNoBed * p.childNoBed) + (svcInf * p.infants);
     
     // Calculate per person pricing in ORIGINAL currency for display
-    const perAdult = convertToPKR(costAdult + svcAdult, currency);
-    const perChildBed = convertToPKR(costChildBed + svcChildBed, currency);
-    const perChildNoBed = convertToPKR(costChildNoBed + svcChildNoBed, currency);
-    const perInfant = convertToPKR(costInf + svcInf, currency);
-    
-    let perPersonText = [];
-    if (p.adults > 0) perPersonText.push(`Adult x${p.adults}: PKR ${fmt(perAdult)}`);
-    if (p.childBed > 0) perPersonText.push(`Child (with bed) x${p.childBed}: PKR ${fmt(perChildBed)}`);
-    if (p.childNoBed > 0) perPersonText.push(`Child (no bed) x${p.childNoBed}: PKR ${fmt(perChildNoBed)}`);
-    if (p.infants > 0) perPersonText.push(`Infant x${p.infants}: PKR ${fmt(perInfant)}`);
-    perPersonText = perPersonText.join(', ');
-    
-    const details = `${airline} - ${flightType}<br>
-                    Adults: ${p.adults} × ${currency} ${fmt(costAdult)}<br>
-                    Children (with bed): ${p.childBed} × ${currency} ${fmt(costChildBed)}<br>
-                    Children (no bed): ${p.childNoBed} × ${currency} ${fmt(costChildNoBed)}<br>
-                    Infants: ${p.infants} × ${currency} ${fmt(costInf)}`;
+    const perAdult = costAdult + svcAdult;
+    const perChildBed = costChildBed + svcChildBed;
+    const perChildNoBed = costChildNoBed + svcChildNoBed;
+    const perInfant = costInf + svcInf;
+
+    const perPersonLines = [];
+    if (p.adults > 0) perPersonLines.push(`Ad x${p.adults}: ${currency} ${fmt(perAdult)}`);
+    if (p.childBed > 0) perPersonLines.push(`CWB x${p.childBed}: ${currency} ${fmt(perChildBed)}`);
+    if (p.childNoBed > 0) perPersonLines.push(`CNB x${p.childNoBed}: ${currency} ${fmt(perChildNoBed)}`);
+    if (p.infants > 0) perPersonLines.push(`INF x${p.infants}: ${currency} ${fmt(perInfant)}`);
+
+    const paxDetails = [];
+    const buildPaxLine = (label, count, costUnit, svcUnit) => {
+      if (count === 0) return null;
+      if (svcUnit > 0) {
+        return `${label}: ${currency} ${fmt(costUnit)} + ${fmt(svcUnit)} svc = ${currency} ${fmt(costUnit + svcUnit)} x ${count}`;
+      }
+      return `${label}: ${currency} ${fmt(costUnit)} x ${count}`;
+    };
+    paxDetails.push(buildPaxLine('Ad', p.adults, costAdult, svcAdult));
+    paxDetails.push(buildPaxLine('CWB', p.childBed, costChildBed, svcChildBed));
+    paxDetails.push(buildPaxLine('CNB', p.childNoBed, costChildNoBed, svcChildNoBed));
+    paxDetails.push(buildPaxLine('INF', p.infants, costInf, svcInf));
+
+    const perPersonText = perPersonLines.join(', ');
+    const details = paxDetails.filter(Boolean).join('\n');
 
     if (totalCostOrig + totalSvcOrig > 0) {
-      addDetailedRow(`Flight ${idx}`, airline, details, currency, totalCostOrig, totalSvcOrig, perPersonText, false);
+      addDetailedRow(`Flight`, `${airline}${flightType ? ` (${flightType})` : ''}`, details, currency, totalCostOrig, totalSvcOrig, perPersonText, false);
     }
   });
 
@@ -5324,19 +5362,24 @@ async function performCalculation() {
     Object.values(hotelGroupActual).forEach((hotel) => {
       const nights = hotel.nights;
       
-      // Build detailed description with hotel name/location, stay duration, and room breakdowns
-      let desc = `${hotel.name}, ${hotel.city}<br>Stay: ${nights} nights`;
+      // Build detailed description with hotel name/location and room breakdowns
+      let desc = `${hotel.name}, ${hotel.city}`;
       
-      hotel.rooms.forEach(rb => {
-        desc += `<br>${rb.count} ${rb.roomType} with ${rb.serviceType} • ${rb.currency} ${fmt(rb.costNight)} cost/night + ${rb.currency} ${fmt(rb.svcNight)} service/night • ${rb.nights} nights • PKR ${fmt(rb.perPerson)} per pax`;
-      });
+      const hotelDetails = [
+        hotel.checkIn && hotel.checkOut ? `Check-in: ${formatDateToDMY(hotel.checkIn)} • Check-out: ${formatDateToDMY(hotel.checkOut)}` : '',
+        hotel.rooms.map(rb => {
+          const roomLine = `${rb.count} ${rb.roomType} with ${rb.serviceType}`;
+          const priceLine = `${rb.currency} ${fmt(rb.costNight)} cost/night` + (rb.svcNight > 0 ? ` + ${rb.currency} ${fmt(rb.svcNight)} service/night` : '') + ` x ${rb.nights} nights`;
+          return `${roomLine}\n${priceLine}`;
+        }).join('\n')
+      ].filter(Boolean).join('\n');
       
       // Build per person text showing breakdown by room type
       let perPersonTextHotel = hotel.rooms.map(rb => 
         `${rb.roomType} (${rb.count} room${rb.count > 1 ? 's' : ''}): PKR ${fmt(rb.perPerson)} x ${rb.totalRoomPax}`
       ).join(', ');
       
-      addDetailedRow(`Hotel`, hotel.name, desc, hotel.currency, hotel.totalCost, hotel.totalSvc, perPersonTextHotel, false);
+      addDetailedRow(`Hotel`, hotel.name, hotelDetails, hotel.currency, hotel.totalCost, hotel.totalSvc, perPersonTextHotel, false);
     });
   } else {
     // Average mode: sum all hotel costs and divide by total paying pax
@@ -5397,17 +5440,20 @@ async function performCalculation() {
     
     // Add one row per hotel with detailed room type breakdown
     Object.values(hotelGroups).forEach((hotel) => {
-      // Build description with hotel name/location, stay duration, and room breakdowns
+      // Build description with hotel name/location and room breakdowns
       const nights = hotel.rooms[0].nights;
-      let desc = `${hotel.name}, ${hotel.city}<br>Stay: ${nights} nights`;
+      let desc = `${hotel.name}, ${hotel.city}`;
       
-      hotel.rooms.forEach(r => {
-        const avgCostPerNight = r.costNight; // Already averaged
-        const avgSvcPerNight = r.svcNight;   // Already averaged
-        desc += `<br>${r.rooms} ${r.roomType} with ${r.serviceType} • ${r.currency} ${fmt(avgCostPerNight)} cost/night + ${r.currency} ${fmt(avgSvcPerNight)} service/night • ${r.nights} nights • PKR ${fmt(hotelCostPerPerson)} per pax`;
-      });
+      const hotelDetails = [
+        hotel.checkIn && hotel.checkOut ? `Check-in: ${formatDateToDMY(hotel.checkIn)} • Check-out: ${formatDateToDMY(hotel.checkOut)}` : '',
+        hotel.rooms.map(r => {
+          const roomLine = `${r.rooms} ${r.roomType} with ${r.serviceType}`;
+          const priceLine = `${r.currency} ${fmt(r.costNight)} cost/night` + (r.svcNight > 0 ? ` + ${r.currency} ${fmt(r.svcNight)} service/night` : '') + ` x ${r.nights} nights`;
+          return `${roomLine}\n${priceLine}`;
+        }).join('\n')
+      ].filter(Boolean).join('\n');
       
-      addDetailedRow(`Hotel`, hotel.name, desc, hotel.currency, hotel.totalCost, hotel.totalSvc, perPersonText, false);
+      addDetailedRow(`Hotel`, hotel.name, hotelDetails, hotel.currency, hotel.totalCost, hotel.totalSvc, perPersonText, false);
     });
   }
 
@@ -5421,12 +5467,16 @@ async function performCalculation() {
     const type = document.getElementById(`tType_${idx}`)?.value || "Not specified";
     const pricing = getTransferPricing(idx, paxData);
     
+    const transferRateLine = pricing.svcOrig > 0
+      ? `Rate: ${pricing.currency} ${fmt(pricing.costOrig)} + Service ${fmt(pricing.svcOrig)}`
+      : `Rate: ${pricing.currency} ${fmt(pricing.costOrig)}`;
+
     const details = `Date: ${formatDateToDMY(date)}<br>
                     Route: ${from} → ${to}<br>
                     Vehicle: ${vehicle} (${type})<br>
                     ${pricing.type === 'sharing'
                       ? `Rate: ${pricing.currency} Adult ${fmt(numVal(`tShareCostAdult_${idx}`))} + Svc ${fmt(numVal(`tShareSvcAdult_${idx}`))}, Child ${fmt(numVal(`tShareCostChild_${idx}`))} + Svc ${fmt(numVal(`tShareSvcChild_${idx}`))}, Infant ${fmt(numVal(`tShareCostInf_${idx}`))} + Svc ${fmt(numVal(`tShareSvcInf_${idx}`))}<br>Charged by passenger type`
-                      : `Rate: ${pricing.currency} ${fmt(pricing.costOrig)} + Service ${fmt(pricing.svcOrig)}<br>Charged to: Adults (${paxData.adults}) + Children with bed (${paxData.childBed}) + Children without bed (${paxData.childNoBed})`
+                      : transferRateLine
                     }`;
 
     let perPersonText = [];
@@ -5464,7 +5514,7 @@ async function performCalculation() {
                     Vehicle: ${vehicle}<br>
                     ${pricing.mode === 'sharing'
                       ? `Rate: PKR Adult ${fmt(tourAdultPKR)}, Child ${fmt(tourChildPKR)}, Infant ${fmt(tourInfantPKR)}<br>Charged by passenger type`
-                      : `Rate: PKR ${fmt(tourPrivateTotalPKR)} total distributed per pax<br>Charged to: All passengers (${paxData.adults + paxData.childBed + paxData.childNoBed + paxData.infants})`
+                      : `Rate: PKR ${fmt(tourPrivateTotalPKR)} total distributed per pax`
                     }`;
 
     let perPersonText = [];
@@ -5792,7 +5842,7 @@ async function performCalculation() {
                     Vehicle: ${tourVehicle}<br>
                     ${pricing.mode === 'sharing'
                       ? `Rate: PKR Adult ${fmt(tourAddonAdultPKR)}, Child ${fmt(tourAddonChildPKR)}, Infant ${fmt(tourAddonInfantPKR)}<br>Charged by passenger type`
-                      : `Rate: PKR ${fmt(tourAddonPrivateTotalPKR)} total distributed per pax<br>Charged to: All passengers (${paxData.adults + paxData.childBed + paxData.childNoBed + paxData.infants})`
+                      : `Rate: PKR ${fmt(tourAddonPrivateTotalPKR)} total distributed per pax`
                     }`;
     
     let perPersonText = [];
@@ -7668,6 +7718,10 @@ async function upsertCustomerFromQuotation(clientData, quotationMeta) {
 
 function saveQuotation() {
   try {
+    if (isLoadingQuotation) {
+      return;
+    }
+
     // Check if client data is saved
     if (!isClientDataSaved) {
       showNotification("Please save Client & Pax information first before saving the quotation.", "error");
@@ -8041,7 +8095,8 @@ const customSectionsData = {
     let bookedMovedToPendingByEdit = false;
     const targetQuotationId = currentQuotationId || quotationData.id;
     quotationData.id = targetQuotationId;
-    if (existingQuotation?.status === 'booked') {
+    const editLabels = existingQuotation ? getPublicQuotationEditLabels(existingQuotation, quotationData) : [];
+    if (existingQuotation?.status === 'booked' && !isLoadingQuotation && editLabels.length) {
       quotationData.status = 'pending';
       quotationData.customerNeedsReaccept = true;
       quotationData.customerAcceptance = null;
@@ -8129,11 +8184,13 @@ function loadQuotation(quotationId) {
     
     if (!quotation) {
       showNotification("Quotation not found.", "error");
+      isLoadingQuotation = false;
       return;
     }
     
-    // Set the current quotation ID
+    // Set the current quotation ID and mark quotation loading state
     currentQuotationId = quotationId;
+    isLoadingQuotation = true;
 
     // Restore selected package from quotation data (or clear stale selection)
     const packageSelect = document.getElementById('packageSelect');
@@ -8258,6 +8315,16 @@ function loadQuotation(quotationId) {
         localStorage.setItem('savedQuotations_international', JSON.stringify(allQuotationsForNorm));
       }
     }
+
+    let loadTasks = 0;
+    const completeLoadTask = () => {
+      loadTasks -= 1;
+      if (loadTasks <= 0) {
+        loadTasks = 0;
+        isLoadingQuotation = false;
+        showStatusSection();
+      }
+    };
     
     // Clear existing sections
     if (document.getElementById("flightContainer")) document.getElementById("flightContainer").innerHTML = "";
@@ -8291,6 +8358,7 @@ function loadQuotation(quotationId) {
     // Load flights with proper timing
     if (quotation.flights && Array.isArray(quotation.flights)) {
       quotation.flights.forEach((flightData, flightIndex) => {
+        loadTasks += 1;
         setTimeout(() => {
           // Trigger the addFlight function
           addFlight();
@@ -8328,6 +8396,7 @@ function loadQuotation(quotationId) {
               if (document.getElementById(`flightSvcInf_${idx}`)) 
                 document.getElementById(`flightSvcInf_${idx}`).value = flightData.costs.infant?.service || 0;
             }
+            completeLoadTask();
           }, 100);
         }, 200 * flightIndex);
       });
@@ -8336,6 +8405,7 @@ function loadQuotation(quotationId) {
     // Load hotels with proper timing
     if (quotation.hotels && Array.isArray(quotation.hotels)) {
       quotation.hotels.forEach((hotelData, hotelIndex) => {
+        loadTasks += 1;
         setTimeout(() => {
           // Add hotel section directly (works even when booked lock disables add buttons)
           nextHotelNumber++;
@@ -8394,6 +8464,7 @@ function loadQuotation(quotationId) {
               if (currencyEl) currencyEl.value = normalizeCurrency(roomTypeData.currency);
               if (svcNightEl) svcNightEl.value = roomTypeData.svcNight || 0;
             });
+            completeLoadTask();
           }, 100);
         }, 200 * hotelIndex);
       });
@@ -8402,6 +8473,7 @@ function loadQuotation(quotationId) {
     // Load transfers with proper timing
     if (quotation.transfers && Array.isArray(quotation.transfers)) {
       quotation.transfers.forEach((transferData, transferIndex) => {
+        loadTasks += 1;
         setTimeout(() => {
           // Add transfer section directly (works even when booked lock disables add buttons)
           addTransfer();
@@ -8451,6 +8523,7 @@ function loadQuotation(quotationId) {
             if (directionSelect) {
               directionSelect.dispatchEvent(new Event('change'));
             }
+            completeLoadTask();
           }, 100);
         }, 200 * transferIndex);
       });
@@ -8459,6 +8532,7 @@ function loadQuotation(quotationId) {
     // Load tours with proper timing
     if (quotation.tours && Array.isArray(quotation.tours)) {
       quotation.tours.forEach((tourData, tourIndex) => {
+        loadTasks += 1;
         setTimeout(() => {
           // Add tour section directly (works even when booked lock disables add buttons)
           addTour();
@@ -8507,6 +8581,7 @@ function loadQuotation(quotationId) {
               document.getElementById(`tourShareSvcInf_${idx}`).value = tourData.shareSvcInf || 0;
 
             toggleTourRateFields(idx, false);
+            completeLoadTask();
           }, 100);
         }, 200 * tourIndex);
       });
@@ -8514,6 +8589,7 @@ function loadQuotation(quotationId) {
     
     // Load visa with proper timing
     if (quotation.visa && quotation.visa.count) {
+      loadTasks += 1;
       setTimeout(() => {
         // Add visa section directly (works even when booked lock disables add buttons)
         addVisa();
@@ -8532,6 +8608,7 @@ function loadQuotation(quotationId) {
             document.getElementById('visaCurrency').value = normalizeCurrency(quotation.visa.currency);
           if (document.getElementById('visaSvc')) 
             document.getElementById('visaSvc').value = quotation.visa.service || 0;
+          completeLoadTask();
         }, 100);
       }, 200);
     }
@@ -8541,6 +8618,7 @@ function loadQuotation(quotationId) {
       // Load direct flight add-ons
       if (quotation.addons.directFlights && Array.isArray(quotation.addons.directFlights)) {
         quotation.addons.directFlights.forEach((addonData, addonIndex) => {
+          loadTasks += 1;
           setTimeout(() => {
             // Open the direct flight panel
             const directFlightPanel = document.getElementById('directFlightPanel');
@@ -8587,6 +8665,7 @@ function loadQuotation(quotationId) {
                     document.getElementById(`upgradeFlightSvcInf_${idx}`).value = addonData.costs.infant?.service || 0;
                 }
               }
+              completeLoadTask();
             }, 100);
           }, 300 * (addonIndex + 1));
         });
@@ -8595,6 +8674,7 @@ function loadQuotation(quotationId) {
       // Load meal add-ons
       if (quotation.addons.meals && Array.isArray(quotation.addons.meals)) {
         quotation.addons.meals.forEach((addonData, addonIndex) => {
+          loadTasks += 1;
           setTimeout(() => {
             // Open the meal type panel
             const mealTypePanel = document.getElementById('mealTypePanel');
@@ -8621,6 +8701,7 @@ function loadQuotation(quotationId) {
                 if (inputs[1]) inputs[1].value = addonData.service || 0;
                 if (selects[2]) selects[2].value = normalizeCurrency(addonData.currency);
               }
+              completeLoadTask();
             }, 100);
           }, 300 * (addonIndex + 1));
         });
@@ -8629,6 +8710,7 @@ function loadQuotation(quotationId) {
       // Load tour add-ons
       if (quotation.addons.tours && Array.isArray(quotation.addons.tours)) {
         quotation.addons.tours.forEach((addonData, addonIndex) => {
+          loadTasks += 1;
           setTimeout(() => {
             // Open the tours panel
             const toursPanel = document.getElementById('toursPanel');
@@ -8683,18 +8765,17 @@ function loadQuotation(quotationId) {
                 document.getElementById(`tourAddonShareSvcInf_${idx}`).value = addonData.shareSvcInf || 0;
 
               toggleTourRateFields(idx, true);
+              completeLoadTask();
             }, 100);
           }, 300 * (addonIndex + 1));
         });
       }
     }
     
-    // Show status section and force voucher visibility for already-booked quotations
-    showStatusSection();
-    const _voucherBtn = document.getElementById('btnCreateVoucher');
-    const _currentStatus = normalizeQuotationStatus(document.getElementById('quotationStatus')?.value);
-    if (_voucherBtn) {
-      _voucherBtn.style.display = _currentStatus === 'booked' ? 'inline-block' : 'none';
+    // Show status section after the quotation has had time to finish asynchronous section loading
+    if (loadTasks === 0) {
+      isLoadingQuotation = false;
+      showStatusSection();
     }
 
     // Keep loaded values but do not auto-open quotation preview/cost sheet on reload
@@ -8710,6 +8791,7 @@ function loadQuotation(quotationId) {
     
   } catch (error) {
     console.error('Error loading quotation:', error);
+    isLoadingQuotation = false;
     showNotification("Failed to load quotation. Please try again.", "error");
   }
 }
@@ -8875,11 +8957,6 @@ function handleUrlParameters() {
       // Load the quotation
       loadQuotation(quotationIdToLoad);
     }, 1000);
-    
-    // Add this at the end to ensure status is shown
-    setTimeout(() => {
-      showStatusSection();
-    }, 1500);
   }
 }
 

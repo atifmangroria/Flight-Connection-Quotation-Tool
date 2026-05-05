@@ -3,8 +3,11 @@
   let text = String(value);
   // Remove zero-width / invisible characters
   text = text.replace(/[\u200B-\u200D\uFEFF\u00A0]/g, '');
+  // Convert HTML breaks into real line breaks
+  text = text.replace(/<br\s*\/?/gi, '\n');
   // Normalize line breaks and tabs
-  text = text.replace(/[\r\n\t]+/g, ' ');
+  text = text.replace(/\r\n?/g, '\n');
+  text = text.replace(/\t+/g, ' ');
   // Replace Unicode symbols with plain ASCII equivalents
   text = text.replace(/\u00D7/g, 'x');
   text = text.replace(/[\u2192\u21D2\u27A1\u2794]/g, '->');
@@ -16,9 +19,10 @@
   text = text.replace(/(\d),\s+(\d)/g, '$1,$2');
   // Fix dates with spaces: "10/ 05/ 2026" -> "10/05/2026"
   text = text.replace(/(\d)\s*\/\s*(\d)/g, '$1/$2');
-  // Normalize whitespace
-  text = text.replace(/\s+/g, ' ').trim();
-  return text;
+  // Normalize spaces, but preserve line breaks
+  text = text.replace(/[ \t]+/g, ' ');
+  text = text.replace(/ *\n */g, '\n');
+  return text.trim();
 }
 
 function parseMoney(value) {
@@ -126,11 +130,11 @@ function renderAccountsSummaryPdf(options) {
   // ── Table columns ────────────────────────────────────────────────────────────
   const cols = [
     { title: 'Service',     width: 62  },
-    { title: 'Details',     width: 200 },
-    { title: 'Supplier',    width: 85  },
-    { title: 'Cost',        width: 60  },
-    { title: 'Svc Charge',  width: 60  },
-    { title: 'Selling',     width: 60  }
+    { title: 'Details',     width: 230 },
+    { title: 'Supplier',    width: 70  },
+    { title: 'Cost',        width: 55  },
+    { title: 'Svc Charge',  width: 55  },
+    { title: 'Selling',     width: 55  }
   ];
 
   // Header row
@@ -157,7 +161,14 @@ function renderAccountsSummaryPdf(options) {
   let totalSelling = 0;
   let rowIndex = 0;
 
-  rows.forEach((row) => {
+  const sortedRows = [...rows].sort((a, b) => {
+    const aIsAgentFee = String(a.section || '').toLowerCase().includes('agent service fee');
+    const bIsAgentFee = String(b.section || '').toLowerCase().includes('agent service fee');
+    if (aIsAgentFee === bIsAgentFee) return 0;
+    return aIsAgentFee ? 1 : -1;
+  });
+
+  sortedRows.forEach((row) => {
     const costVal    = parseMoney(row.cost);
     const svcVal     = parseMoney(row.service);
     const sellVal    = parseMoney(row.selling);
@@ -165,18 +176,22 @@ function renderAccountsSummaryPdf(options) {
     totalService += svcVal;
     totalSelling += sellVal;
 
+    const isAgentFeeRow = String(row.section || '').toLowerCase().includes('agent service fee');
+    const supplierText = isAgentFeeRow ? '' : normalizePdfText(supplierMap[row.key] || '-');
     const cellValues = [
       normalizePdfText(row.section    || '-'),
       normalizePdfText(row.description || '-'),
-      normalizePdfText(supplierMap[row.key] || '-'),
+      supplierText,
       costVal  ? formatCurrency(costVal)  : '-',
       svcVal   ? formatCurrency(svcVal)   : '-',
       sellVal  ? formatCurrency(sellVal)  : '-'
     ];
 
-    const wrapped = cellValues.map((v, i) =>
-      doc.splitTextToSize(String(v), cols[i].width - 8)
-    );
+    const wrapped = cellValues.map((v, i) => {
+      const textValue = String(v);
+      const lines = textValue.split(/\r?\n/);
+      return lines.flatMap(line => doc.splitTextToSize(line, cols[i].width - 8));
+    });
     const maxLines  = Math.max(...wrapped.map((w) => w.length), 1);
     const lineH     = 11;
     const rowHeight = Math.max(20, maxLines * lineH + 8);

@@ -4165,7 +4165,18 @@ function showToast(message, type = "info") {
       <h2 style="margin-top:0;color:#0b76d1;">Agent Terms Confirmation</h2>
       <p style="margin:0 0 16px;color:#333;">Please review the quotation terms and confirm that you have read and accept them before booking.</p>
       <div id="agentApprovalSummary" style="margin-bottom:14px;padding:12px;border:1px solid #d9e6f3;border-radius:10px;background:#f7fbff;color:#111;font-size:14px;line-height:1.5;"></div>
-      <textarea id="agentApprovalTerms" readonly style="width:100%;min-height:160px;padding:12px;border:1px solid #ccc;border-radius:10px;background:#f8f9fb;margin-bottom:14px;"></textarea>
+      <textarea id="agentApprovalTerms" readonly style="width:100%;min-height:160px;padding:12px;border:1px solid #ccc;border-radius:10px;background:#f8f9fb;margin-bottom:14px;">By accepting this quotation on behalf of the customer, I confirm that:
+
+- I have shared the full quotation details with the customer
+- I have explained all inclusions and exclusions
+- I have confirmed the total amount, travel dates, and number of passengers with the customer
+- The customer has verbally or via message agreed to proceed
+
+Important:
+I understand that this does not confirm booking. Booking will only be confirmed after availability is verified and full payment is received.
+
+Declaration:
+This action will be treated as my confirmation that the customer has been properly informed and has agreed to proceed with Flight Connection Travel & Tours.</textarea>
       <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:18px;">
         <input id="agentAcceptCheck" type="checkbox" style="width:18px;height:18px;margin-top:4px;" />
         <label for="agentAcceptCheck" style="font-size:14px;color:#333;line-height:1.4;">I have read and accept the terms and conditions.</label>
@@ -4366,14 +4377,14 @@ function isCurrentQuotationBookedForAccounts() {
   return String(quotation?.status || '').trim().toLowerCase() === 'booked';
 }
 
-function getSummaryRowsForAccounts() {
+function getSummaryRowsForAccounts(includeAgentServiceFee = true) {
   const rows = [];
   document.querySelectorAll('#calcSummaryBody tr').forEach((row, index) => {
     const cells = row.querySelectorAll('td');
     if (!cells || cells.length < 5) return;
     const section = normalizePdfText(cells[0]?.innerText || '');
     const normalizedSection = section.toLowerCase();
-    if (normalizedSection === 'package totals' || normalizedSection.includes('agent service fee')) return;
+    if (normalizedSection === 'package totals' || (!includeAgentServiceFee && normalizedSection.includes('agent service fee'))) return;
     const description = normalizePdfText(cells[1]?.innerText || '');
     const cost = normalizePdfText(cells[2]?.innerText || '');
     const service = normalizePdfText(cells[3]?.innerText || '');
@@ -4437,7 +4448,7 @@ function openAccountsSupplierModal() {
     showNotification('Accounts summary is available only for booked quotations.', 'warning');
     return;
   }
-  const rows = getSummaryRowsForAccounts();
+  const rows = getSummaryRowsForAccounts(false);
   if (!rows.length) {
     showNotification('No summary rows found. Please calculate first.', 'warning');
     return;
@@ -4508,7 +4519,8 @@ function openAccountsSupplierModal() {
     saveAccountsSuppliersToCurrentQuotation();
 
     try {
-      buildAccountsSummaryPdf(rows, accountsSupplierMap);
+      const pdfRows = getSummaryRowsForAccounts();
+      buildAccountsSummaryPdf(pdfRows, accountsSupplierMap);
     } catch (error) {
       console.error('Accounts PDF download error:', error);
       const errMsg = error?.message ? `PDF Error: ${error.message}` : 'Unable to generate Accounts PDF. Please recalculate and try again.';
@@ -5099,26 +5111,31 @@ async function performCalculation() {
     const perChildBed = costChildBed + svcChildBed;
     const perChildNoBed = costChildNoBed + svcChildNoBed;
     const perInfant = costInf + svcInf;
-    
-    // Build per person text with counts and only show categories with passengers
-    let perPersonText = [];
-    if (p.adults > 0) perPersonText.push(`Adult x${p.adults}: PKR ${fmt(perAdult)}`);
-    if (p.childBed > 0) perPersonText.push(`Child (with bed) x${p.childBed}: PKR ${fmt(perChildBed)}`);
-    if (p.childNoBed > 0) perPersonText.push(`Child (no bed) x${p.childNoBed}: PKR ${fmt(perChildNoBed)}`);
-    if (p.infants > 0) perPersonText.push(`Infant x${p.infants}: PKR ${fmt(perInfant)}`);
-    
-    // Join the array with commas
-    perPersonText = perPersonText.join(', ');
-    
-    // Create detailed description
-    const details = `${airline} - ${flightType}<br>
-                    Adults: ${p.adults} × PKR ${fmt(costAdult)}<br>
-                    Children (with bed): ${p.childBed} × PKR ${fmt(costChildBed)}<br>
-                    Children (no bed): ${p.childNoBed} × PKR ${fmt(costChildNoBed)}<br>
-                    Infants: ${p.infants} × PKR ${fmt(costInf)}`;
+
+    const perPersonLines = [];
+    if (p.adults > 0) perPersonLines.push(`Ad x${p.adults}: PKR ${fmt(perAdult)}`);
+    if (p.childBed > 0) perPersonLines.push(`CWB x${p.childBed}: PKR ${fmt(perChildBed)}`);
+    if (p.childNoBed > 0) perPersonLines.push(`CNB x${p.childNoBed}: PKR ${fmt(perChildNoBed)}`);
+    if (p.infants > 0) perPersonLines.push(`INF x${p.infants}: PKR ${fmt(perInfant)}`);
+
+    const paxDetails = [];
+    const buildPaxLine = (label, count, costUnit, svcUnit) => {
+      if (count === 0) return null;
+      if (svcUnit > 0) {
+        return `${label}: PKR ${fmt(costUnit)} + ${fmt(svcUnit)} svc = PKR ${fmt(costUnit + svcUnit)} x ${count}`;
+      }
+      return `${label}: PKR ${fmt(costUnit)} x ${count}`;
+    };
+    paxDetails.push(buildPaxLine('Ad', p.adults, costAdult, svcAdult));
+    paxDetails.push(buildPaxLine('CWB', p.childBed, costChildBed, svcChildBed));
+    paxDetails.push(buildPaxLine('CNB', p.childNoBed, costChildNoBed, svcChildNoBed));
+    paxDetails.push(buildPaxLine('INF', p.infants, costInf, svcInf));
+
+    const perPersonText = perPersonLines.join(', ');
+    const details = paxDetails.filter(Boolean).join('\n');
 
     if (cost + svc > 0) {
-      addDetailedRow(`Flight ${idx}`, airline, details, cost, svc, cost + svc, perPersonText, false);
+      addDetailedRow(`Flight`, `${airline}${flightType ? ` (${flightType})` : ''}`, details, cost, svc, cost + svc, perPersonText, false);
     }
   });
 
@@ -5184,13 +5201,17 @@ async function performCalculation() {
   Object.values(hotelGroupActual).forEach((hotel) => {
     const nights = hotel.nights;
     const roomLines = hotel.rooms.map(r => {
-      const costNightPKR = (r.costNight || 0) * roe;
-      const svcNightPKR = (r.svcNight || 0) * roe;
-      return `${r.count} ${r.roomType} with ${r.serviceType} • PKR ${fmt(costNightPKR)} cost/night + PKR ${fmt(svcNightPKR)} service/night • ${r.nights} nights • PKR ${fmt(r.perPerson)} per pax`;
-    }).join('<br>');
+      const currencyLabel = r.currency || 'SAR';
+      const roomLine = `${r.count} ${r.roomType} with ${r.serviceType}`;
+      const priceLine = `${currencyLabel} ${fmt(r.costNight)} cost/night` + (r.svcNight > 0 ? ` + ${currencyLabel} ${fmt(r.svcNight)} service/night` : '') + ` x ${r.nights} nights`;
+      return `${roomLine}\n${priceLine}`;
+    }).join('\n');
 
     const hotelHeading = `${hotel.name}, ${hotel.city}`;
-    const hotelDetails = `Stay: ${nights} nights<br>${roomLines}`;
+    const hotelDetails = [
+      hotel.checkIn && hotel.checkOut ? `Check-in: ${formatDateToDMY(hotel.checkIn)} • Check-out: ${formatDateToDMY(hotel.checkOut)}` : '',
+      roomLines
+    ].filter(Boolean).join('\n');
 
     const payingPax = numAdult + numChildBed;
     let perPersonTextHotel = '';
@@ -5231,12 +5252,16 @@ async function performCalculation() {
     const shareInfRate = (parseFloat(document.getElementById(`tShareCostInf_${idx}`)?.value || 0) + parseFloat(document.getElementById(`tShareSvcInf_${idx}`)?.value || 0));
     
     // Create detailed description
+    const transferRateLine = pricing.svcSAR > 0
+      ? `Rate: SAR ${fmt(pricing.costSAR)} + Service SAR ${fmt(pricing.svcSAR)} × ${roe} = PKR ${fmt(cost + svc)}`
+      : `Rate: SAR ${fmt(pricing.costSAR)} × ${roe} = PKR ${fmt(cost)}`;
+
     const details = `Date: ${formatDateToDMY(date)}<br>
                     Route: ${from} → ${to}<br>
                     Vehicle: ${vehicle} (${type})<br>
                     ${pricing.type === 'sharing'
                       ? `Rate: SAR Adult ${fmt(shareAdultRate)}, Child ${fmt(shareChildRate)}, Infant ${fmt(shareInfRate)}<br>Charged by passenger type`
-                      : `Rate: SAR ${fmt(pricing.costSAR)} + Service SAR ${fmt(pricing.svcSAR)} × ${roe} = PKR ${fmt(cost + svc)}<br>Charged to: Adults (${paxData.adults}) + Children with bed (${paxData.childBed}) + Children without bed (${paxData.childNoBed})`
+                      : transferRateLine
                     }`;
 
     // Build per person text with counts and only show categories with passengers
@@ -5599,13 +5624,15 @@ async function performCalculation() {
     const perInfant = paxData.infants > 0 ? pricing.perInfantPKR : 0;
     
     if (cost + svc > 0) {
+      const baseRateText = pricing.type === 'sharing'
+        ? `Rate: Sharing per passenger type (Adult/Child/Infant)`
+        : `Cost: SAR ${fmt(pricing.costSAR)}/vehicle`;
+      const serviceText = pricing.type === 'sharing' || pricing.svcSAR > 0
+        ? `Service: SAR ${fmt(pricing.svcSAR)}/vehicle` : '';
       const details = `${city} - ${vehicle} (${type})<br>
-                      ${pricing.type === 'sharing'
-                        ? `Rate: Sharing per passenger type (Adult/Child/Infant)`
-                        : `Cost: SAR ${fmt(pricing.costSAR)}/vehicle<br>Service: SAR ${fmt(pricing.svcSAR)}/vehicle`
-                      }<br>
+                      ${baseRateText}${serviceText ? `<br>${serviceText}` : ''}<br>
                       ROE: ${roe}<br>
-                      Charged by ${pricing.type === 'sharing' ? 'passenger type' : 'equal split across paying passengers (excluding infants)'}`;
+                      ${pricing.type === 'sharing' ? 'Charged by passenger type' : 'Equal split across paying passengers (excluding infants)'}`;
       
       // Build per person text with counts and only show categories with passengers
       let perPersonText = [];
@@ -9724,7 +9751,19 @@ function openAgentApprovalModal(action) {
     showAlert('No quotation loaded for approval.');
     return;
   }
-  const terms = quotation.terms || quotation.termsAndConditions || quotation.customTerms || quotation.termsText || 'Terms and conditions are not available for this quotation.';
+  const defaultAgentTerms = `By accepting this quotation on behalf of the customer, I confirm that:
+
+- I have shared the full quotation details with the customer
+- I have explained all inclusions and exclusions
+- I have confirmed the total amount, travel dates, and number of passengers with the customer
+- The customer has verbally or via message agreed to proceed
+
+Important:
+I understand that this does not confirm booking. Booking will only be confirmed after availability is verified and full payment is received.
+
+Declaration:
+This action will be treated as my confirmation that the customer has been properly informed and has agreed to proceed with Flight Connection Travel & Tours.`;
+  const terms = quotation.terms || quotation.termsAndConditions || quotation.customTerms || quotation.termsText || defaultAgentTerms;
   const approvalSummary = document.getElementById('agentApprovalSummary');
   const acceptedStatus = quotation.customerAcceptance ? `Customer accepted version ${quotation.customerAcceptance.shareVersion || quotation.shareVersion || 1}` : 'Customer has not accepted yet.';
   const needsReacceptStatus = quotation.customerNeedsReaccept ? 'This shared quotation needs re-acceptance before approval.' : '';
