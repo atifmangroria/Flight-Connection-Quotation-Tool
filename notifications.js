@@ -20,12 +20,22 @@ const notificationPageList = document.getElementById('notificationPageList');
 const pageInfo = document.getElementById('pageInfo');
 const btnBack = document.getElementById('btnBack');
 const btnRefresh = document.getElementById('btnRefresh');
+const btnScheduledReminders = document.getElementById('btnScheduledReminders');
+const btnCloseReminderModal = document.getElementById('btnCloseReminderModal');
 let currentNotifications = [];
 let currentAgent = null;
 let currentOwnerId = null;
+let scheduledReminderItems = [];
 let dismissedKeys = new Set();
 let reminderStates = {};
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+
+function updateScheduledReminderCount() {
+  if (!btnScheduledReminders) return;
+  const count = scheduledReminderItems.length;
+  btnScheduledReminders.textContent = `Scheduled reminders ${count ? `(${count})` : '(0)'}`;
+  btnScheduledReminders.disabled = count === 0;
+}
 
 function showNotification(message, type = 'info') {
   const notification = document.createElement('div');
@@ -445,10 +455,17 @@ function renderNotificationPage(items) {
       }
       const saved = await scheduleReminderForItem(item, selectedDate);
       if (saved) {
+        const key = item.notificationKey || getNotificationKey(item);
+        item.reminderState = reminderStates[key];
         currentNotifications.splice(index, 1);
+        scheduledReminderItems.push(item);
         renderNotificationPage(currentNotifications);
+        updateScheduledReminderCount();
+        if (!document.getElementById('scheduledReminderModal')?.hidden) {
+          renderScheduledReminderModal();
+        }
         showNotification(`Reminder scheduled for ${selectedDate.toLocaleString()}`, 'success');
-        await logNotificationAction(currentOwnerId, item, 'notification_snoozed', { reminderCount: reminderStates[itemKey]?.count || 0, nextReminderAt: reminderStates[itemKey]?.nextReminderAt });
+        await logNotificationAction(currentOwnerId, item, 'notification_snoozed', { reminderCount: reminderStates[key]?.count || 0, nextReminderAt: reminderStates[key]?.nextReminderAt });
       }
     });
 
@@ -472,18 +489,112 @@ function renderNotificationPage(items) {
   notificationPageList.appendChild(grid);
 }
 
-async function markNotificationDone(index) {
-  if (index < 0 || index >= currentNotifications.length) return;
-  const item = currentNotifications[index];
+function getReminderButtonLabel(item) {
+  return item.reminderState?.final ? 'Final reminder' : 'Scheduled reminder';
+}
+
+function renderScheduledReminderModal() {
+  const modal = document.getElementById('scheduledReminderModal');
+  const modalBody = document.getElementById('scheduled-reminder-body');
+  const countLabel = document.getElementById('scheduled-reminder-count');
+  if (!modalBody || !countLabel) return;
+
+  countLabel.textContent = `${scheduledReminderItems.length} scheduled reminder${scheduledReminderItems.length === 1 ? '' : 's'}`;
+  modalBody.innerHTML = '';
+
+  if (!scheduledReminderItems.length) {
+    modalBody.innerHTML = '<div class="notification-page-empty">No scheduled reminders at the moment.</div>';
+    return;
+  }
+
+  const list = document.createElement('div');
+  list.className = 'notification-card-grid';
+
+  scheduledReminderItems.forEach((item, index) => {
+    const reminderText = item.reminderState?.nextReminderAt ? new Date(item.reminderState.nextReminderAt).toLocaleString() : 'Unknown';
+    const card = document.createElement('article');
+    card.className = 'notification-card';
+
+    const header = document.createElement('div');
+    header.className = 'notification-card-header';
+    header.innerHTML = `
+      <div>
+        <div class="notification-card-title">${item.title || 'Scheduled reminder'}</div>
+        <div class="notification-card-meta">${item.quotationType?.toUpperCase() || 'TYPE'} #${item.quotationId || 'N/A'}</div>
+      </div>
+      <span class="notification-card-badge ${item.type || 'general'}">${item.type?.toUpperCase() || 'GENERAL'}</span>
+    `;
+
+    const body = document.createElement('div');
+    body.className = 'notification-card-body';
+    body.innerHTML = `
+      <div class="notification-card-message">${item.message}</div>
+      <div class="notification-card-details">
+        <div class="notification-detail"><strong>Client</strong><span>${item.clientName || 'Unknown'}</span></div>
+        <div class="notification-detail"><strong>${getReminderButtonLabel(item)}</strong><span>${reminderText}</span></div>
+      </div>
+    `;
+
+    const footer = document.createElement('div');
+    footer.className = 'notification-card-footer';
+    const actions = document.createElement('div');
+    actions.className = 'notification-action-group';
+    const addAction = (label, callback, disabled = false) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = label;
+      btn.disabled = disabled;
+      btn.addEventListener('click', callback);
+      actions.appendChild(btn);
+    };
+
+    if (item.type === 'voucher') {
+      addAction('Open voucher', () => openVoucherForNotification(item));
+    } else if (item.quotationId && item.quotationType) {
+      addAction('Open quotation', () => openQuotationForNotification(item));
+    }
+    addAction('Copy message', () => copyTextToClipboard(buildCopyMessage(item)));
+    addAction('Mark done early', async () => {
+      await markReminderDoneByItem(item);
+      renderScheduledReminderModal();
+      renderNotificationPage(currentNotifications);
+    });
+
+    footer.appendChild(actions);
+    card.appendChild(header);
+    card.appendChild(body);
+    card.appendChild(footer);
+    list.appendChild(card);
+  });
+
+  modalBody.appendChild(list);
+}
+
+function toggleScheduledReminderModal(show = true) {
+  const modal = document.getElementById('scheduledReminderModal');
+  if (!modal) return;
+  modal.hidden = !show;
+  if (show) renderScheduledReminderModal();
+}
+
+async function markReminderDoneByItem(item) {
+  if (!item) return;
   const saved = await scheduleReminderForItem(item);
   if (!saved) return;
 
   const key = item.notificationKey || getNotificationKey(item);
   const nextReminderAt = reminderStates[key]?.nextReminderAt;
-  currentNotifications.splice(index, 1);
-  renderNotificationPage(currentNotifications);
+  await loadNotifications();
+  updateScheduledReminderCount();
+  const modal = document.getElementById('scheduledReminderModal');
+  if (modal && !modal.hidden) renderScheduledReminderModal();
   showNotification(`Reminder rescheduled for ${new Date(nextReminderAt).toLocaleString()}`, 'success');
   await logNotificationAction(currentOwnerId, item, 'notification_snoozed', { reminderCount: reminderStates[key]?.count || 0, nextReminderAt });
+}
+
+async function markNotificationDone(index) {
+  if (index < 0 || index >= currentNotifications.length) return;
+  await markReminderDoneByItem(currentNotifications[index]);
 }
 
 function getNotificationBase(q) {
@@ -502,6 +613,7 @@ function getNotificationBase(q) {
 async function computeNotifications(quotations) {
   const now = new Date();
   const notifications = [];
+  const scheduled = [];
 
   await Promise.all(quotations.map(async (q) => {
     const base = getNotificationBase(q);
@@ -517,7 +629,10 @@ async function computeNotifications(quotations) {
       const key = getNotificationKey(item);
       const reminderState = reminderStates[key];
       if (dismissedKeys.has(key)) return;
-      if (reminderState?.nextReminderAt && now.getTime() < reminderState.nextReminderAt) return;
+      if (reminderState?.nextReminderAt && now.getTime() < reminderState.nextReminderAt) {
+        scheduled.push({ ...item, notificationKey: key, reminderState });
+        return;
+      }
       item.notificationKey = key;
       item.reminderState = reminderState;
       notifications.push(item);
@@ -593,7 +708,7 @@ async function computeNotifications(quotations) {
     }
   }));
 
-  return notifications;
+  return { notifications, scheduled };
 }
 
 async function loadNotifications() {
@@ -615,8 +730,11 @@ async function loadNotifications() {
       ...(snapshot.domestic || []).map(q => ({ ...q, type: 'domestic' }))
     ];
 
-    currentNotifications = await computeNotifications(allQuotations);
+    const computed = await computeNotifications(allQuotations);
+    currentNotifications = computed.notifications;
+    scheduledReminderItems = computed.scheduled;
     renderNotificationPage(currentNotifications);
+    updateScheduledReminderCount();
 
     if (!allQuotations.length) {
       pageInfo.textContent = 'No quotations found for this agent in Firebase.';
@@ -633,6 +751,12 @@ if (btnBack) {
 }
 if (btnRefresh) {
   btnRefresh.addEventListener('click', async () => { pageInfo.textContent = 'Refreshing notifications...'; await loadNotifications(); showNotification('Notifications refreshed.', 'success'); });
+}
+if (btnScheduledReminders) {
+  btnScheduledReminders.addEventListener('click', () => toggleScheduledReminderModal(true));
+}
+if (btnCloseReminderModal) {
+  btnCloseReminderModal.addEventListener('click', () => toggleScheduledReminderModal(false));
 }
 document.addEventListener('DOMContentLoaded', loadNotifications);
 

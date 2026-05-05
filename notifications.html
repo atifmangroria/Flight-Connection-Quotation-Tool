@@ -46,6 +46,12 @@
   .notification-reminder-input{padding:10px 12px;border:1px solid #c8d4e3;border-radius:10px;font-size:14px;min-width:220px;flex:1;max-width:260px}
   .notification-page-empty{background:#fff;border:1px solid #dce3ef;border-radius:14px;padding:24px;color:#4d5e78;text-align:center;font-size:15px}
   .no-print{display:none!important}
+  .modal-overlay{position:fixed;inset:0;background:rgba(12,20,40,0.55);display:flex;align-items:center;justify-content:center;padding:20px;z-index:1300;backdrop-filter:blur(2px)}
+  .modal-overlay[hidden]{display:none}
+  .modal-content{width:100%;max-width:960px;background:#fff;border-radius:20px;box-shadow:0 24px 60px rgba(11,19,43,0.22);overflow:hidden;max-height:90vh;display:flex;flex-direction:column}
+  .modal-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:22px 24px;border-bottom:1px solid #eef3f8}
+  .modal-header h2{margin:0;font-size:22px;color:#122a4f}
+  .modal-body{padding:20px 24px;overflow:auto;min-height:180px}
   @media (max-width:900px){.wrap{padding:18px}.header{flex-direction:column;align-items:stretch}.header-right{justify-content:flex-start}.btn-primary,.btn-secondary{width:100%}.notification-card-header{flex-direction:column;align-items:flex-start}.notification-card-body{padding:16px 18px 0}.notification-card-footer{padding:16px 18px 18px}}
   @media (max-width:640px){body{margin:6px}.wrap{padding:16px}.notification-card-grid{grid-template-columns:1fr}.notification-action-group{flex-direction:column}.notification-action-group button{width:100%;min-width:0}}</style>
 </head>
@@ -58,6 +64,7 @@
     </div>
     <div class="header-right">
       <button id="btnBack" class="btn-secondary" type="button" onclick="window.location.href='dashboard.html'">← Back to Dashboard</button>
+      <button id="btnScheduledReminders" class="btn-secondary" type="button">Scheduled reminders</button>
       <button id="btnRefresh" class="btn-primary" type="button">Refresh</button>
     </div>
   </div>
@@ -66,6 +73,21 @@
     <div class="notification-summary" id="notificationSummary">Fetching notifications...</div>
     <div class="notification-page-list" id="notificationPageList">
       <div class="notification-page-empty">Waiting for saved quotation data.</div>
+    </div>
+  </div>
+</div>
+
+<div id="scheduledReminderModal" class="modal-overlay" hidden>
+  <div class="modal-content">
+    <div class="modal-header">
+      <div>
+        <h2>Scheduled reminders</h2>
+        <div class="small" id="scheduled-reminder-count">Loading scheduled reminder data...</div>
+      </div>
+      <button id="btnCloseReminderModal" class="btn-secondary" type="button">Close</button>
+    </div>
+    <div id="scheduled-reminder-body" class="modal-body">
+      <div class="notification-page-empty">Fetching scheduled reminders...</div>
     </div>
   </div>
 </div>
