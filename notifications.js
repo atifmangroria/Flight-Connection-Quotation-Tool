@@ -24,6 +24,7 @@ let currentNotifications = [];
 let currentAgent = null;
 let currentOwnerId = null;
 let dismissedKeys = new Set();
+let reminderStates = {};
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 
 function showNotification(message, type = 'info') {
@@ -130,6 +131,26 @@ async function loadDismissedNotificationKeys(ownerId) {
   return new Set(userData?.dismissedNotificationKeys || []);
 }
 
+async function loadNotificationSettings(ownerId) {
+  const userData = await getUserDoc(ownerId);
+  dismissedKeys = new Set(userData?.dismissedNotificationKeys || []);
+  reminderStates = userData?.notificationReminders || {};
+}
+
+async function saveNotificationSettings(ownerId) {
+  try {
+    await setDoc(doc(db, 'users', ownerId), {
+      dismissedNotificationKeys: Array.from(dismissedKeys),
+      notificationReminders: reminderStates
+    }, { merge: true });
+    return true;
+  } catch (error) {
+    console.error('Error saving notification settings:', error);
+    showNotification('Could not save notification state to Firebase.', 'error');
+    return false;
+  }
+}
+
 async function saveDismissedNotificationKeys(ownerId, keys) {
   try {
     await setDoc(doc(db, 'users', ownerId), { dismissedNotificationKeys: Array.from(keys) }, { merge: true });
@@ -163,6 +184,36 @@ async function logNotificationAction(ownerId, item, action, extra = {}) {
   } catch (error) {
     console.error('Error writing notification log:', error);
   }
+}
+
+function getDefaultReminderDelayHours(reminderCount) {
+  if (reminderCount <= 1) return 48;
+  return 96;
+}
+
+function formatDateTimeLocal(date) {
+  const pad = value => String(value).padStart(2, '0');
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+async function scheduleReminderForItem(item, chosenDate = null) {
+  if (!currentOwnerId) return false;
+  const key = item.notificationKey || getNotificationKey(item);
+  const currentState = reminderStates[key] || { count: 0 };
+  const nextCount = (Number(currentState.count) || 0) + 1;
+  const nextReminderAt = chosenDate ? chosenDate.getTime() : Date.now() + getDefaultReminderDelayHours(nextCount) * 60 * 60 * 1000;
+  reminderStates[key] = {
+    count: nextCount,
+    nextReminderAt,
+    final: nextCount >= 3
+  };
+  dismissedKeys.delete(key);
+  return await saveNotificationSettings(currentOwnerId);
 }
 
 async function getQuotationDoc(collectionName, ownerId) {
@@ -254,9 +305,30 @@ function openVoucherForNotification(item) {
   }
 }
 
-function buildFollowupMessage(item) {
+function formatDurationText(hours) {
+  if (hours >= 24) {
+    const days = Math.floor(hours / 24);
+    return `${days} day${days === 1 ? '' : 's'}`;
+  }
+  return `${hours} hour${hours === 1 ? '' : 's'}`;
+}
+
+function buildCopyMessage(item) {
   const name = item.clientName || 'Customer';
-  return `Dear ${name},\n\nYour quotation ${item.quoteLabel || ''} needs follow-up. Please contact the client and update the quotation status.`;
+  const quoteLabel = item.quoteLabel || 'the quotation';
+  if (item.title === 'Quotation Updated After Share') {
+    return `Dear ${name},\n\nI have shared an updated quotation ${quoteLabel}. Please confirm if you are interested or if any changes are required.`;
+  }
+  if (item.title === 'Customer Acceptance Received') {
+    return `Dear ${name},\n\nPlease review the accepted quotation ${quoteLabel}. If you are interested, or if any changes are required, let me know.`;
+  }
+  if (item.type === 'voucher') {
+    return `Dear ${name},\n\nYour booking for quotation ${quoteLabel} is being prepared. Please confirm the details or let me know if any changes are required.`;
+  }
+  if (item.type === 'booked') {
+    return `Dear ${name},\n\nYour booking quotation ${quoteLabel} is scheduled soon. Please confirm if all details are correct or if any changes are required.`;
+  }
+  return `Dear ${name},\n\nPlease confirm about the quotation ${quoteLabel} I have shared. If you are interested or if any changes are required, let me know.`;
 }
 
 function renderNotificationPage(items) {
@@ -269,21 +341,54 @@ function renderNotificationPage(items) {
     return;
   }
 
+  const table = document.createElement('table');
+  table.className = 'notification-page-table';
+  const thead = document.createElement('thead');
+  thead.innerHTML = `
+    <tr>
+      <th>Type</th>
+      <th>Quotation</th>
+      <th>Client</th>
+      <th>Message</th>
+      <th>Reminder</th>
+      <th>Actions</th>
+    </tr>
+  `;
+  const tbody = document.createElement('tbody');
+
+  const createCell = (text, className = '') => {
+    const td = document.createElement('td');
+    td.textContent = text;
+    if (className) td.className = className;
+    return td;
+  };
+
   items.forEach((item, index) => {
-    const card = document.createElement('div');
-    card.className = 'notification-page-card';
-    const metaParts = [item.quotationType?.toUpperCase(), item.quotationId ? `ID: ${item.quotationId}` : '', item.clientName, item.contactNumber].filter(Boolean);
-    const meta = metaParts.join(' • ');
-    const visibleTitle = item.clientName ? `${item.title} — ${item.clientName}` : item.title;
+    const itemKey = item.notificationKey || getNotificationKey(item);
+    const reminderState = reminderStates[itemKey];
+    const typeText = item.type?.toUpperCase() || 'GENERAL';
+    const quotationText = item.quotationId ? `${item.quotationType?.toUpperCase() || 'TYPE'} #${item.quotationId}` : 'N/A';
+    const clientText = item.clientName || 'Unknown';
+    const messageText = item.message + (reminderState?.final ? ' (FINAL REMINDER)' : '');
 
-    card.innerHTML = `
-      <div class="notification-card-header">
-        <strong>${visibleTitle}</strong>
-        <span class="notification-card-meta">${meta}</span>
-      </div>
-      <p>${item.message}</p>
-    `;
+    const row = document.createElement('tr');
+    if (reminderState?.final) row.classList.add('notification-table-final');
 
+    row.appendChild(createCell(typeText));
+    row.appendChild(createCell(quotationText));
+    row.appendChild(createCell(clientText));
+    row.appendChild(createCell(messageText, 'message-cell'));
+
+    const reminderCell = document.createElement('td');
+    if (reminderState?.nextReminderAt) {
+      const nextDate = new Date(reminderState.nextReminderAt);
+      reminderCell.innerHTML = `<strong>${reminderState.final ? 'Final' : 'Next'} reminder</strong><br>${nextDate.toLocaleString()}`;
+    } else {
+      reminderCell.textContent = 'Immediate';
+    }
+    row.appendChild(reminderCell);
+
+    const actionCell = document.createElement('td');
     const actions = document.createElement('div');
     actions.className = 'notification-action-group';
     const addAction = (label, callback, disabled = false) => {
@@ -295,9 +400,9 @@ function renderNotificationPage(items) {
       actions.appendChild(btn);
     };
 
-    if (item.type === 'followup') {
+    if (item.type === 'followup' || item.type === 'approval') {
       addAction('Copy number', () => copyTextToClipboard(item.contactNumber || ''), !item.contactNumber);
-      addAction('Copy message', () => copyTextToClipboard(buildFollowupMessage(item)));
+      addAction('Copy message', () => copyTextToClipboard(buildCopyMessage(item)));
       addAction('Mark done', () => markNotificationDone(index));
     } else if (item.type === 'booked') {
       addAction('Open quotation', () => openQuotationForNotification(item));
@@ -310,21 +415,65 @@ function renderNotificationPage(items) {
       addAction('Mark done', () => markNotificationDone(index));
     }
 
-    card.appendChild(actions);
-    notificationPageList.appendChild(card);
+    const reminderRow = document.createElement('div');
+    reminderRow.className = 'notification-reminder-row';
+    reminderRow.style.display = 'none';
+
+    const reminderInput = document.createElement('input');
+    reminderInput.type = 'datetime-local';
+    reminderInput.className = 'notification-reminder-input';
+    const nextCount = (reminderState?.count || 0) + 1;
+    const defaultReminder = new Date(Date.now() + getDefaultReminderDelayHours(nextCount) * 60 * 60 * 1000);
+    reminderInput.value = formatDateTimeLocal(defaultReminder);
+
+    const saveReminderBtn = document.createElement('button');
+    saveReminderBtn.type = 'button';
+    saveReminderBtn.className = 'btn-secondary';
+    saveReminderBtn.textContent = 'Schedule reminder';
+    saveReminderBtn.addEventListener('click', async () => {
+      const selectedDate = reminderInput.value ? new Date(reminderInput.value) : null;
+      if (!selectedDate || Number.isNaN(selectedDate.getTime()) || selectedDate <= new Date()) {
+        showNotification('Please choose a future reminder date and time.', 'warning');
+        return;
+      }
+      const saved = await scheduleReminderForItem(item, selectedDate);
+      if (saved) {
+        currentNotifications.splice(index, 1);
+        renderNotificationPage(currentNotifications);
+        showNotification(`Reminder scheduled for ${selectedDate.toLocaleString()}`, 'success');
+        await logNotificationAction(currentOwnerId, item, 'notification_snoozed', { reminderCount: reminderStates[itemKey]?.count || 0, nextReminderAt: reminderStates[itemKey]?.nextReminderAt });
+      }
+    });
+
+    reminderRow.appendChild(reminderInput);
+    reminderRow.appendChild(saveReminderBtn);
+    addAction('Remind later', () => {
+      reminderRow.style.display = reminderRow.style.display === 'flex' ? 'none' : 'flex';
+    });
+
+    actionCell.appendChild(actions);
+    actionCell.appendChild(reminderRow);
+    row.appendChild(actionCell);
+    tbody.appendChild(row);
   });
+
+  table.appendChild(thead);
+  table.appendChild(tbody);
+  notificationPageList.appendChild(table);
 }
 
 async function markNotificationDone(index) {
   if (index < 0 || index >= currentNotifications.length) return;
   const item = currentNotifications[index];
-  dismissedKeys.add(getNotificationKey(item));
-  const saved = await saveDismissedNotificationKeys(currentOwnerId, dismissedKeys);
+  const saved = await scheduleReminderForItem(item);
   if (!saved) return;
-  await logNotificationAction(currentOwnerId, item, 'notification_done');
+
+  const key = item.notificationKey || getNotificationKey(item);
+  const nextReminderAt = reminderStates[key]?.nextReminderAt;
   currentNotifications.splice(index, 1);
   renderNotificationPage(currentNotifications);
-  showNotification('Notification marked done.', 'success');
+  showNotification(`Reminder rescheduled for ${new Date(nextReminderAt).toLocaleString()}`, 'success');
+  await logNotificationAction(currentOwnerId, item, 'notification_snoozed', { reminderCount: reminderStates[key]?.count || 0, nextReminderAt });
 }
 
 function getNotificationBase(q) {
@@ -356,17 +505,21 @@ async function computeNotifications(quotations) {
     const pushNotification = (title, message, type) => {
       const item = { ...base, title, message, type };
       const key = getNotificationKey(item);
-      if (!dismissedKeys.has(key)) {
-        notifications.push(item);
-      }
+      const reminderState = reminderStates[key];
+      if (dismissedKeys.has(key)) return;
+      if (reminderState?.nextReminderAt && now.getTime() < reminderState.nextReminderAt) return;
+      item.notificationKey = key;
+      item.reminderState = reminderState;
+      notifications.push(item);
     };
 
     if (createdAt) {
       const hoursSinceCreate = Math.floor((now - createdAt) / (1000 * 60 * 60));
       if (hoursSinceCreate >= 24 && !['booked', 'cancelled', 'expired', 'followup'].includes(status)) {
+        const durationText = formatDurationText(hoursSinceCreate);
         pushNotification(
           'Follow-up Reminder',
-          `Quotation ${base.quoteLabel} for ${clientName} was created ${hoursSinceCreate} hours ago and still not moved to Follow Up. Please contact the client.`,
+          `Quotation ${base.quoteLabel} for ${clientName} was created ${durationText} ago and still not moved to Follow Up. Please contact the client.`,
           'followup'
         );
       }
@@ -375,12 +528,10 @@ async function computeNotifications(quotations) {
     if (status === 'followup' && updatedAt) {
       const hoursSinceFollowup = Math.floor((now - updatedAt) / (1000 * 60 * 60));
       if (hoursSinceFollowup >= 24) {
-        pushNotification(
-          'Follow-up Status Pending',
-          `Quotation ${base.quoteLabel} for ${clientName} has been on Follow Up for ${hoursSinceFollowup} hours. Review and update its status.`,
-          'followup'
-        );
-      }
+          const durationText = formatDurationText(hoursSinceFollowup);
+          pushNotification(
+            'Follow-up Status Pending',
+            `Quotation ${base.quoteLabel} for ${clientName} has been on Follow Up for ${durationText}. Review and update its status.`,
     }
 
     if (q.customerAcceptance && !q.agentApproval?.approvedAt) {
@@ -442,7 +593,7 @@ async function loadNotifications() {
     }
 
     currentOwnerId = getOwnerId(currentAgent);
-    dismissedKeys = await loadDismissedNotificationKeys(currentOwnerId);
+    await loadNotificationSettings(currentOwnerId);
     const snapshot = await loadQuotationsFromFirebase(currentOwnerId);
 
     const allQuotations = [

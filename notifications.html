@@ -18,15 +18,18 @@
   .btn-secondary:hover{background:#e9eff8}
   .notification-panel{background:#fff;border:1px solid #dce3ef;border-radius:12px;padding:18px;box-shadow:0 8px 20px rgba(0,0,0,0.04)}
   .notification-summary{font-size:14px;color:#555;margin-bottom:18px}
-  .notification-page-list{display:grid;gap:14px}
-  .notification-page-card{background:#f8fbff;border:1px solid #d5e6fa;border-radius:12px;padding:18px}
-  .notification-card-header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:10px}
-  .notification-card-header strong{display:block;margin:0;font-size:16px}
-  .notification-card-meta{font-size:13px;color:#555}
-  .notification-page-card p{margin:0;font-size:14px;color:#1b3d6f;line-height:1.5}
-  .notification-action-group{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .notification-page-list{display:block}
+  .notification-page-table{width:100%;border-collapse:collapse;margin-top:10px}
+  .notification-page-table th,.notification-page-table td{padding:12px 14px;border:1px solid #e8edf4;vertical-align:top}
+  .notification-page-table th{background:#f5f8fb;color:#444;text-align:left;font-size:14px}
+  .notification-page-table td{font-size:14px;color:#1b3d6f}
+  .notification-table-final{background:#fff3f3}
+  .notification-table-final td{border-color:#f1d4d4}
+  .notification-action-group{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
   .notification-action-group button{background:#fff;border:1px solid #c8d4e3;padding:8px 12px;border-radius:6px;cursor:pointer;color:#111;font-size:13px;transition:background 0.2s ease}
   .notification-action-group button:hover{background:#f3f6fb}
+  .notification-reminder-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;align-items:center}
+  .notification-reminder-input{padding:8px 10px;border:1px solid #c8d4e3;border-radius:6px;font-size:14px;min-width:200px}
   .notification-page-empty{background:#fff;border:1px solid #dce3ef;border-radius:10px;padding:18px;color:#444}
   .no-print{display:none!important}
   @media (max-width:768px){.wrap{padding:15px}.header{flex-direction:column;align-items:stretch}.header-right{justify-content:flex-start}button{width:100%}.notification-card-header{flex-direction:column;align-items:flex-start}}</style>

@@ -137,6 +137,19 @@
   .stat-value{font-size:28px;font-weight:bold;margin:5px 0}
   .stat-value.money{font-size:22px;line-height:1.2;word-break:break-word}
   .stat-label{font-size:14px;color:var(--muted)}
+  .stat-caption{font-size:12px;color:#6c757d;margin-top:6px}
+  .chart-panel{background:#fff;border-radius:8px;padding:16px;box-shadow:0 2px 10px rgba(0,0,0,0.05);border-left:4px solid var(--accent);margin-top:15px}
+  .chart-title{font-size:15px;color:#444;font-weight:700;margin-bottom:14px}
+  .chart-bar{display:grid;grid-template-columns:120px 1fr 60px;gap:10px;align-items:center;margin-bottom:12px}
+  .chart-bar-label{font-size:13px;color:#444}
+  .chart-bar-track{background:#f1f3f5;border-radius:999px;height:12px;overflow:hidden}
+  .chart-bar-fill{height:100%;border-radius:999px}
+  .chart-bar-fill.booked{background:#28a745}
+  .chart-bar-fill.pending{background:#6c757d}
+  .chart-bar-fill.followup{background:#f39c12}
+  .chart-bar-fill.cancelled{background:#dc3545}
+  .chart-bar-fill.expired{background:#6c757d}
+  .chart-value{font-size:13px;color:#444;text-align:right}
   .notification-panel{background:#fff;border:1px solid #dce3ef;border-radius:12px;padding:16px;margin-bottom:18px;box-shadow:0 8px 20px rgba(0,0,0,0.04)}
   .notification-header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
   .notification-summary{font-size:13px;color:#555}
@@ -175,6 +188,12 @@
   .pkg-actions .btn-edit,.pkg-actions .btn-delete,.pkg-actions .btn-view{min-width:64px;padding:4px 8px;line-height:1.1;text-align:center}
   .expiring-soon{color:var(--warning);font-weight:bold}
   .expired{color:var(--danger);font-weight:bold}
+  .status-badge{display:inline-block;padding:4px 8px;border-radius:999px;font-size:12px;font-weight:700;color:#fff}
+  .status-badge.pending{background:#6c757d}
+  .status-badge.followup{background:#f39c12}
+  .status-badge.booked{background:#28a745}
+  .status-badge.cancelled{background:#dc3545}
+  .status-badge.expired{background:#6c757d}
   .action-buttons{display:flex;gap:5px}
   .action-buttons button{padding:4px 8px;border:none;border-radius:4px;cursor:pointer;font-size:12px}
   .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;position:relative}
@@ -194,12 +213,18 @@
   .status-select{padding:4px 8px;border:1px solid #ddd;border-radius:4px;font-size:12px;cursor:pointer}
   .quotation-type-badge{padding:2px 6px;border-radius:4px;font-size:11px;font-weight:bold;margin-left:5px}
   .umrah-badge{background:#007bff;color:white}
+  .domestic-badge{background:#f39c12;color:white}
   .international-badge{background:#28a745;color:white}
   @media print{.no-print{display:none}}
   @media (max-width:768px){
     body { margin: 5px; }
     .wrap { padding: 10px; }
-    .stats-grid{grid-template-columns:1fr}
+    .stats-grid{grid-template-columns:1fr;gap:10px;margin-bottom:18px}
+    .stat-card{padding:12px}
+    .stat-value{font-size:24px}
+    .chart-panel{padding:14px}
+    .chart-bar{grid-template-columns:100px 1fr 50px;gap:8px;margin-bottom:10px}
+    .chart-title{font-size:14px}
     .filters-section{flex-direction:column;align-items:stretch}
     .quotation-table { font-size: 12px; overflow-x: auto; display: block; }
     .quotation-table th, .quotation-table td { padding: 6px; }
@@ -209,6 +234,9 @@
     .wrap { padding: 14px; margin: 0 auto; border-radius: 0; }
     .grid, .grid-2, .grid-3, .grid-4, .modalGrid, .controls, .tableWrap, .table-wrap, .package-toolbar, .card-grid, .modal-content, .stats-grid { grid-template-columns: 1fr !important; }
     .filters-section, .header, .header-right, .top, .actions, .action-buttons, .pkg-actions, .info-bar, .card-header, .bar { flex-direction: column !important; align-items: stretch !important; }
+    .header-right { gap: 10px !important; }
+    .tools-dropdown, .tools-dropdown > button, .btn-notification, .btn-primary, .btn-logout { width: 100% !important; max-width: 100% !important; }
+    .tools-menu { position: static !important; width: 100% !important; margin-top: 8px; box-shadow: none !important; border-radius: 6px; }
     .service-tabs { flex-wrap: wrap !important; justify-content: flex-start !important; }
     .service-tab, button, .btn, input, select, textarea { width: 100% !important; min-width: 0 !important; }
     .tableWrap, .table-wrap, .saved-list, .modalBox, .notice { overflow-x: auto !important; }
@@ -299,16 +327,6 @@
 
 .btn-view:hover {
   background: linear-gradient(135deg, #138496, #117a8b);
-  transform: translateY(-1px);
-}
-
-.btn-edit {
-  background: linear-gradient(135deg, #ffc107, #e0a800);
-  color: #212529;
-}
-
-.btn-edit:hover {
-  background: linear-gradient(135deg, #e0a800, #d39e00);
   transform: translateY(-1px);
 }
 
@@ -465,58 +483,6 @@
     </div>
   </div>
 
-  <!-- Statistics Cards -->
-  <div class="stats-grid">
-    <div class="stat-card">
-      <div class="stat-label">Total Quotations</div>
-      <div class="stat-value" id="totalQuotations">0</div>
-    </div>
-    <div class="stat-card success">
-      <div class="stat-label">Booked</div>
-      <div class="stat-value" id="bookedQuotations">0</div>
-    </div>
-    <div class="stat-card info">
-      <div class="stat-label">Pending</div>
-      <div class="stat-value" id="pendingQuotations">0</div>
-    </div>
-    <div class="stat-card warning">
-      <div class="stat-label">Follow-up Required</div>
-      <div class="stat-value" id="followupQuotations">0</div>
-    </div>
-    <div class="stat-card danger">
-      <div class="stat-label">Cancelled</div>
-      <div class="stat-value" id="cancelledQuotations">0</div>
-    </div>
-    <div class="stat-card danger">
-      <div class="stat-label">Expired</div>
-      <div class="stat-value" id="expiredQuotations">0</div>
-    </div>
-    <div class="stat-card info">
-      <div class="stat-label">Expiring Soon</div>
-      <div class="stat-value" id="expiringQuotations">0</div>
-    </div>
-    <div class="stat-card info">
-      <div class="stat-label" id="periodQuotationLabel">Quotations (Selected Period)</div>
-      <div class="stat-value" id="periodQuotationCount">0</div>
-    </div>
-    <div class="stat-card success">
-      <div class="stat-label" id="periodSalesLabel">Expected Sales (Selected Period)</div>
-      <div class="stat-value money" id="periodExpectedSales">PKR 0</div>
-    </div>
-    <div class="stat-card success">
-      <div class="stat-label">Booked Sales (Selected Period)</div>
-      <div class="stat-value money" id="periodBookedSales">PKR 0</div>
-    </div>
-    <div class="stat-card info">
-      <div class="stat-label">Pending Sales (Selected Period)</div>
-      <div class="stat-value money" id="periodPendingSales">PKR 0</div>
-    </div>
-    <div class="stat-card warning">
-      <div class="stat-label">Follow-up Sales (Selected Period)</div>
-      <div class="stat-value money" id="periodFollowupSales">PKR 0</div>
-    </div>
-  </div>
-
   <!-- Filters Section -->
   <div class="filters-section no-print">
     <div style="width: 100%; display: flex; gap: 10px; margin-bottom: 15px;">
@@ -573,6 +539,8 @@
           <th>Client Name</th>
           <th id="agentHeaderCol" style="display: none;">Agent</th>
           <th>Destination</th>
+          <th>Days</th>
+          <th>Package Total</th>
           <th>Date Created</th>
           <th>Expiry Date</th>
           <th>Status</th>
@@ -589,6 +557,135 @@
     <!-- Pagination -->
     <div class="pagination no-print" id="allPagination">
       <!-- Pagination buttons will be added dynamically -->
+    </div>
+  </div>
+
+  <!-- Summary Sections -->
+  <div class="section">
+    <h2>Quotation Status</h2>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total Quotations</div>
+        <div class="stat-value" id="totalQuotations">0</div>
+      </div>
+      <div class="stat-card success">
+        <div class="stat-label">Booked</div>
+        <div class="stat-value" id="bookedQuotations">0</div>
+      </div>
+      <div class="stat-card info">
+        <div class="stat-label">Pending</div>
+        <div class="stat-value" id="pendingQuotations">0</div>
+      </div>
+      <div class="stat-card warning">
+        <div class="stat-label">Follow-up Required</div>
+        <div class="stat-value" id="followupQuotations">0</div>
+      </div>
+      <div class="stat-card danger">
+        <div class="stat-label">Cancelled</div>
+        <div class="stat-value" id="cancelledQuotations">0</div>
+      </div>
+      <div class="stat-card danger">
+        <div class="stat-label">Expired</div>
+        <div class="stat-value" id="expiredQuotations">0</div>
+      </div>
+      <div class="stat-card info">
+        <div class="stat-label">Expiring Soon</div>
+        <div class="stat-value" id="expiringQuotations">0</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Action Items</h2>
+    <div class="stats-grid">
+      <div class="stat-card warning">
+        <div class="stat-label">Awaiting Customer Acceptance</div>
+        <div class="stat-value" id="awaitingCustomerAcceptance">0</div>
+      </div>
+      <div class="stat-card info">
+        <div class="stat-label">Awaiting Agent Approval</div>
+        <div class="stat-value" id="awaitingAgentApproval">0</div>
+      </div>
+      <div class="stat-card success">
+        <div class="stat-label">Vouchers Pending Creation</div>
+        <div class="stat-value" id="vouchersPending">0</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Urgent Travel</h2>
+    <div class="stats-grid">
+      <div class="stat-card danger">
+        <div class="stat-label">Departing within 7 days</div>
+        <div class="stat-value" id="departingIn7Days">0</div>
+      </div>
+      <div class="stat-card warning">
+        <div class="stat-label">Departing within 14 days</div>
+        <div class="stat-value" id="departingIn14Days">0</div>
+      </div>
+      <div class="stat-card info">
+        <div class="stat-label">Departing within 30 days</div>
+        <div class="stat-value" id="departingIn30Days">0</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Quick Insights</h2>
+    <div class="chart-panel">
+      <div class="chart-title">Status Breakdown</div>
+      <div class="chart-bar">
+        <div class="chart-bar-label">Booked</div>
+        <div class="chart-bar-track"><div id="chartBooked" class="chart-bar-fill booked" style="width:0"></div></div>
+        <div class="chart-value" id="chartBookedValue">0</div>
+      </div>
+      <div class="chart-bar">
+        <div class="chart-bar-label">Pending</div>
+        <div class="chart-bar-track"><div id="chartPending" class="chart-bar-fill pending" style="width:0"></div></div>
+        <div class="chart-value" id="chartPendingValue">0</div>
+      </div>
+      <div class="chart-bar">
+        <div class="chart-bar-label">Follow-up</div>
+        <div class="chart-bar-track"><div id="chartFollowup" class="chart-bar-fill followup" style="width:0"></div></div>
+        <div class="chart-value" id="chartFollowupValue">0</div>
+      </div>
+      <div class="chart-bar">
+        <div class="chart-bar-label">Cancelled</div>
+        <div class="chart-bar-track"><div id="chartCancelled" class="chart-bar-fill cancelled" style="width:0"></div></div>
+        <div class="chart-value" id="chartCancelledValue">0</div>
+      </div>
+      <div class="chart-bar">
+        <div class="chart-bar-label">Expired</div>
+        <div class="chart-bar-track"><div id="chartExpired" class="chart-bar-fill expired" style="width:0"></div></div>
+        <div class="chart-value" id="chartExpiredValue">0</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Sales Data</h2>
+    <div class="stats-grid">
+      <div class="stat-card info">
+        <div class="stat-label" id="periodQuotationLabel">Quotations (Selected Period)</div>
+        <div class="stat-value" id="periodQuotationCount">0</div>
+      </div>
+      <div class="stat-card success">
+        <div class="stat-label" id="periodSalesLabel">Expected Sales (Selected Period)</div>
+        <div class="stat-value money" id="periodExpectedSales">PKR 0</div>
+      </div>
+      <div class="stat-card success">
+        <div class="stat-label">Booked Sales (Selected Period)</div>
+        <div class="stat-value money" id="periodBookedSales">PKR 0</div>
+      </div>
+      <div class="stat-card info">
+        <div class="stat-label">Pending Sales (Selected Period)</div>
+        <div class="stat-value money" id="periodPendingSales">PKR 0</div>
+      </div>
+      <div class="stat-card warning">
+        <div class="stat-label">Follow-up Sales (Selected Period)</div>
+        <div class="stat-value money" id="periodFollowupSales">PKR 0</div>
+      </div>
     </div>
   </div>
 </div>
@@ -2147,17 +2244,34 @@ function updateStatistics() {
   const followup = filteredAllQuotations.filter(q => q.status === 'followup').length;
   const cancelled = filteredAllQuotations.filter(q => q.status === 'cancelled').length;
   const expired = filteredAllQuotations.filter(q => q.status === 'expired').length;
-  
+
   // Calculate expiring soon (within 5 days)
   const today = new Date();
   const fiveDaysFromNow = new Date(today);
   fiveDaysFromNow.setDate(today.getDate() + 5);
-  
+
   const expiring = filteredAllQuotations.filter(q => {
-    const expiryDate = new Date(q.expiresAt);
-    return expiryDate >= today && expiryDate <= fiveDaysFromNow;
+    const expiryDate = parseDateValue(q.expiresAt || q.expiryDate || q.expireDate);
+    return expiryDate && expiryDate >= today && expiryDate <= fiveDaysFromNow;
   }).length;
-  
+
+  const vouchersPending = filteredAllQuotations.filter(q => q.status === 'booked' && !getVoucherIdForQuotation(q)).length;
+  const awaitingCustomerAcceptance = filteredAllQuotations.filter(q => q.shareLinkId && !q.customerAccepted && q.status !== 'booked').length;
+  const awaitingAgentApproval = filteredAllQuotations.filter(q => q.customerAccepted && !q.agentApproved && q.status !== 'booked').length;
+
+  const departingIn7Days = filteredAllQuotations.filter(q => {
+    const dateFrom = parseDateValue(q.clientData?.dateFrom || q.dateFrom || q.travelFrom);
+    return dateFrom && dateFrom >= today && Math.ceil((dateFrom - today) / (1000 * 60 * 60 * 24)) <= 7;
+  }).length;
+  const departingIn14Days = filteredAllQuotations.filter(q => {
+    const dateFrom = parseDateValue(q.clientData?.dateFrom || q.dateFrom || q.travelFrom);
+    return dateFrom && dateFrom >= today && Math.ceil((dateFrom - today) / (1000 * 60 * 60 * 24)) <= 14;
+  }).length;
+  const departingIn30Days = filteredAllQuotations.filter(q => {
+    const dateFrom = parseDateValue(q.clientData?.dateFrom || q.dateFrom || q.travelFrom);
+    return dateFrom && dateFrom >= today && Math.ceil((dateFrom - today) / (1000 * 60 * 60 * 24)) <= 30;
+  }).length;
+
   document.getElementById('totalQuotations').textContent = total;
   document.getElementById('bookedQuotations').textContent = booked;
   document.getElementById('pendingQuotations').textContent = pending;
@@ -2165,6 +2279,13 @@ function updateStatistics() {
   document.getElementById('cancelledQuotations').textContent = cancelled;
   document.getElementById('expiredQuotations').textContent = expired;
   document.getElementById('expiringQuotations').textContent = expiring;
+
+  document.getElementById('vouchersPending').textContent = vouchersPending;
+  document.getElementById('awaitingCustomerAcceptance').textContent = awaitingCustomerAcceptance;
+  document.getElementById('awaitingAgentApproval').textContent = awaitingAgentApproval;
+  document.getElementById('departingIn7Days').textContent = departingIn7Days;
+  document.getElementById('departingIn14Days').textContent = departingIn14Days;
+  document.getElementById('departingIn30Days').textContent = departingIn30Days;
 
   const periodLabel = getSelectedPeriodLabel();
   const periodQuotationCount = filteredAllQuotations.length;
@@ -2186,6 +2307,27 @@ function updateStatistics() {
   document.getElementById('periodBookedSales').textContent = `PKR ${Math.round(periodBookedSales).toLocaleString('en-PK')}`;
   document.getElementById('periodPendingSales').textContent = `PKR ${Math.round(periodPendingSales).toLocaleString('en-PK')}`;
   document.getElementById('periodFollowupSales').textContent = `PKR ${Math.round(periodFollowupSales).toLocaleString('en-PK')}`;
+
+  const totalForChart = Math.max(total, 1);
+  const chartMapping = [
+    { id: 'chartBooked', valueId: 'chartBookedValue', count: booked, label: 'Booked' },
+    { id: 'chartPending', valueId: 'chartPendingValue', count: pending, label: 'Pending' },
+    { id: 'chartFollowup', valueId: 'chartFollowupValue', count: followup, label: 'Follow-up' },
+    { id: 'chartCancelled', valueId: 'chartCancelledValue', count: cancelled, label: 'Cancelled' },
+    { id: 'chartExpired', valueId: 'chartExpiredValue', count: expired, label: 'Expired' }
+  ];
+
+  chartMapping.forEach(item => {
+    const percent = Math.round((item.count / totalForChart) * 100);
+    const element = document.getElementById(item.id);
+    const label = document.getElementById(item.valueId);
+    if (element) {
+      element.style.width = `${item.count === 0 ? 2 : Math.max(percent, 8)}%`;
+    }
+    if (label) {
+      label.textContent = `${item.count} (${percent}%)`;
+    }
+  });
 }
 
 // Render quotations table
@@ -2201,7 +2343,7 @@ function renderQuotationsTable() {
   }
   
   if (quotations.length === 0) {
-    tableBody.innerHTML = `<tr><td colspan="${showAgentColumn ? 9 : 8}" style="text-align:center;">No quotations found</td></tr>`;
+    tableBody.innerHTML = `<tr><td colspan="${showAgentColumn ? 11 : 10}" style="text-align:center;">No quotations found</td></tr>`;
     document.getElementById('allPagination').innerHTML = '';
     return;
   }
@@ -2239,14 +2381,34 @@ function renderQuotationsTable() {
     const typeBadge = quotation.type === 'umrah'
       ? '<span class="quotation-type-badge umrah-badge">Umrah</span>'
       : quotation.type === 'domestic'
-        ? '<span class="quotation-type-badge" style="background:#f39c12;color:white">Domestic</span>'
+        ? '<span class="quotation-type-badge domestic-badge">Domestic</span>'
         : '<span class="quotation-type-badge international-badge">International</span>';
     
     // Get destination based on type
     const destination = quotation.type === 'umrah' 
       ? 'Umrah' 
-      : (quotation.clientData.tourDestination || 'N/A');
-    
+      : (quotation.clientData?.tourDestination || 'N/A');
+    const days = (() => {
+      const dateFrom = parseDateValue(quotation.clientData?.dateFrom || quotation.dateFrom);
+      const dateTo = parseDateValue(quotation.clientData?.dateTo || quotation.dateTo);
+      if (dateFrom && dateTo && !Number.isNaN(dateFrom.getTime()) && !Number.isNaN(dateTo.getTime())) {
+        const diff = getDaysBetween(dateFrom, dateTo);
+        return diff >= 0 ? diff + 1 : '-';
+      }
+      return '-';
+    })();
+    const packageTotal = getExpectedSalesAmount(quotation);
+    const statusKey = String(quotation.status || 'pending').toLowerCase();
+    const statusLabels = {
+      pending: 'Pending',
+      followup: 'Follow-up Required',
+      booked: 'Booked',
+      cancelled: 'Cancelled',
+      expired: 'Expired'
+    };
+    const statusClass = ['booked', 'pending', 'followup', 'cancelled', 'expired'].includes(statusKey) ? statusKey : 'pending';
+    const statusLabel = statusLabels[statusKey] || 'Pending';
+
     // Build row HTML
     const agentCell = showAgentColumn ? `<td>${quotation.agentName || quotation.agentId || 'N/A'}</td>` : '';
     const transferButton = showTransferAction
@@ -2255,24 +2417,17 @@ function renderQuotationsTable() {
     const rowHTML = `
       <td>${quotation.id}</td>
       <td>${typeBadge}</td>
-      <td>${quotation.clientData.name || 'N/A'}</td>
+      <td>${quotation.clientData?.name || 'N/A'}</td>
       ${agentCell}
       <td>${destination}</td>
+      <td>${typeof days === 'number' ? days : days}</td>
+      <td>PKR ${Math.round(packageTotal).toLocaleString('en-PK')}</td>
       <td>${createdDate}</td>
       <td class="${expiryClass}">${expiryDate}</td>
-      <td>
-        <select class="status-select" onchange="updateStatusFromTable('${quotation.id}', '${quotation.type}', this.value)">
-          <option value="pending" ${quotation.status === 'pending' ? 'selected' : ''}>Pending</option>
-          <option value="followup" ${quotation.status === 'followup' ? 'selected' : ''}>Follow-up Required</option>
-          <option value="booked" ${quotation.status === 'booked' ? 'selected' : ''}>Booked</option>
-          <option value="cancelled" ${quotation.status === 'cancelled' ? 'selected' : ''}>Cancelled</option>
-          <option value="expired" ${quotation.status === 'expired' ? 'selected' : ''}>Expired</option>
-        </select>
-      </td>
+      <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
       <td>
         <div class="action-buttons">
           <button class="btn-action btn-view" onclick="viewQuotation('${quotation.id}', '${quotation.type}')">View</button>
-          <button class="btn-action btn-edit" onclick="editQuotation('${quotation.id}', '${quotation.type}')">Edit</button>
           ${transferButton}
           <button class="btn-action btn-delete" onclick="deleteQuotation('${quotation.id}', '${quotation.type}', '${quotation.agentId || ''}')">Delete</button>
         </div>
