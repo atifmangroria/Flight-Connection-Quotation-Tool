@@ -275,7 +275,7 @@
     <!-- PACKAGE DETAILS & DESTINATIONS -->
     <div class="section">
       <h3>📋 Package Details & Destinations</h3>
-      <div class="grid cols2">
+      <div class="grid cols3">
         <div>
           <label>Package Name <span class="req">*</span></label>
           <input type="text" id="packageName" required placeholder="e.g., March International Tour 2024">
@@ -288,6 +288,10 @@
             <option value="international">International</option>
             <option value="domestic">Domestic</option>
           </select>
+        </div>
+        <div>
+          <label>Destination <span class="req">*</span></label>
+          <input type="text" id="packageDestination" required placeholder="Enter destination">
         </div>
       </div>
       <div class="grid cols3">
@@ -423,6 +427,7 @@ async function generateImage() {
     nights: Number(s.querySelector('.destNights')?.value || 0)
   })).filter(d => d.city);
   const destinationNames = [...new Set(destinationRows.map(d => d.city))].join(', ') || 'N/A';
+  const packageDestination = document.getElementById('packageDestination')?.value?.trim() || destinationNames;
   const cityNightText = destinationRows.length
     ? destinationRows.map(d => `${d.city}: ${d.nights}N`).join(' | ')
     : 'N/A';
@@ -851,6 +856,7 @@ async function loadPackageForEditing(packageId, options = {}) {
 
   document.getElementById('packageName').value = data.name || '';
   document.getElementById('packageType').value = data.type || '';
+  document.getElementById('packageDestination').value = data.destination || '';
   if (data.validFrom && data.validTo) {
     document.getElementById('validFrom').value = String(data.validFrom).slice(0, 10);
     document.getElementById('validTo').value = String(data.validTo).slice(0, 10);
@@ -1081,7 +1087,7 @@ function loadPackageList() {
       .filter(pkg => isAdmin || pkg.createdBy === agent.id)
       .filter(pkg => {
         if (!searchValue) return true;
-        return [pkg.name, pkg.packageCode, pkg.type, (pkg.destinations || []).map(d => d.city).join(' ')].some(value =>
+        return [pkg.name, pkg.packageCode, pkg.type, pkg.destination, (pkg.destinations || []).map(d => d.city).join(' ')].some(value =>
           String(value || '').toLowerCase().includes(searchValue)
         );
       })
@@ -1095,7 +1101,7 @@ function loadPackageList() {
     }
 
     body.innerHTML = filteredPackages.map(pkg => {
-      const destinationText = (pkg.destinations || []).map(d => d.city).filter(Boolean).join(', ');
+      const destinationText = pkg.destination || (pkg.destinations || []).map(d => d.city).filter(Boolean).join(', ');
       return `
         <tr>
           <td>${pkg.packageCode || 'N/A'}</td>
@@ -1166,7 +1172,20 @@ function updateSections() {
     }
   }
 
+  updatePackageDestinationField(type);
   updateTransferFromToByPackageType(type);
+}
+
+function updatePackageDestinationField(type) {
+  const destInput = document.getElementById('packageDestination');
+  if (!destInput) return;
+  if (type === 'umrah') {
+    destInput.value = 'Umrah';
+    destInput.readOnly = true;
+  } else {
+    if (destInput.value === 'Umrah') destInput.value = '';
+    destInput.readOnly = false;
+  }
 }
 
 // DESTINATIONS
@@ -1446,10 +1465,16 @@ document.getElementById('packageForm').addEventListener('submit', async (e) => {
   }
 
   const pkgType = document.getElementById('packageType').value;
+  const packageDestination = document.getElementById('packageDestination').value.trim();
   console.log('Package type:', pkgType);
   if (!pkgType) {
     showNotification('Please select package type', 'error');
     console.log('❌ No package type selected');
+    return;
+  }
+  if (!packageDestination) {
+    showNotification('Please enter destination', 'error');
+    console.log('❌ No package destination entered');
     return;
   }
   console.log('✅ Package type selected:', pkgType);
@@ -1632,6 +1657,7 @@ document.getElementById('packageForm').addEventListener('submit', async (e) => {
   const data = {
     name: document.getElementById('packageName').value,
     type: pkgType,
+    destination: packageDestination,
     validFrom: validFromInput,
     validTo: validToInput,
     travelMonth: month,
@@ -1820,6 +1846,7 @@ async function generatePDF() {
   })).filter(d => d.city);
 
   const destinationNames = [...new Set(destinationRows.map(d => d.city))].join(', ') || 'N/A';
+  const packageDestination = document.getElementById('packageDestination')?.value?.trim() || destinationNames;
   const cityNightText = destinationRows.length
     ? destinationRows.map(d => `${d.city}: ${d.nights}N`).join(' | ')
     : 'N/A';
@@ -2044,7 +2071,7 @@ async function generatePDF() {
   const metaLines = [
     `Package Code: ${packageCode}`,
     `Package Name: ${pkgName}`,
-    `Destinations: ${destinationNames}`,
+    `Destinations: ${packageDestination}`,
     `Cities with Nights: ${cityNightText}`,
     `${totalNights || 'N/A'} Nights / ${totalDays || 'N/A'} Days`,
     `Travel Period: ${travelPeriod}`,
