@@ -664,6 +664,23 @@ async function renderDesktopVoucherCanvas(element, fixedWidth = 1020) {
     }
   });
 
+  const breakSelectors = [
+    '#voucherContent > .header-card',
+    '#voucherContent > .agent-note',
+    '#voucherContent > .card',
+    '#voucherContent > .company-footer',
+    '#voucherContent > div[style*="text-align:center"]'
+  ];
+  const breakPoints = new Set();
+  breakSelectors.forEach((selector) => {
+    clone.querySelectorAll(selector).forEach((node) => {
+      const top = node.offsetTop;
+      if (top > 0 && top < clone.scrollHeight - 20) {
+        breakPoints.add(Math.round(top * Math.min(4, Math.max(2, window.devicePixelRatio || 2))));
+      }
+    });
+  });
+
   await waitForImages(clone);
   await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   const canvas = await html2canvas(clone, {
@@ -678,6 +695,7 @@ async function renderDesktopVoucherCanvas(element, fixedWidth = 1020) {
     windowHeight: clone.scrollHeight,
     width: fixedWidth
   });
+  canvas.__breakPoints = Array.from(breakPoints).sort((a, b) => a - b);
   document.body.removeChild(wrapper);
   return canvas;
 }
@@ -713,6 +731,7 @@ async function downloadPDF() {
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
     const canvas = await renderDesktopVoucherCanvas(el, 1020);
+    const breakPoints = canvas.__breakPoints || [];
 
     const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     const pW = pdf.internal.pageSize.getWidth() - 10;
@@ -723,8 +742,11 @@ async function downloadPDF() {
     const pageH = pH * pxPerMm;
     let pages = 0;
 
-    for (let y = 0; y < cH; y += pageH) {
-      const h = Math.min(pageH, cH - y);
+    for (let y = 0; y < cH;) {
+      const naturalEnd = Math.min(y + pageH, cH);
+      const minBreak = y + Math.max(180, Math.round(pageH * 0.58));
+      const breakPoint = breakPoints.filter((point) => point >= minBreak && point < naturalEnd).pop();
+      const h = Math.max(1, Math.min((breakPoint || naturalEnd) - y, cH - y));
       const pg = document.createElement("canvas");
       pg.width = cW;
       pg.height = h;
@@ -735,6 +757,7 @@ async function downloadPDF() {
       if (pages > 0) pdf.addPage();
       pdf.addImage(pg.toDataURL("image/png"), "PNG", 5, 7, pW, (h / pxPerMm));
       pages++;
+      y += h;
     }
 
     const vId = document.getElementById("hdrVoucherId")?.textContent || "voucher";
