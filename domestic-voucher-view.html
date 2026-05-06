@@ -587,7 +587,7 @@ function setupWhatsApp(vc) {
   });
 }
 
-async function renderDesktopVoucherCanvas(element, fixedWidth = 1200) {
+async function renderDesktopVoucherCanvas(element, fixedWidth = 1020) {
   const clone = element.cloneNode(true);
   clone.style.width = fixedWidth + 'px';
   clone.style.maxWidth = fixedWidth + 'px';
@@ -602,15 +602,30 @@ async function renderDesktopVoucherCanvas(element, fixedWidth = 1200) {
   wrapper.appendChild(clone);
   document.body.appendChild(wrapper);
 
+  const pdfStyle = document.createElement('style');
+  pdfStyle.textContent = `
+    .header-card h1 { font-size: 36px !important; }
+    .header-card .sub, .header-card .meta .vid { font-size: 22px !important; }
+    .header-card .meta .vdate, .update-badge, .company-footer, .qr-area p { font-size: 18px !important; }
+    .card h3 { font-size: 24px !important; }
+    .card h4 { font-size: 20px !important; }
+    .field-label { font-size: 18px !important; }
+    .field-value, .agent-note-text, .badge, .maps-link, .checklist li, .pax-table, .itinerary-table, .itinerary-table th, .itinerary-table td { font-size: 19px !important; }
+    table[style*="font-size:14px"], div[style*="font-size:14px"], span[style*="font-size:14px"], p[style*="font-size:14px"] { font-size: 18px !important; }
+    table[style*="font-size:16px"], div[style*="font-size:16px"], span[style*="font-size:16px"], p[style*="font-size:16px"] { font-size: 18px !important; }
+    .pax-table th, .pax-table td, .itinerary-table th, .itinerary-table td { padding: 12px 14px !important; }
+  `;
+  clone.prepend(pdfStyle);
+
   clone.querySelectorAll('h1, h2, h3, h4, h5, h6, p, span, div, li, td, th, label, small').forEach((node) => {
     const computed = window.getComputedStyle(node);
     const fontSize = parseFloat(computed.fontSize);
     const lineHeight = parseFloat(computed.lineHeight);
     if (Number.isFinite(fontSize)) {
-      node.style.fontSize = (fontSize * 1.08) + 'px';
+      node.style.fontSize = (fontSize * 1.18) + 'px';
     }
     if (Number.isFinite(lineHeight)) {
-      node.style.lineHeight = (lineHeight * 1.08) + 'px';
+      node.style.lineHeight = (lineHeight * 1.14) + 'px';
     }
   });
 
@@ -648,7 +663,7 @@ async function downloadPDF() {
   try {
     await waitForImages(el);
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    const canvas = await renderDesktopVoucherCanvas(el, 1200);
+    const canvas = await renderDesktopVoucherCanvas(el, 1020);
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const pW = pdf.internal.pageSize.getWidth() - 10;
     const pH = pdf.internal.pageSize.getHeight() - 14;
