@@ -488,12 +488,14 @@ async function generateImage() {
     const rate = toNumber(roe) > 0 ? toNumber(roe) : 1;
     return amount * rate;
   };
-  let adultDouble = 0, adultTriple = 0, childWithBed = 0, childWithoutBed = 0, infant = 0;
+  let adultDouble = 0, adultTriple = 0, adultQuad = 0, childWithBed = 0, childWithoutBed = 0, infant = 0;
+  let hasQuad = false;
   document.querySelectorAll('#flightsContainer .subsection').forEach(item => {
     const c = item.querySelector('.flCurrency')?.value || 'PKR';
     const r = item.querySelector('.flROE')?.value || 1;
     adultDouble += toPKR(item.querySelector('.flAdult')?.value, c, r);
     adultTriple += toPKR(item.querySelector('.flAdult')?.value, c, r);
+    adultQuad += toPKR(item.querySelector('.flAdult')?.value, c, r);
     const childTicket = toPKR(item.querySelector('.flChild')?.value, c, r);
     childWithBed += childTicket;
     childWithoutBed += childTicket;
@@ -505,12 +507,16 @@ async function generateImage() {
     const nights = toNumber(item.querySelector('.htlNights')?.value);
     const doubleRate = toNumber(item.querySelector('.htlDouble')?.value);
     const tripleRate = toNumber(item.querySelector('.htlTriple')?.value);
+    const quadRate = toNumber(item.querySelector('.htlQuad')?.value);
     const childBedCharge = toNumber(item.querySelector('.htlChildBed')?.value);
     const perAdultDoubleHotel = toPKR((doubleRate * nights) / 2, c, r);
     const perAdultTripleHotel = toPKR((tripleRate * nights) / 3, c, r);
+    const perAdultQuadHotel = toPKR((quadRate * nights) / 4, c, r);
     const perChildWithBedHotel = toPKR((childBedCharge * nights), c, r);
     adultDouble += perAdultDoubleHotel;
     adultTriple += perAdultTripleHotel;
+    adultQuad += perAdultQuadHotel;
+    hasQuad = hasQuad || quadRate > 0;
     childWithBed += perChildWithBedHotel;
   });
   const applyMoveService = (item, prefix) => {
@@ -521,14 +527,17 @@ async function generateImage() {
     if (perVehicleRaw > 0) {
       const doubleShare = perVehicle / 2;
       const tripleShare = perVehicle / 3;
+      const quadShare = perVehicle / 4;
       adultDouble += doubleShare;
       adultTriple += tripleShare;
+      adultQuad += quadShare;
       return;
     }
     const a = toPKR(item.querySelector(`.${prefix}Adult`)?.value, currency, roe);
     const cnb = toPKR(item.querySelector(`.${prefix}ChildNoBed`)?.value, currency, roe);
     adultDouble += a;
     adultTriple += a;
+    adultQuad += a;
     childWithoutBed += cnb;
     const cwbRaw = item.querySelector(`.${prefix}ChildBed`)?.value;
     childWithBed += cwbRaw !== null && cwbRaw !== undefined && cwbRaw !== '' ? toPKR(cwbRaw, currency, roe) : cnb;
@@ -543,12 +552,14 @@ async function generateImage() {
     const inf = toPKR(item.querySelector('.vsInfant')?.value, c, r);
     adultDouble += a;
     adultTriple += a;
+    adultQuad += a;
     childWithBed += ch;
     childWithoutBed += ch;
     infant += inf;
   });
   adultDouble += toNumber(document.getElementById('chargeAdult')?.value);
   adultTriple += toNumber(document.getElementById('chargeAdult')?.value);
+  adultQuad += toNumber(document.getElementById('chargeAdult')?.value);
   childWithBed += toNumber(document.getElementById('chargeChildBed')?.value);
   childWithoutBed += toNumber(document.getElementById('chargeChildNoBed')?.value);
   infant += toNumber(document.getElementById('chargeInfant')?.value);
@@ -556,6 +567,7 @@ async function generateImage() {
   const priceLines = [
     `Per Person on Double bed: ${fmtPKR(adultDouble)}`,
     `Per Person on Triple bed: ${fmtPKR(adultTriple)}`,
+    ...(hasQuad ? [`Per Person on Quad bed: ${fmtPKR(adultQuad)}`] : []),
     `Per Child (2-12) with bed: ${fmtPKR(childWithBed)}`,
     `Per Child (2-12) without bed: ${fmtPKR(childWithoutBed)}`,
     `Per Infant (0-2): ${fmtPKR(infant)}`
@@ -1854,9 +1866,11 @@ async function generatePDF() {
   // ========= CALCULATION (AS REQUESTED) =========
   let adultDouble = 0;
   let adultTriple = 0;
+  let adultQuad = 0;
   let childWithBed = 0;
   let childWithoutBed = 0;
   let infant = 0;
+  let hasQuad = false;
 
   // Ticket
   document.querySelectorAll('#flightsContainer .subsection').forEach(item => {
@@ -1864,6 +1878,7 @@ async function generatePDF() {
     const r = item.querySelector('.flROE')?.value || 1;
     adultDouble += toPKR(item.querySelector('.flAdult')?.value, c, r);
     adultTriple += toPKR(item.querySelector('.flAdult')?.value, c, r);
+    adultQuad += toPKR(item.querySelector('.flAdult')?.value, c, r);
     const childTicket = toPKR(item.querySelector('.flChild')?.value, c, r);
     childWithBed += childTicket;
     childWithoutBed += childTicket;
@@ -1877,14 +1892,18 @@ async function generatePDF() {
     const nights = toNumber(item.querySelector('.htlNights')?.value);
     const doubleRate = toNumber(item.querySelector('.htlDouble')?.value);
     const tripleRate = toNumber(item.querySelector('.htlTriple')?.value);
+    const quadRate = toNumber(item.querySelector('.htlQuad')?.value);
     const childBedCharge = toNumber(item.querySelector('.htlChildBed')?.value);
 
     const perAdultDoubleHotel = toPKR((doubleRate * nights) / 2, c, r);
     const perAdultTripleHotel = toPKR((tripleRate * nights) / 3, c, r);
+    const perAdultQuadHotel = toPKR((quadRate * nights) / 4, c, r);
     const perChildWithBedHotel = toPKR((childBedCharge * nights), c, r);
 
     adultDouble += perAdultDoubleHotel;
     adultTriple += perAdultTripleHotel;
+    adultQuad += perAdultQuadHotel;
+    hasQuad = hasQuad || quadRate > 0;
 
     // Child with bed uses child extra bed charge from hotel row.
     childWithBed += perChildWithBedHotel;
@@ -1901,8 +1920,10 @@ async function generatePDF() {
       // Split vehicle amount by occupancy basis for adult plans.
       const doubleShare = perVehicle / 2;
       const tripleShare = perVehicle / 3;
+      const quadShare = perVehicle / 4;
       adultDouble += doubleShare;
       adultTriple += tripleShare;
+      adultQuad += quadShare;
       return;
     }
 
@@ -1912,6 +1933,7 @@ async function generatePDF() {
 
     adultDouble += a;
     adultTriple += a;
+    adultQuad += a;
     childWithoutBed += cnb;
 
     // Child with bed: if explicit child-bed exists use it, else use child-no-bed as closest per-person input.
@@ -1933,6 +1955,7 @@ async function generatePDF() {
     const inf = toPKR(item.querySelector('.vsInfant')?.value, c, r);
     adultDouble += a;
     adultTriple += a;
+    adultQuad += a;
     childWithBed += ch;
     childWithoutBed += ch;
     infant += inf;
@@ -1941,6 +1964,7 @@ async function generatePDF() {
   // Service Charges
   adultDouble += toNumber(document.getElementById('chargeAdult')?.value);
   adultTriple += toNumber(document.getElementById('chargeAdult')?.value);
+  adultQuad += toNumber(document.getElementById('chargeAdult')?.value);
   childWithBed += toNumber(document.getElementById('chargeChildBed')?.value);
   childWithoutBed += toNumber(document.getElementById('chargeChildNoBed')?.value);
   infant += toNumber(document.getElementById('chargeInfant')?.value);
@@ -2097,6 +2121,7 @@ async function generatePDF() {
   const priceLines = [
     `Per Person on Double bed: ${fmtPKR(adultDouble)}`,
     `Per Person on Triple bed: ${fmtPKR(adultTriple)}`,
+    ...(hasQuad ? [`Per Person on Quad bed: ${fmtPKR(adultQuad)}`] : []),
     `Per Child (2-12) with bed: ${fmtPKR(childWithBed)}`,
     `Per Child (2-12) without bed: ${fmtPKR(childWithoutBed)}`,
     `Per Infant (0-2): ${fmtPKR(infant)}`
