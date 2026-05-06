@@ -2877,6 +2877,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     sessionStorage.removeItem('refreshDashboard_international');
     await loadAllQuotations();
   }
+
+  // Ensure Active Quotations is selected by default on load
+  changeViewMode('active');
 });
 </script>
 </body>
