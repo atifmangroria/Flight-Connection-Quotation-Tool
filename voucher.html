@@ -148,7 +148,7 @@ button.whatsapp:hover{background:#128C7E}
     <div class="small" id="pageSubtitle">Loading quotation...</div>
   </div>
   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-    <button class="ghost" onclick="window.history.back()">← Back</button>
+    <button class="ghost" onclick="goBackToQuotationTool('index.html')">← Back</button>
     <button id="btnSaveDraft" class="orange">💾 Save Draft</button>
     <button id="btnPublish" class="green">📤 Publish Voucher</button>
     <button id="btnCancelVoucher" class="red" style="display:none">🚫 Cancel Voucher</button>
@@ -309,6 +309,18 @@ function showNotif(msg, type = 'info', dur = 3500) {
   el._t = setTimeout(() => { el.classList.remove('show'); }, dur);
 }
 
+function goBackToQuotationTool(fallbackUrl) {
+  if (document.referrer && document.referrer !== window.location.href) {
+    window.location.href = document.referrer;
+    return;
+  }
+  if (window.history.length > 1) {
+    window.history.back();
+    return;
+  }
+  window.location.href = fallbackUrl;
+}
+
 function confirm(msg, title = 'Confirm') {
   return new Promise(res => {
     const modal = document.getElementById('confirmModal');
@@ -378,6 +390,30 @@ function linkVoucherToQuotation(qId, vId) {
   const map = loadVoucherIdMap();
   map[qId] = vId;
   saveVoucherIdMap(map);
+}
+
+function updateLinkedQuotationStatus(newStatus) {
+  if (!quotationId) return;
+  try {
+    const all = JSON.parse(localStorage.getItem('savedQuotations') || '[]') || [];
+    const index = all.findIndex(q => q.id === quotationId);
+    if (index === -1) return;
+    const currentStatus = String(all[index].status || '').trim().toLowerCase();
+    const targetStatus = String(newStatus || '').trim().toLowerCase();
+    if (targetStatus === 'vouchered' && currentStatus !== 'vouchered') {
+      all[index].status = targetStatus;
+    } else if (targetStatus === 'booked' && currentStatus === 'vouchered') {
+      all[index].status = targetStatus;
+    } else {
+      return;
+    }
+    all[index].updatedAt = new Date().toISOString();
+    localStorage.setItem('savedQuotations', JSON.stringify(all));
+    if (quotation) quotation.status = targetStatus;
+    sessionStorage.setItem('refreshDashboard_umrah', 'true');
+  } catch (e) {
+    console.warn('Failed to update quotation status in localStorage:', e);
+  }
 }
 
 async function ensureSignedInForWrite() {
@@ -961,7 +997,7 @@ async function saveDraft() {
   const data = collectFormData();
   const doc = buildVoucherDoc(data, voucherData?.status === 'published' ? 'published' : 'draft');
   try {
-    await window.firebaseDB.save('vouchers', voucherId, doc);
+    await window.firebaseDB.saveData('vouchers', voucherId, doc);
     voucherData = doc;
     linkVoucherToQuotation(quotationId, voucherId);
     updateStatusBar();
@@ -987,9 +1023,10 @@ async function publishVoucher() {
   if (!ok) return;
   const doc = buildVoucherDoc(data, 'published');
   try {
-    await window.firebaseDB.save('vouchers', voucherId, doc);
+    await window.firebaseDB.saveData('vouchers', voucherId, doc);
     voucherData = doc;
     linkVoucherToQuotation(quotationId, voucherId);
+    updateLinkedQuotationStatus('vouchered');
     updateStatusBar();
     showNotif('🎉 Voucher published! Share the link with the customer.', 'success', 5000);
   } catch (e) {
@@ -1006,9 +1043,10 @@ async function cancelVoucher() {
   const data = collectFormData();
   const doc = buildVoucherDoc(data, 'cancelled');
   try {
-    await window.firebaseDB.save('vouchers', voucherId, doc);
+    await window.firebaseDB.saveData('vouchers', voucherId, doc);
     voucherData = doc;
     linkVoucherToQuotation(quotationId, voucherId);
+    updateLinkedQuotationStatus('booked');
     updateStatusBar();
     showNotif('Voucher cancelled.', 'info');
   } catch (e) {
@@ -1114,7 +1152,7 @@ async function init() {
 
   if (mappedId) {
     try {
-      existing = await window.firebaseDB.get('vouchers', mappedId);
+      existing = await window.firebaseDB.getData('vouchers', mappedId);
       if (existing) {
         voucherId = mappedId;
         voucherData = existing;
@@ -1126,7 +1164,7 @@ async function init() {
 
   if (!existing) {
     try {
-      existing = await window.firebaseDB.get('vouchers', deterministicId);
+      existing = await window.firebaseDB.getData('vouchers', deterministicId);
       if (existing) {
         voucherId = deterministicId;
         voucherData = existing;

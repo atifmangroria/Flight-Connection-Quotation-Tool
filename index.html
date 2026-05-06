@@ -4158,6 +4158,7 @@ function showToast(message, type = "info") {
     <button id="btnApproveCustomer" type="button" class="blue-btn" style="display:none;">✅ Approve Customer</button>
     <button id="btnSelfBook" type="button" class="green-btn" style="display:none;">✅ Accept & Book</button>
     <button id="btnCreateVoucher" type="button" class="green-btn" style="display:none;">🎫 Create Voucher</button>
+    <button id="btnEditVoucher" type="button" class="green-btn" style="display:none;">✏️ Edit Voucher</button>
   </div>
 
   <div id="agentApprovalModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);align-items:center;justify-content:center;z-index:9999;">
@@ -9298,12 +9299,83 @@ saveBtn.addEventListener('click', (e) => {
 }
 
 // Function to update quotation status
-function updateQuotationStatus(quotationId, newStatus) {
+function getLinkedVoucherIdForQuotation(quotationId) {
+  try {
+    const map = JSON.parse(localStorage.getItem('voucherIdByQuotation') || '{}') || {};
+    return map[quotationId] || '';
+  } catch (e) {
+    return '';
+  }
+}
+
+async function cancelLinkedVoucher(voucherId) {
+  if (!voucherId || !window.firebaseDB) return false;
+  try {
+    const existing = await window.firebaseDB.getData('vouchers', voucherId);
+    if (!existing) {
+      console.warn('Linked voucher not found; treating as already cancelled or non-existent:', voucherId);
+      return true;
+    }
+    if (String(existing.status || '').trim().toLowerCase() === 'cancelled') return true;
+    const cancelledDoc = { ...existing, status: 'cancelled', updatedAt: new Date().toISOString() };
+    await window.firebaseDB.saveData('vouchers', voucherId, cancelledDoc);
+    return true;
+  } catch (e) {
+    console.error('Failed to cancel linked voucher:', e);
+    return false;
+  }
+}
+
+async function getPublishedLinkedVoucherIdForQuotation(quotationId) {
+  const voucherId = getLinkedVoucherIdForQuotation(quotationId);
+  if (!voucherId || !window.firebaseDB) return '';
+  try {
+    const existing = await window.firebaseDB.getData('vouchers', voucherId);
+    if (!existing) return '';
+    const status = String(existing.status || '').trim().toLowerCase();
+    return status === 'published' ? voucherId : '';
+  } catch (e) {
+    console.error('Failed to resolve linked voucher:', e);
+    return '';
+  }
+}
+
+async function updateQuotationStatus(quotationId, newStatus) {
   try {
     if (newStatus === 'booked') {
       showAlert('Use the Accept & Book button instead of directly setting Booked status.');
       openAgentApprovalModal('selfbook');
       return false;
+    }
+    const currentQuotation = JSON.parse(localStorage.getItem('savedQuotations')) || [];
+    const existingQuotation = currentQuotation.find(q => q.id === quotationId);
+    const currentStatus = String(existingQuotation?.status || '').trim().toLowerCase();
+
+    if (newStatus === 'pending' && currentStatus === 'vouchered') {
+      const voucherId = await getPublishedLinkedVoucherIdForQuotation(quotationId);
+      if (voucherId) {
+        const proceed = await showConfirm('This quotation has a published voucher. Editing it requires cancelling the voucher first. Proceed and cancel the voucher?', 'Edit Quotation');
+        if (!proceed) return false;
+        const cancelled = await cancelLinkedVoucher(voucherId);
+        if (!cancelled) {
+          showAlert('Unable to cancel the linked voucher. Quotation edit aborted.');
+          return false;
+        }
+        showNotification('Linked voucher cancelled automatically before editing the quotation.', 'info');
+      }
+    }
+    if (newStatus === 'cancelled') {
+      const voucherId = await getPublishedLinkedVoucherIdForQuotation(quotationId);
+      if (voucherId) {
+        const proceed = await showConfirm('This quotation has a linked voucher. Cancelling the quotation will also cancel the linked voucher. Proceed?', 'Cancel Quotation');
+        if (!proceed) return false;
+        const cancelled = await cancelLinkedVoucher(voucherId);
+        if (!cancelled) {
+          showAlert('Unable to cancel the linked voucher. Quotation cancellation aborted.');
+          return false;
+        }
+        showNotification('Linked voucher cancelled automatically as part of quotation cancellation.', 'info');
+      }
     }
     // Get all quotations
     let savedQuotations = JSON.parse(localStorage.getItem('savedQuotations')) || [];
@@ -9382,11 +9454,12 @@ function updateQuotationStatus(quotationId, newStatus) {
   }
 }
 
-function syncCreateVoucherButton(statusValue) {
-  const voucherBtn = document.getElementById('btnCreateVoucher');
-  if (!voucherBtn) return;
-  const shouldShow = !!currentQuotationId && String(statusValue || '').toLowerCase() === 'booked';
-  voucherBtn.style.display = shouldShow ? 'inline-block' : 'none';
+function syncVoucherButtons(statusValue) {
+  const createBtn = document.getElementById('btnCreateVoucher');
+  const editBtn = document.getElementById('btnEditVoucher');
+  const status = String(statusValue || '').trim().toLowerCase();
+  if (createBtn) createBtn.style.display = (!!currentQuotationId && status === 'booked') ? 'inline-block' : 'none';
+  if (editBtn) editBtn.style.display = (!!currentQuotationId && status === 'vouchered') ? 'inline-block' : 'none';
 }
 
 function setBookedEditLockState(isLocked) {
@@ -9395,6 +9468,7 @@ function setBookedEditLockState(isLocked) {
   const allowedButtonIds = new Set([
     'btnReopenPending',
     'btnCreateVoucher',
+    'btnEditVoucher',
     'btnGenerateQuotation',
     'btnExportExcel',
     'btnDownloadAccountsPdf',
@@ -9435,6 +9509,7 @@ function showStatusSection() {
   const btnApproveCustomer = document.getElementById('btnApproveCustomer');
   const btnSelfBook = document.getElementById('btnSelfBook');
   const btnCreateVoucher = document.getElementById('btnCreateVoucher');
+  const btnEditVoucher = document.getElementById('btnEditVoucher');
 
   // Get all quotations from localStorage
   const allSavedQuotations = JSON.parse(localStorage.getItem('savedQuotations')) || [];
@@ -9447,40 +9522,47 @@ function showStatusSection() {
     const customerAccepted = !!quotation?.customerAcceptance;
     const agentApproved = !!quotation?.agentApproval;
 
-    if (quotation && quotation.status) {
-      if (quotation.status === 'booked') {
+    const currentStatus = String(quotation?.status || '').trim().toLowerCase();
+    if (quotation && currentStatus) {
+      if (currentStatus === 'booked' || currentStatus === 'vouchered') {
         quotationStatus.style.display = 'none';
         const statusLabel = document.getElementById('quotationStatusLabel');
         if (statusLabel) {
           statusLabel.style.display = 'block';
-          statusLabel.textContent = 'Status: Booked';
+          statusLabel.textContent = currentStatus === 'vouchered' ? 'Status: Vouchered' : 'Status: Booked';
         }
       } else {
         quotationStatus.style.display = 'block';
-        quotationStatus.value = quotation.status;
+        quotationStatus.value = currentStatus;
         const statusLabel = document.getElementById('quotationStatusLabel');
         if (statusLabel) {
           statusLabel.style.display = 'none';
           statusLabel.textContent = '';
         }
       }
+    } else {
+      quotationStatus.style.display = 'block';
+      quotationStatus.value = 'pending';
+      const statusLabel = document.getElementById('quotationStatusLabel');
+      if (statusLabel) {
+        statusLabel.style.display = 'none';
+        statusLabel.textContent = '';
+      }
     }
-      if (btnCreateVoucher) {
-      syncCreateVoucherButton(quotation.status);
-    }
+    syncVoucherButtons(quotation?.status);
     if (btnApproveCustomer) {
       const canApprove = quotation && customerAccepted && !agentApproved && quotation.status !== 'booked' && !needsReaccept;
       btnApproveCustomer.style.display = canApprove ? 'inline-block' : 'none';
       btnApproveCustomer.disabled = !canApprove;
     }
     if (btnSelfBook) {
-      const canSelfBook = quotation && quotation.status !== 'booked' && !customerAccepted && !agentApproved;
+      const canSelfBook = quotation && quotation.status !== 'booked' && !agentApproved;
       btnSelfBook.style.display = canSelfBook ? 'inline-block' : 'none';
       btnSelfBook.disabled = !canSelfBook;
     }
     const btnUpdateStatus = document.getElementById('btnUpdateStatus');
     const btnReopenPending = document.getElementById('btnReopenPending');
-    if (quotation && quotation.status === 'booked') {
+    if (quotation && (currentStatus === 'booked' || currentStatus === 'vouchered')) {
       setBookedEditLockState(true);
       if (btnUpdateStatus) {
         btnUpdateStatus.style.display = 'none';
@@ -9507,6 +9589,8 @@ function showStatusSection() {
     setBookedEditLockState(false);
     statusSection.style.display = 'none';
     if (btnCreateVoucher) btnCreateVoucher.style.display = 'none';
+    const btnEditVoucher = document.getElementById('btnEditVoucher');
+    if (btnEditVoucher) btnEditVoucher.style.display = 'none';
     if (btnApproveCustomer) btnApproveCustomer.style.display = 'none';
     if (btnSelfBook) btnSelfBook.style.display = 'none';
     const btnReopenPending = document.getElementById('btnReopenPending');
@@ -9526,14 +9610,14 @@ setTimeout(() => {
 }, 100);
 
 // Event listener for status update button
-document.getElementById('btnUpdateStatus').addEventListener('click', () => {
+document.getElementById('btnUpdateStatus').addEventListener('click', async () => {
   if (!currentQuotationId) {
     showAlert("No quotation selected. Please save or load a quotation first.");
     return;
   }
   
   const newStatus = document.getElementById('quotationStatus').value;
-  updateQuotationStatus(currentQuotationId, newStatus);
+  await updateQuotationStatus(currentQuotationId, newStatus);
 });
 
 document.getElementById('btnReopenPending')?.addEventListener('click', async () => {
@@ -9558,6 +9642,14 @@ document.getElementById('btnCreateVoucher')?.addEventListener('click', () => {
   window.location.href = 'voucher.html?quotationId=' + encodeURIComponent(currentQuotationId) + '&type=umrah';
 });
 
+document.getElementById('btnEditVoucher')?.addEventListener('click', () => {
+  if (!currentQuotationId) {
+    showAlert("No quotation selected. Please save or load a quotation first.");
+    return;
+  }
+  window.location.href = 'voucher.html?quotationId=' + encodeURIComponent(currentQuotationId) + '&type=umrah';
+});
+
 document.getElementById('btnApproveCustomer')?.addEventListener('click', () => {
   openAgentApprovalModal('approve');
 });
@@ -9566,9 +9658,9 @@ document.getElementById('btnSelfBook')?.addEventListener('click', () => {
   openAgentApprovalModal('selfbook');
 });
 
-// Show/hide Create Voucher button when status changes
+// Show/hide voucher buttons when status changes
 document.getElementById('quotationStatus')?.addEventListener('change', () => {
-    syncCreateVoucherButton(document.getElementById('quotationStatus').value);
+    syncVoucherButtons(document.getElementById('quotationStatus').value);
 });
 
 function getQuotationPublicUrl(quotationId, shareKey) {
@@ -9896,7 +9988,7 @@ function handleSelfBook(requireTermsCheck = false) {
   showNotification('Quotation accepted and booked by agent.', 'success');
   const statusSelect = document.getElementById('quotationStatus');
   if (statusSelect) statusSelect.value = 'booked';
-  syncCreateVoucherButton('booked');
+  syncVoucherButtons('booked');
   showStatusSection();
 }
 
