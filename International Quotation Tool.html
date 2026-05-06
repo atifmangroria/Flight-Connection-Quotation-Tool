@@ -6358,11 +6358,7 @@ function showQuotationModal() {
   const itineraryWrapper = clonedContent.querySelector('#itinerarySectionWrapper');
   const clonedItineraryContainer = clonedContent.querySelector('#itineraryTableContainer');
   if (itineraryWrapper && (itineraryWrapper.classList.contains('itinerary-hidden') || (clonedItineraryContainer && clonedItineraryContainer.style.display === 'none'))) {
-    itineraryWrapper.classList.remove('itinerary-hidden');
-    itineraryWrapper.style.display = 'block';
-    if (clonedItineraryContainer) {
-      clonedItineraryContainer.style.display = 'block';
-    }
+    itineraryWrapper.remove();
   }
 
   return clonedContent;
