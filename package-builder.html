@@ -440,11 +440,12 @@ async function generateImage() {
     inclusions.push(`${titleCase(flightType)} Flight${sector ? ` ${sector}` : ''} by ${airline}`);
   });
   document.querySelectorAll('#hotelsContainer .subsection').forEach(item => {
+    const hotelName = titleCase(item.querySelector('.htlName')?.value || '');
     const category = normalizeHotelCategory(item.querySelector('.htlCategory')?.value || 'Hotel');
     const city = titleCase(item.querySelector('.htlCity')?.value || 'Destination City');
     const mealPlan = item.querySelector('.htlMealPlan')?.value || 'Breakfast Included';
     const nights = item.querySelector('.htlNights')?.value || '';
-    inclusions.push(`${category} hotel in ${city} (${nights ? nights + ' nights, ' : ''}${mealPlan})`);
+    inclusions.push(`${hotelName ? hotelName + ' ' : ''}${category} hotel in ${city} (${nights ? nights + ' nights, ' : ''}${mealPlan})`);
   });
   document.querySelectorAll('#toursContainer .subsection').forEach(item => {
     const name = titleCase(item.querySelector('.trName')?.value || 'Tour');
@@ -1959,11 +1960,12 @@ async function generatePDF() {
   });
 
   document.querySelectorAll('#hotelsContainer .subsection').forEach(item => {
+    const hotelName = titleCase(item.querySelector('.htlName')?.value || '');
     const category = normalizeHotelCategory(item.querySelector('.htlCategory')?.value || 'Hotel');
     const city = titleCase(item.querySelector('.htlCity')?.value || 'Destination City');
     const mealPlan = item.querySelector('.htlMealPlan')?.value || 'Breakfast Included';
     const nights = item.querySelector('.htlNights')?.value || '';
-    inclusions.push(`${category} hotel in ${city} (${nights ? nights + ' nights, ' : ''}${mealPlan})`);
+    inclusions.push(`${hotelName ? hotelName + ' ' : ''}${category} hotel in ${city} (${nights ? nights + ' nights, ' : ''}${mealPlan})`);
   });
 
   document.querySelectorAll('#toursContainer .subsection').forEach(item => {
