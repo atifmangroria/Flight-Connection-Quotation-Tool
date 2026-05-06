@@ -645,6 +645,19 @@ async function renderDesktopVoucherCanvas(element, fixedWidth = 1200) {
   wrapper.style.background = '#fff';
   wrapper.appendChild(clone);
   document.body.appendChild(wrapper);
+
+  clone.querySelectorAll('h1, h2, h3, h4, h5, h6, p, span, div, li, td, th, label, small').forEach((node) => {
+    const computed = window.getComputedStyle(node);
+    const fontSize = parseFloat(computed.fontSize);
+    const lineHeight = parseFloat(computed.lineHeight);
+    if (Number.isFinite(fontSize)) {
+      node.style.fontSize = (fontSize * 1.08) + 'px';
+    }
+    if (Number.isFinite(lineHeight)) {
+      node.style.lineHeight = (lineHeight * 1.08) + 'px';
+    }
+  });
+
   await waitForImages(clone);
   await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   const canvas = await html2canvas(clone, {
