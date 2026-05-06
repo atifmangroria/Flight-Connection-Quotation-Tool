@@ -5423,9 +5423,10 @@ function ensureCreateVoucherButton() {
     voucherBtn.className = updateBtn.className || '';
     voucherBtn.style.marginLeft = '8px';
     voucherBtn.style.display = 'none';
-    voucherBtn.addEventListener('click', openDomesticVoucherEditor);
     updateBtn.insertAdjacentElement('afterend', voucherBtn);
   }
+
+  voucherBtn.onclick = openDomesticVoucherEditor;
   return voucherBtn;
 }
 
@@ -5874,8 +5875,10 @@ function handleGenerateQuotationLink(options = {}) {
     }).catch(err => console.error('Firebase share link save error:', err));
   }
 
-  showNotification('Share link is ready. The same customer URL is kept and updated with latest preview.', 'success');
-  showStatusSection();
+  if (!options.silent) {
+    showNotification('Share link is ready. The same customer URL is kept and updated with latest preview.', 'success');
+    showStatusSection();
+  }
   if (typeof options.onComplete === 'function') options.onComplete();
 }
 
@@ -6905,7 +6908,7 @@ if (hasAddons) {
 quotationHTML += `
   <div style="margin-bottom: 20px; border: 1px solid #f5e6e6; padding: 15px; border-radius: 8px; background-color: #ffffff;">
     <h3 style="margin-top: 0; color: #0b76d1; text-align: center; margin-bottom: 15px;">Inclusions</h3>
-    <div style="font-size: 13px; line-height: 1.6; text-align: left;">
+    <div style="font-size: 14px; line-height: 1.6; text-align: left;">
       <ul style="padding-left: 20px; margin: 0; text-align: left;">
 `;
 
@@ -7023,7 +7026,7 @@ quotationHTML += `
 quotationHTML += `
 <div style="margin-bottom: 20px; border: 1px solid #f5e6e6; padding: 15px; border-radius: 8px; background-color: #ffffff;">
     <h3 style="margin-top: 0; color: #0b76d1; text-align: center; margin-bottom: 15px;">Exclusions</h3>
-    <div style="font-size: 13px; line-height: 1.6; text-align: left;">
+    <div style="font-size: 14px; line-height: 1.6; text-align: left;">
       <ul style="padding-left: 20px; margin: 0; text-align: left;">
 `;
 
@@ -7070,7 +7073,7 @@ quotationHTML += `
 quotationHTML += `
    <div style="margin-bottom: 20px; border: 1px solid #e3f2fd; padding: 15px; border-radius: 8px; background-color: #ffffff;">
     <h3 style="margin-top:0; color:#0b76d1; text-align:left; margin-bottom:10px;">Terms & Conditions</h3>
-    <div style="font-size: 13px; line-height: 1.6; text-align: left;">
+    <div style="font-size: 14px; line-height: 1.6; text-align: left;">
     ${customTerms || defaultTerms}
   </div>
   </div>
@@ -7237,7 +7240,7 @@ setTimeout(() => {
     const _allQ = JSON.parse(localStorage.getItem('savedQuotations_domestic')) || [];
     const _q = _allQ.find(q => q.id === currentQuotationId);
     if (!_q?.shareLinkId) {
-      handleGenerateQuotationLink({ requirePreview: false, onComplete: syncPreviewShareControls });
+      handleGenerateQuotationLink({ requirePreview: false, silent: true, onComplete: syncPreviewShareControls });
     }
   }
 
