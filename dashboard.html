@@ -1100,8 +1100,9 @@ function getFilteredPackages() {
   if (query) {
     filtered = filtered.filter(pkg => {
       const name = String(pkg.name || pkg.id || '').toLowerCase();
+      const packageCode = String(pkg.packageCode || '').toLowerCase();
       const destination = String(pkg.destination || '').toLowerCase();
-      return name.includes(query) || destination.includes(query);
+      return name.includes(query) || packageCode.includes(query) || destination.includes(query);
     });
   }
 
