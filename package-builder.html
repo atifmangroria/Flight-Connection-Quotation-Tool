@@ -462,14 +462,31 @@ async function generateImage() {
     const from = titleCase(item.querySelector('.tfFrom')?.value || 'Point A');
     const to = titleCase(item.querySelector('.tfTo')?.value || 'Point B');
     const vehicle = normalizeVehicle(item.querySelector('.tfVehicle')?.value || 'vehicle');
-    inclusions.push(`Return transfer from ${from} to ${to} by ${vehicle}`);
+    const transferType = item.querySelector('.tfType')?.value || '';
+    const prefix = transferType === 'One Way' ? 'Transfer' : 'Return transfer';
+    inclusions.push(`${prefix} from ${from} to ${to} by ${vehicle}`);
   });
   document.querySelectorAll('#visasContainer .subsection').forEach(item => {
     const country = titleCase(item.querySelector('.vsCountry')?.value || 'Destination');
     const visaType = item.querySelector('.vsType')?.value || 'Visa';
     inclusions.push(`${visaType} visa processing for ${country}`);
   });
+
+  const hotelExclusions = [];
+  document.querySelectorAll('#hotelsContainer .subsection').forEach(item => {
+    const mealPlan = item.querySelector('.htlMealPlan')?.value || 'Breakfast Included';
+    if (mealPlan === 'Room Only') {
+      const hotelName = titleCase(item.querySelector('.htlName')?.value || '').trim();
+      const city = titleCase(item.querySelector('.htlCity')?.value || '').trim();
+      const label = [hotelName, city].filter(Boolean).join(' ').trim();
+      if (label) {
+        hotelExclusions.push(`Without Breakfast in ${label}`);
+      }
+    }
+  });
+
   const exclusions = [
+    ...hotelExclusions,
     'Lunch and Dinner (if not explicitly mentioned)',
     'Early check-in / Late check-out',
     'Entrance tickets if not mentioned',
@@ -2030,7 +2047,9 @@ async function generatePDF() {
     const from = titleCase(item.querySelector('.tfFrom')?.value || 'Point A');
     const to = titleCase(item.querySelector('.tfTo')?.value || 'Point B');
     const vehicle = normalizeVehicle(item.querySelector('.tfVehicle')?.value || 'vehicle');
-    inclusions.push(`Return transfer from ${from} to ${to} by ${vehicle}`);
+    const transferType = item.querySelector('.tfType')?.value || '';
+    const prefix = transferType === 'One Way' ? 'Transfer' : 'Return transfer';
+    inclusions.push(`${prefix} from ${from} to ${to} by ${vehicle}`);
   });
 
   document.querySelectorAll('#visasContainer .subsection').forEach(item => {
@@ -2039,7 +2058,21 @@ async function generatePDF() {
     inclusions.push(`${visaType} visa processing for ${country}`);
   });
 
+  const hotelExclusions = [];
+  document.querySelectorAll('#hotelsContainer .subsection').forEach(item => {
+    const mealPlan = item.querySelector('.htlMealPlan')?.value || 'Breakfast Included';
+    if (mealPlan === 'Room Only') {
+      const hotelName = titleCase(item.querySelector('.htlName')?.value || '').trim();
+      const city = titleCase(item.querySelector('.htlCity')?.value || '').trim();
+      const label = [hotelName, city].filter(Boolean).join(' ').trim();
+      if (label) {
+        hotelExclusions.push(`Without Breakfast in ${label}`);
+      }
+    }
+  });
+
   const exclusions = [
+    ...hotelExclusions,
     'Lunch and Dinner (if not explicitly mentioned)',
     'Early check-in / Late check-out',
     'Entrance tickets if not mentioned',
