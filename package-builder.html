@@ -1116,7 +1116,7 @@ function loadPackageList() {
       .filter(pkg => isAdmin || pkg.createdBy === agent.id)
       .filter(pkg => {
         if (!searchValue) return true;
-        return [pkg.name, pkg.packageCode, pkg.type, pkg.destination, (pkg.destinations || []).map(d => d.city).join(' ')].some(value =>
+        return [pkg.name, pkg.packageCode, pkg.type, pkg.destination].some(value =>
           String(value || '').toLowerCase().includes(searchValue)
         );
       })
@@ -1130,14 +1130,14 @@ function loadPackageList() {
     }
 
     body.innerHTML = filteredPackages.map(pkg => {
-      const destinationText = pkg.destination || (pkg.destinations || []).map(d => d.city).filter(Boolean).join(', ');
+      const destinationText = pkg.destination || 'N/A';
       return `
         <tr>
           <td>${pkg.packageCode || 'N/A'}</td>
           <td>${pkg.name || 'Untitled'}</td>
           <td>${pkg.type || 'N/A'}</td>
           <td>${pkg.totalNights || ''}</td>
-          <td>${destinationText || 'N/A'}</td>
+          <td>${destinationText}</td>
           <td>${pkg.validFrom || 'N/A'}</td>
           <td>${pkg.validTo || 'N/A'}</td>
           <td>
