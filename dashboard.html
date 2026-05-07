@@ -1100,10 +1100,8 @@ function getFilteredPackages() {
   if (query) {
     filtered = filtered.filter(pkg => {
       const name = String(pkg.name || pkg.id || '').toLowerCase();
-      const destinations = Array.isArray(pkg.destinations)
-        ? pkg.destinations.map(d => String(d?.city || '')).join(', ').toLowerCase()
-        : '';
-      return name.includes(query) || destinations.includes(query);
+      const destination = String(pkg.destination || '').toLowerCase();
+      return name.includes(query) || destination.includes(query);
     });
   }
 
@@ -1189,9 +1187,9 @@ function renderPackagesTable(isAdmin) {
         ? pkg.totalNights
         : 'N/A';
 
-      const destinationsText = Array.isArray(pkg.destinations) && pkg.destinations.length > 0
+      const destinationsText = String(pkg.destination || '').trim() || (Array.isArray(pkg.destinations) && pkg.destinations.length > 0
         ? pkg.destinations.map(d => d.city).filter(Boolean).join(', ')
-        : 'N/A';
+        : 'N/A');
 
       let createdText = 'N/A';
       if (pkg.createdAt?.toDate) {
