@@ -3455,7 +3455,7 @@ function getTransferPricingSAR(index, paxDataOverride = null, roeOverride = null
     const payingPax = (p.adults || 0) + childCount;
     const perPerson = payingPax > 0 ? ((costSAR + svcSAR) * roeValue) / payingPax : 0;
     perAdultPKR = perPerson;
-    perChildPKR = perPerson;
+    perChildPKR = 0;
     perInfantPKR = 0;
   }
 
@@ -4025,7 +4025,7 @@ function getZiyarahPricing(index, paxData, roe) {
     costSAR,
     svcSAR,
     perAdultPKR: pax.adults > 0 ? perPaying : 0,
-    perChildPKR: (pax.childBed + pax.childNoBed) > 0 ? perPaying : 0,
+    perChildPKR: 0,
     perInfantPKR: 0
   };
 }
@@ -5268,8 +5268,8 @@ async function performCalculation() {
     // Build per person text with counts and only show categories with passengers
     let perPersonText = [];
     if (paxData.adults > 0) perPersonText.push(`Adult x${paxData.adults}: PKR ${fmt(perAdult)}`);
-    if (paxData.childBed > 0) perPersonText.push(`Child (with bed) x${paxData.childBed}: PKR ${fmt(perChildBed)}`);
-    if (paxData.childNoBed > 0) perPersonText.push(`Child (no bed) x${paxData.childNoBed}: PKR ${fmt(perChildNoBed)}`);
+    if (paxData.childBed > 0 && perChildBed > 0) perPersonText.push(`Child (with bed) x${paxData.childBed}: PKR ${fmt(perChildBed)}`);
+    if (paxData.childNoBed > 0 && perChildNoBed > 0) perPersonText.push(`Child (no bed) x${paxData.childNoBed}: PKR ${fmt(perChildNoBed)}`);
     if (paxData.infants > 0) perPersonText.push(`Infant x${paxData.infants}: PKR ${fmt(perInfant)}`);
     
     // Join the array with commas
@@ -5638,8 +5638,8 @@ async function performCalculation() {
       // Build per person text with counts and only show categories with passengers
       let perPersonText = [];
       if (paxData.adults > 0) perPersonText.push(`Adult x${paxData.adults}: PKR ${fmt(perAdult)}`);
-      if (paxData.childBed > 0) perPersonText.push(`Child (with bed) x${paxData.childBed}: PKR ${fmt(perChildBed)}`);
-      if (paxData.childNoBed > 0) perPersonText.push(`Child (no bed) x${paxData.childNoBed}: PKR ${fmt(perChildNoBed)}`);
+      if (paxData.childBed > 0 && perChildBed > 0) perPersonText.push(`Child (with bed) x${paxData.childBed}: PKR ${fmt(perChildBed)}`);
+      if (paxData.childNoBed > 0 && perChildNoBed > 0) perPersonText.push(`Child (no bed) x${paxData.childNoBed}: PKR ${fmt(perChildNoBed)}`);
       if (paxData.infants > 0 && perInfant > 0) perPersonText.push(`Infant x${paxData.infants}: PKR ${fmt(perInfant)}`);
       
       // Join the array with commas
@@ -6297,11 +6297,17 @@ if (packageTotalsRow) {
   // Debug: Log the actual text to see what we're working with
   console.log("Per person text:", perPersonText);
   
-  // Parse the per-person costs from the text
-  const adultMatch = perPersonText.match(/Adult x(\d+): PKR ([\d,]+)/);
-  const childBedMatch = perPersonText.match(/Child \(with bed\) x(\d+): PKR ([\d,]+)/);
-  const childNoBedMatch = perPersonText.match(/Child \(no bed\) x(\d+): PKR ([\d,]+)/);
-  const infantMatch = perPersonText.match(/Infant x(\d+): PKR ([\d,]+)/);
+  // Parse per-person amounts; allow optional sharing tags like "(5 Sharing)" before ": PKR"
+  const parsePerPerson = (labels) => {
+    const safeLabels = labels.map(label => label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+    const re = new RegExp(`(?:${safeLabels}) x(\\d+)(?:\\s*\\([^)]*\\))?:\\s*PKR\\s*([\\d,]+)`, 'i');
+    return perPersonText.match(re);
+  };
+
+  const adultMatch = parsePerPerson(['Adult']);
+  const childBedMatch = parsePerPerson(['Child (with bed)', 'Child (bed)']);
+  const childNoBedMatch = parsePerPerson(['Child (no bed)', 'Child (without bed)']);
+  const infantMatch = parsePerPerson(['Infant']);
   
   // Debug: Log the matches
   console.log("Adult match:", adultMatch);
@@ -6314,15 +6320,12 @@ if (packageTotalsRow) {
   if (childNoBedMatch) packagePerChildNoBed = parseFloat(childNoBedMatch[2].replace(/,/g, ''));
   if (infantMatch) packagePerInfant = parseFloat(infantMatch[2].replace(/,/g, ''));
   
-  // If child with bed is still 0, try alternative patterns
-  if (packagePerChildBed === 0 && clientData.childBed > 0) {
-    // Try "Child (bed)" pattern
-    const altChildBedMatch = perPersonText.match(/Child \(bed\) x(\d+): PKR ([\d,]+)/);
-    if (altChildBedMatch) {
-      packagePerChildBed = parseFloat(altChildBedMatch[2].replace(/,/g, ''));
-      console.log("Alternative child bed match:", altChildBedMatch);
-    }
-  }
+  // Fill any missing parsed values from live calculation totals to avoid partial parse issues.
+  const fallbackPerPerson = calculatePerPersonCosts(totalCostPKR, finalTotalServicePKR, clientData);
+  if (clientData.adults > 0 && packagePerAdult === 0) packagePerAdult = fallbackPerPerson.perAdult || 0;
+  if (clientData.childBed > 0 && packagePerChildBed === 0) packagePerChildBed = fallbackPerPerson.perChildBed || 0;
+  if (clientData.childNoBed > 0 && packagePerChildNoBed === 0) packagePerChildNoBed = fallbackPerPerson.perChildNoBed || 0;
+  if (clientData.infants > 0 && packagePerInfant === 0) packagePerInfant = fallbackPerPerson.perInfant || 0;
 } else {
   // Fallback to the calculation function if the PACKAGE TOTALS row is not found
   const perPersonCosts = calculatePerPersonCosts(packageCostPKR, finalPackageServicePKR, clientData);

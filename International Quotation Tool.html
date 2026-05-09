@@ -3504,7 +3504,7 @@ function getTransferPricing(index, paxDataOverride = null) {
     const payingPax = (p.adults || 0) + childCount;
     const perPersonPKR = payingPax > 0 ? convertToPKR(costOrig + svcOrig, currency) / payingPax : 0;
     perAdultPKR = perPersonPKR;
-    perChildPKR = perPersonPKR;
+    perChildPKR = 0;
     perInfantPKR = 0;
   }
 
@@ -3544,7 +3544,7 @@ function getTourPricing(index, isAddon = false, paxDataOverride = null) {
     const payingPax = (p.adults || 0) + childCount + (p.infants || 0);
     const perPersonPKR = payingPax > 0 ? convertToPKR(costOrig + svcOrig, currency) / payingPax : 0;
     perAdultPKR = perPersonPKR;
-    perChildPKR = perPersonPKR;
+    perChildPKR = 0;
     perInfantPKR = perPersonPKR;
   }
 
@@ -5495,8 +5495,8 @@ async function performCalculation() {
 
     let perPersonText = [];
     if (paxData.adults > 0) perPersonText.push(`Adult x${paxData.adults}: PKR ${fmt(pricing.perAdultPKR)}`);
-    if (paxData.childBed > 0) perPersonText.push(`Child (with bed) x${paxData.childBed}: PKR ${fmt(pricing.perChildPKR)}`);
-    if (paxData.childNoBed > 0) perPersonText.push(`Child (no bed) x${paxData.childNoBed}: PKR ${fmt(pricing.perChildPKR)}`);
+    if (paxData.childBed > 0 && pricing.perChildPKR > 0) perPersonText.push(`Child (with bed) x${paxData.childBed}: PKR ${fmt(pricing.perChildPKR)}`);
+    if (paxData.childNoBed > 0 && pricing.perChildPKR > 0) perPersonText.push(`Child (no bed) x${paxData.childNoBed}: PKR ${fmt(pricing.perChildPKR)}`);
     if (paxData.infants > 0 && pricing.perInfantPKR > 0) perPersonText.push(`Infant x${paxData.infants}: PKR ${fmt(pricing.perInfantPKR)}`);
     perPersonText = perPersonText.join(', ');
 
@@ -5533,8 +5533,8 @@ async function performCalculation() {
 
     let perPersonText = [];
     if (paxData.adults > 0) perPersonText.push(`Adult x${paxData.adults}: PKR ${fmt(pricing.perAdultPKR)}`);
-    if (paxData.childBed > 0) perPersonText.push(`Child (with bed) x${paxData.childBed}: PKR ${fmt(pricing.perChildPKR)}`);
-    if (paxData.childNoBed > 0) perPersonText.push(`Child (no bed) x${paxData.childNoBed}: PKR ${fmt(pricing.perChildPKR)}`);
+    if (paxData.childBed > 0 && pricing.perChildPKR > 0) perPersonText.push(`Child (with bed) x${paxData.childBed}: PKR ${fmt(pricing.perChildPKR)}`);
+    if (paxData.childNoBed > 0 && pricing.perChildPKR > 0) perPersonText.push(`Child (no bed) x${paxData.childNoBed}: PKR ${fmt(pricing.perChildPKR)}`);
     if (paxData.infants > 0) perPersonText.push(`Infant x${paxData.infants}: PKR ${fmt(pricing.perInfantPKR)}`);
     perPersonText = perPersonText.join(', ');
 
@@ -5861,8 +5861,8 @@ async function performCalculation() {
     
     let perPersonText = [];
     if (paxData.adults > 0) perPersonText.push(`Adult x${paxData.adults}: PKR ${fmt(pricing.perAdultPKR)}`);
-    if (paxData.childBed > 0) perPersonText.push(`Child (with bed) x${paxData.childBed}: PKR ${fmt(pricing.perChildPKR)}`);
-    if (paxData.childNoBed > 0) perPersonText.push(`Child (no bed) x${paxData.childNoBed}: PKR ${fmt(pricing.perChildPKR)}`);
+    if (paxData.childBed > 0 && pricing.perChildPKR > 0) perPersonText.push(`Child (with bed) x${paxData.childBed}: PKR ${fmt(pricing.perChildPKR)}`);
+    if (paxData.childNoBed > 0 && pricing.perChildPKR > 0) perPersonText.push(`Child (no bed) x${paxData.childNoBed}: PKR ${fmt(pricing.perChildPKR)}`);
     if (paxData.infants > 0) perPersonText.push(`Infant x${paxData.infants}: PKR ${fmt(pricing.perInfantPKR)}`);
     perPersonText = perPersonText.join(', ');
     
