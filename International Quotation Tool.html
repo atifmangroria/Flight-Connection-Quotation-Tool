@@ -1143,9 +1143,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     const proceed = await showConfirm('Editing a booked quotation will move it to Pending. New Acceptance would require. Continue?', 'Enable Editing');
     if (!proceed) return;
-    const updated = updateQuotationStatus(currentQuotationId, 'pending');
+    const updated = await updateQuotationStatus(currentQuotationId, 'pending');
     if (updated && typeof markCalculationDirty === 'function') {
       markCalculationDirty();
+    }
+    if (updated && typeof showStatusSection === 'function') {
+      showStatusSection();
     }
   });
 
@@ -3501,7 +3504,7 @@ function getTransferPricing(index, paxDataOverride = null) {
   } else {
     costOrig = numVal(`tCost_${index}`);
     svcOrig = numVal(`tSvc_${index}`);
-    const payingPax = (p.adults || 0) + childCount;
+    const payingPax = p.adults || 0;
     const perPersonPKR = payingPax > 0 ? convertToPKR(costOrig + svcOrig, currency) / payingPax : 0;
     perAdultPKR = perPersonPKR;
     perChildPKR = 0;
@@ -3541,11 +3544,11 @@ function getTourPricing(index, isAddon = false, paxDataOverride = null) {
   } else {
     costOrig = numVal(`${prefix}Cost_${index}`);
     svcOrig = numVal(`${prefix}Svc_${index}`);
-    const payingPax = (p.adults || 0) + childCount + (p.infants || 0);
+    const payingPax = p.adults || 0;
     const perPersonPKR = payingPax > 0 ? convertToPKR(costOrig + svcOrig, currency) / payingPax : 0;
     perAdultPKR = perPersonPKR;
     perChildPKR = 0;
-    perInfantPKR = perPersonPKR;
+    perInfantPKR = 0;
   }
 
   return { mode, currency, costOrig, svcOrig, totalOrig: costOrig + svcOrig, perAdultPKR, perChildPKR, perInfantPKR };
@@ -4475,67 +4478,7 @@ function removeAddon(id){
 }
 </script>
 
-<!-- Quotation Status Section -->
-<div class="section" id="statusSection" style="display:none;">
-  <h3>Update Quotation Status</h3>
-  <div class="grid">
-    <div>
-      <label for="quotationStatus">Current Status</label>
-      <select id="quotationStatus">
-        <option value="pending">Pending</option>
-        <option value="followup">Follow-up Required</option>
-        <option value="cancelled">Cancelled</option>
-      </select>
-      <div id="quotationStatusLabel" style="display:none;margin-top:10px;font-weight:700;color:#0b76d1;"></div>
-    </div>
-  </div>
-  <div class="actions" style="margin-top:10px">
-    <button id="btnUpdateStatus" type="button">Update Status</button>
-    <button id="btnReopenPending" type="button" class="blue-btn" style="display:none;">↩ Reopen as Pending</button>
-    <button id="btnApproveCustomer" type="button" class="blue-btn" style="display:none;">✅ Approve Customer</button>
-    <button id="btnSelfBook" type="button" class="green-btn" style="display:none;">✅ Accept & Book</button>
-    <button id="btnCreateVoucher" type="button" class="green-btn" style="display:none;">🎫 Create Voucher</button>
-    <button id="btnEditVoucher" type="button" class="green-btn" style="display:none;">✏️ Edit Voucher</button>
-  </div>
 
-  <div id="agentApprovalModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);align-items:center;justify-content:center;z-index:9999;">
-    <div style="background:#fff;border-radius:14px;padding:22px;max-width:560px;width:100%;box-shadow:0 18px 40px rgba(0,0,0,0.18);">
-      <h2 style="margin-top:0;color:#0b76d1;">Agent Terms Confirmation</h2>
-      <p style="margin:0 0 16px;color:#333;">Please review and accept the terms before completing this action.</p>
-      <div id="agentApprovalSummary" style="margin-bottom:14px;padding:12px;border:1px solid #d9e6f3;border-radius:10px;background:#f7fbff;color:#111;font-size:14px;line-height:1.5;"></div>
-      <textarea id="agentApprovalTerms" readonly style="width:100%;min-height:180px;padding:12px;border:1px solid #ccc;border-radius:10px;background:#f8f9fb;margin-bottom:14px;">By accepting this quotation on behalf of the customer, I confirm that:
-
-- I have shared the full quotation details with the customer
-- I have explained all inclusions and exclusions
-- I have confirmed the total amount, travel dates, and number of passengers with the customer
-- The customer has verbally or via message agreed to proceed
-
-Important:
-I understand that this does not confirm booking. Booking will only be confirmed after availability is verified and full payment is received.
-
-Declaration:
-This action will be treated as my confirmation that the customer has been properly informed and has agreed to proceed with Flight Connection Travel & Tours.</textarea>
-      <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:18px;">
-        <input id="agentAcceptCheck" type="checkbox" style="width:18px;height:18px;margin-top:4px;" />
-        <label for="agentAcceptCheck" style="font-size:14px;color:#333;line-height:1.4;">I have read and accept the terms and conditions.</label>
-      </div>
-      <div style="display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;">
-        <button id="btnCancelAgentApprove" type="button" style="border:1px solid #c8d4e3;background:#f3f6fb;color:#111;border-radius:8px;padding:10px 16px;">Cancel</button>
-        <button id="btnSubmitAgentApprove" type="button" style="background:#0b76d1;color:#fff;border:none;border-radius:8px;padding:10px 16px;">Confirm and Book</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- PACKAGE CALCULATION -->
-<div class="section" id="calcSectionWrapper">
-  <div class="actions">
-    <button type="button" id="btnCalculate" class="green-btn">💰 Calculate Package</button>
-    <button type="button" id="btnRecalculate" class="blue-btn" style="display:none;">🔁 Recalculate Package</button>
-    <button type="button" id="btnGenerateQuotation" class="blue-btn" style="display:none;">📄 Generate Quotation</button>
-    <button type="button" id="btnExportExcel" class="green-btn" style="display:none;">📊 Export Cost Sheet</button>
-  </div>
-</div>
 
 
 <!-- Hotel Price Mode Toggle -->
@@ -4550,6 +4493,38 @@ This action will be treated as my confirmation that the customer has been proper
       <input type="radio" name="hotelPriceMode" id="hotelPriceModeAverage" value="average">
       <span>Average Per Person</span>
     </label>
+  </div>
+</div>
+
+<div class="section" id="agentExtraSvc" style="margin-top: 20px; border: 1px dashed #ccc; padding: 15px; border-radius: 8px;">
+  <h4>Agent Service Charge Options (Optional)</h4>
+  <p class="small" style="color:#666; margin-top:-10px;">Choose one option for adding service fee to the final selling price.</p>
+  
+  <div style="margin-bottom: 15px; display:flex; flex-direction:column; align-items:flex-start;">
+    <label style="display: flex; justify-content:flex-start; align-items: center; gap: 8px; width:100%; margin-bottom: 10px;">
+      <input type="radio" name="svcOption" value="perPerson" onchange="toggleServiceOption('perPerson')" style="margin-right: 8px;">
+      <span>Add Service Fee Per Person (PKR)</span>
+    </label>
+    <label style="display: flex; justify-content:flex-start; align-items: center; gap: 8px; width:100%;">
+      <input type="radio" name="svcOption" value="none" checked onchange="toggleServiceOption('none')" style="margin-right: 8px;">
+      <span>No Service Charge</span>
+    </label>
+  </div>
+  
+  <!-- Per Person Service Option -->
+  <div id="perPersonSvcOption" class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 10px; display: none;">
+    <div id="svcAdultWrap">
+      <label>Service / Adult (PKR)</label>
+      <input id="svcPerAdult" type="number" value="0" min="0" oninput="performCalculation()">
+    </div>
+    <div id="svcChildWrap">
+      <label>Service / Child (PKR)</label>
+      <input id="svcPerChild" type="number" value="0" min="0" oninput="performCalculation()">
+    </div>
+    <div id="svcInfantWrap">
+      <label>Service / Infant (PKR)</label>
+      <input id="svcPerInfant" type="number" value="0" min="0" oninput="performCalculation()">
+    </div>
   </div>
 </div>
 
@@ -4591,40 +4566,69 @@ This action will be treated as my confirmation that the customer has been proper
       <tfoot id="calcSummaryFooter" style="font-weight:bold;background:#f5f5f5;"></tfoot>
     </table>
   </div>
-
-  <div class="section" id="agentExtraSvc" style="margin-top: 20px; border: 1px dashed #ccc; padding: 15px; border-radius: 8px;">
-    <h4>Agent Service Charge Options (Optional)</h4>
-    <p class="small" style="color:#666; margin-top:-10px;">Choose one option for adding service fee to the final selling price.</p>
-    
-    <div style="margin-bottom: 15px; display:flex; flex-direction:column; align-items:flex-start;">
-      <label style="display: flex; justify-content:flex-start; align-items: center; gap: 8px; width:100%; margin-bottom: 10px;">
-        <input type="radio" name="svcOption" value="perPerson" onchange="toggleServiceOption('perPerson')" style="margin-right: 8px;">
-        <span>Add Service Fee Per Person (PKR)</span>
-      </label>
-      <label style="display: flex; justify-content:flex-start; align-items: center; gap: 8px; width:100%;">
-        <input type="radio" name="svcOption" value="none" checked onchange="toggleServiceOption('none')" style="margin-right: 8px;">
-        <span>No Service Charge</span>
-      </label>
-    </div>
-    
-    <!-- Per Person Service Option -->
-    <div id="perPersonSvcOption" class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 10px; display: none;">
-      <div id="svcAdultWrap">
-        <label>Service / Adult (PKR)</label>
-        <input id="svcPerAdult" type="number" value="0" min="0" oninput="performCalculation()">
-      </div>
-      <div id="svcChildWrap">
-        <label>Service / Child (PKR)</label>
-        <input id="svcPerChild" type="number" value="0" min="0" oninput="performCalculation()">
-      </div>
-      <div id="svcInfantWrap">
-        <label>Service / Infant (PKR)</label>
-        <input id="svcPerInfant" type="number" value="0" min="0" oninput="performCalculation()">
-      </div>
-    </div>
-  </div>
   
   <div id="calcTotals" style="margin-top:14px;font-weight:bold;"></div>
+</div>
+
+<div class="section" id="bottomActionSection" style="margin-top:20px;">
+  <div id="statusSection" style="display:none; margin-top:0;">
+    <h3 style="margin-top:0;">Update Quotation Status</h3>
+    <div class="grid">
+      <div>
+        <label for="quotationStatus">Current Status</label>
+        <select id="quotationStatus">
+          <option value="pending">Pending</option>
+          <option value="followup">Follow-up Required</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+        <div id="quotationStatusLabel" style="display:none;margin-top:10px;font-weight:700;color:#0b76d1;"></div>
+      </div>
+    </div>
+    <div class="actions" style="margin-top:10px;">
+      <button id="btnUpdateStatus" type="button">Update Status</button>
+      <button id="btnReopenPending" type="button" class="blue-btn" style="display:none;">↩ Reopen as Pending</button>
+      <button id="btnApproveCustomer" type="button" class="blue-btn" style="display:none;">✅ Approve Customer</button>
+      <button id="btnSelfBook" type="button" class="green-btn" style="display:none;">✅ Accept & Book</button>
+      <button id="btnCreateVoucher" type="button" class="green-btn" style="display:none;">🎫 Create Voucher</button>
+      <button id="btnEditVoucher" type="button" class="green-btn" style="display:none;">✏️ Edit Voucher</button>
+    </div>
+  </div>
+
+  <div class="actions" style="margin-top:12px;">
+    <button type="button" id="btnCalculate" class="green-btn">💰 Calculate Package</button>
+    <button type="button" id="btnRecalculate" class="blue-btn" style="display:none;">🔁 Recalculate Package</button>
+    <button type="button" id="btnGenerateQuotation" class="blue-btn" style="display:none;">📄 Generate Quotation</button>
+    <button type="button" id="btnExportExcel" class="green-btn" style="display:none;">📊 Export Cost Sheet</button>
+  </div>
+</div>
+
+<div id="agentApprovalModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);align-items:center;justify-content:center;z-index:9999;">
+  <div style="background:#fff;border-radius:14px;padding:22px;max-width:560px;width:100%;box-shadow:0 18px 40px rgba(0,0,0,0.18);">
+    <h2 style="margin-top:0;color:#0b76d1;">Agent Terms Confirmation</h2>
+    <p style="margin:0 0 16px;color:#333;">Please review the quotation terms and confirm that you have read and accept them before booking.</p>
+    <div id="agentApprovalSummary" style="margin-bottom:14px;padding:12px;border:1px solid #d9e6f3;border-radius:10px;background:#f7fbff;color:#111;font-size:14px;line-height:1.5;"></div>
+    <textarea id="agentApprovalTerms" readonly style="width:100%;min-height:160px;padding:12px;border:1px solid #ccc;border-radius:10px;background:#f8f9fb;margin-bottom:14px;">By accepting this quotation on behalf of the customer, I confirm that:
+
+- I have shared the full quotation details with the customer
+- I have explained all inclusions and exclusions
+- I have confirmed the total amount, travel dates, and number of passengers with the customer
+- The customer has verbally or via message agreed to proceed
+
+Important:
+I understand that this does not confirm booking. Booking will only be confirmed after availability is verified and full payment is received.
+
+Declaration:
+This action will be treated as my confirmation that the customer has been properly informed and has agreed to proceed with Flight Connection Travel & Tours.</textarea>
+    <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:18px;">
+      <input id="agentAcceptCheck" type="checkbox" style="width:18px;height:18px;margin-top:4px;" />
+      <label for="agentAcceptCheck" style="font-size:14px;color:#333;line-height:1.4;">I have read and accept the terms and conditions.</label>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;">
+      <button id="btnCancelAgentApprove" type="button" style="border:1px solid #c8d4e3;background:#f3f6fb;color:#111;border-radius:8px;padding:10px 16px;">Cancel</button>
+      <button id="btnSubmitAgentApprove" type="button" style="background:#0b76d1;color:#fff;border:none;border-radius:8px;padding:10px 16px;">Confirm and Book</button>
+    </div>
+  </div>
+</div>
 
 <script>
 const btnCalculate = document.getElementById("btnCalculate");
@@ -4897,6 +4901,7 @@ function isCalculationTrackedField(target) {
   if (!["INPUT", "SELECT", "TEXTAREA"].includes(tag)) return false;
   if (target.closest('#statusSection')) return false;
   if (target.closest('#calcSummarySection')) return false;
+  if (target.closest('#agentApprovalModal')) return false;
   if (target.closest('[data-supplier-key]')) return false;
   return true;
 }
@@ -6166,7 +6171,7 @@ async function updateQuotationStatus(quotationId, newStatus) {
       quotation.status = newStatus;
       quotation.updatedAt = new Date().toISOString();
       
-      if (newStatus !== 'booked' && quotation.shareLinkId) {
+      if (newStatus !== 'booked') {
         const editAt = new Date().toISOString();
         if (quotation.customerAcceptance) {
           quotation.lastCustomerAcceptance = quotation.customerAcceptance;
@@ -6175,9 +6180,11 @@ async function updateQuotationStatus(quotationId, newStatus) {
         quotation.customerNeedsReaccept = true;
         quotation.agentApproval = null;
         quotation.customerAcceptance = null;
-        quotation.shareVersion = (quotation.shareVersion || 0) + 1;
-        quotation.shareUpdatedAt = editAt;
-        quotation.sharePublicUrl = getQuotationPublicUrl(quotation.id, quotation.shareLinkId);
+        if (quotation.shareLinkId) {
+          quotation.shareVersion = (quotation.shareVersion || 0) + 1;
+          quotation.shareUpdatedAt = editAt;
+          quotation.sharePublicUrl = getQuotationPublicUrl(quotation.id, quotation.shareLinkId);
+        }
       }
       
       // Save back to localStorage and Firebase
@@ -6734,7 +6741,11 @@ async function printQuotation() {
     
     perAdultLines_q = paxPerRoomType;
   } else {
-    perAdultLines_q = [`<li>Per Adult: <strong>PKR ${fmt(perAdultCost)}</strong></li>`];
+    perAdultLines_q = [];
+    if (numAdult > 0) perAdultLines_q.push(`<li>Adult x${numAdult}: <strong>PKR ${fmt(perAdultCost)}</strong></li>`);
+    if (numChildBed > 0) perAdultLines_q.push(`<li>Child (bed) x${numChildBed}: <strong>PKR ${fmt(perChildBedCost)}</strong></li>`);
+    if (numChildNoBed > 0) perAdultLines_q.push(`<li>Child (no bed) x${numChildNoBed}: <strong>PKR ${fmt(perChildNoBedCost)}</strong></li>`);
+    if (numInfant > 0) perAdultLines_q.push(`<li>Infant x${numInfant}: <strong>PKR ${fmt(perInfantCost)}</strong></li>`);
   }
 
   // Build the HTML for the quotation preview
@@ -6772,9 +6783,6 @@ async function printQuotation() {
       <h3 style="margin-top: 0; color: #0b76d1; border-bottom: 2px solid #0b76d1; padding-bottom: 3px; margin-bottom: 6px;">Package Price</h3>
       <ul style="list-style: disc; padding-left: 18px; margin: 0; line-height: 1.8;">
         ${perAdultLines_q.join('')}
-        ${hotelPriceMode !== 'actual' ? `${numChildBed > 0 ? `<li>Per Child (with bed): <strong>PKR ${fmt(perChildBedCost)}</strong></li>` : ''}
-        ${numChildNoBed > 0 ? `<li>Per Child (without bed): <strong>PKR ${fmt(perChildNoBedCost)}</strong></li>` : ''}
-        ${numInfant > 0 ? `<li>Per Infant: <strong>PKR ${fmt(perInfantCost)}</strong></li>` : ''}` : ''}
       </ul>
       <div style="margin-top: 5px; padding-top: 5px; border-top: 1px solid #ddd; font-weight: bold; color: #0b76d1;">Total Package Amount: PKR ${fmt(totalPackageAmount)}</div>
     </div>
@@ -6951,15 +6959,21 @@ async function printQuotation() {
     const pricing = getTransferPricing(idx, { adults: numAdult, childBed: numChildBed, childNoBed: numChildNoBed, infants: numInfant });
     const totalTransfer = convertToPKR(pricing.costOrig + pricing.svcOrig, pricing.currency);
     const costPerAdult = pricing.perAdultPKR;
-    const costPerChildBed = pricing.perChildPKR;
-    const costPerChildNoBed = pricing.perChildPKR;
+    const costPerChildBed = pricing.type === 'sharing' ? pricing.perChildPKR : 0;
+    const costPerChildNoBed = pricing.type === 'sharing' ? pricing.perChildPKR : 0;
     const costPerInfant = pricing.perInfantPKR;
     
     addBreakdownRow(
       'Transfer',
       `${sanitizeInput(from)} -> ${sanitizeInput(to)} | ${direction}`,
       { adult: costPerAdult, childBed: costPerChildBed, childNoBed: costPerChildNoBed, infant: costPerInfant },
-      totalTransfer
+      totalTransfer,
+      {
+        adult: numAdult,
+        childBed: pricing.type === 'sharing' ? numChildBed : 0,
+        childNoBed: pricing.type === 'sharing' ? numChildNoBed : 0,
+        infant: numInfant
+      }
     );
   });
   
@@ -7000,8 +7014,8 @@ addBreakdownRow(
     const tourVehicle = document.getElementById(`tourVehicle_${idx}`)?.value || "Not specified";
     const pricing = getTourPricing(idx, false, { adults: numAdult, childBed: numChildBed, childNoBed: numChildNoBed, infants: numInfant });
     const perAdultCost = pricing.perAdultPKR;
-    const perChildBedCost = pricing.perChildPKR;
-    const perChildNoBedCost = pricing.perChildPKR;
+    const perChildBedCost = pricing.mode === 'sharing' ? pricing.perChildPKR : 0;
+    const perChildNoBedCost = pricing.mode === 'sharing' ? pricing.perChildPKR : 0;
     const perInfantCost = pricing.perInfantPKR;
     const totalTour = convertToPKR(pricing.costOrig + pricing.svcOrig, pricing.currency);
     
@@ -7009,7 +7023,13 @@ addBreakdownRow(
       'Tour',
       `${sanitizeInput(tourName)}`,
       { adult: perAdultCost, childBed: perChildBedCost, childNoBed: perChildNoBedCost, infant: perInfantCost },
-      totalTour
+      totalTour,
+      {
+        adult: numAdult,
+        childBed: pricing.mode === 'sharing' ? numChildBed : 0,
+        childNoBed: pricing.mode === 'sharing' ? numChildNoBed : 0,
+        infant: numInfant
+      }
     );
   });
   
@@ -8863,6 +8883,18 @@ function loadQuotation(quotationId) {
     updateServiceChargeVisibility();
     updateHotelPriceModeVisibility();
     applyCalculationSnapshot(quotation.calculationSnapshot);
+
+    const flightLoadDelay = ((quotation.flights?.length || 0) * 200) + 200;
+    const directAddonDelay = ((quotation.addons?.directFlights?.length || 0) * 300) + 250;
+    const mealAddonDelay = ((quotation.addons?.meals?.length || 0) * 300) + 250;
+    const tourAddonDelay = ((quotation.addons?.tours?.length || 0) * 300) + 250;
+    const loadSettleDelay = Math.max(500, flightLoadDelay, directAddonDelay, mealAddonDelay, tourAddonDelay);
+
+    if (loadQuotation._recalcTimer) clearTimeout(loadQuotation._recalcTimer);
+    loadQuotation._recalcTimer = setTimeout(() => {
+      performCalculation();
+    }, loadSettleDelay);
+
     accountsSupplierMap = quotation?.accountsSuppliers && typeof quotation.accountsSuppliers === 'object'
       ? { ...quotation.accountsSuppliers }
       : {};

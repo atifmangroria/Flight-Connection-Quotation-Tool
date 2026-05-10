@@ -3452,7 +3452,7 @@ function getTransferPricingSAR(index, paxDataOverride = null, roeOverride = null
   } else {
     costSAR = parseFloat(document.getElementById(`tCostSAR_${index}`)?.value || 0);
     svcSAR = parseFloat(document.getElementById(`tSvcSAR_${index}`)?.value || 0);
-    const payingPax = (p.adults || 0) + childCount;
+    const payingPax = p.adults || 0;
     const perPerson = payingPax > 0 ? ((costSAR + svcSAR) * roeValue) / payingPax : 0;
     perAdultPKR = perPerson;
     perChildPKR = 0;
@@ -4016,7 +4016,7 @@ function getZiyarahPricing(index, paxData, roe) {
 
   const costSAR = parseFloat(document.getElementById(`zCostSAR_${index}`)?.value || 0);
   const svcSAR = parseFloat(document.getElementById(`zSvcSAR_${index}`)?.value || 0);
-  const payingPax = pax.adults + pax.childBed + pax.childNoBed;
+  const payingPax = pax.adults;
   const totalPKR = (costSAR + svcSAR) * roe;
   const perPaying = payingPax > 0 ? (totalPKR / payingPax) : 0;
 
@@ -4138,68 +4138,34 @@ function showToast(message, type = "info") {
 }
 </script>
 
-<!-- Quotation Status Section -->
-<div class="section" id="statusSection" style="display:none;">
-  <h3>Update Quotation Status</h3>
-  <div class="grid">
-    <div>
-      <label for="quotationStatus">Current Status</label>
-      <select id="quotationStatus">
-        <option value="pending">Pending</option>
-        <option value="followup">Follow-up Required</option>
-        <option value="cancelled">Cancelled</option>
-      </select>
-      <div id="quotationStatusLabel" style="display:none;margin-top:10px;font-weight:700;color:#0b76d1;"></div>
+<div class="section" id="agentExtraSvc" style="margin-top: 20px; border: 1px dashed #ccc; padding: 15px; border-radius: 8px;">
+  <h4>Agent Service Charge Options (Optional)</h4>
+  <p class="small" style="color:#666; margin-top:-10px;">Choose one option for adding service fee to the final selling price.</p>
+
+  <div style="margin-bottom: 15px; display:flex; flex-direction:column; align-items:flex-start;">
+    <label style="display: flex; justify-content:flex-start; align-items: center; gap: 8px; width:100%; margin-bottom: 10px;">
+      <input type="radio" name="svcOption" value="perPerson" onchange="toggleServiceOption('perPerson')" style="margin-right: 8px;">
+      <span>Add Service Fee Per Person (PKR)</span>
+    </label>
+    <label style="display: flex; justify-content:flex-start; align-items: center; gap: 8px; width:100%;">
+      <input type="radio" name="svcOption" value="none" checked onchange="toggleServiceOption('none')" style="margin-right: 8px;">
+      <span>No Service Charge</span>
+    </label>
+  </div>
+
+  <div id="perPersonSvcOption" class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 10px; display: none;">
+    <div id="svcAdultWrap">
+      <label>Service / Adult (PKR)</label>
+      <input id="svcPerAdult" type="number" value="0" min="0" oninput="performCalculation()">
     </div>
-  </div>
-  <div class="actions" style="margin-top:10px">
-    <button id="btnUpdateStatus" type="button">Update Status</button>
-    <button id="btnReopenPending" type="button" class="blue-btn" style="display:none;">↩ Reopen as Pending</button>
-    <button id="btnApproveCustomer" type="button" class="blue-btn" style="display:none;">✅ Approve Customer</button>
-    <button id="btnSelfBook" type="button" class="green-btn" style="display:none;">✅ Accept & Book</button>
-    <button id="btnCreateVoucher" type="button" class="green-btn" style="display:none;">🎫 Create Voucher</button>
-    <button id="btnEditVoucher" type="button" class="green-btn" style="display:none;">✏️ Edit Voucher</button>
-  </div>
-
-  <div id="agentApprovalModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);align-items:center;justify-content:center;z-index:9999;">
-    <div style="background:#fff;border-radius:14px;padding:22px;max-width:560px;width:100%;box-shadow:0 18px 40px rgba(0,0,0,0.18);">
-      <h2 style="margin-top:0;color:#0b76d1;">Agent Terms Confirmation</h2>
-      <p style="margin:0 0 16px;color:#333;">Please review the quotation terms and confirm that you have read and accept them before booking.</p>
-      <div id="agentApprovalSummary" style="margin-bottom:14px;padding:12px;border:1px solid #d9e6f3;border-radius:10px;background:#f7fbff;color:#111;font-size:14px;line-height:1.5;"></div>
-      <textarea id="agentApprovalTerms" readonly style="width:100%;min-height:160px;padding:12px;border:1px solid #ccc;border-radius:10px;background:#f8f9fb;margin-bottom:14px;">By accepting this quotation on behalf of the customer, I confirm that:
-
-- I have shared the full quotation details with the customer
-- I have explained all inclusions and exclusions
-- I have confirmed the total amount, travel dates, and number of passengers with the customer
-- The customer has verbally or via message agreed to proceed
-
-Important:
-I understand that this does not confirm booking. Booking will only be confirmed after availability is verified and full payment is received.
-
-Declaration:
-This action will be treated as my confirmation that the customer has been properly informed and has agreed to proceed with Flight Connection Travel & Tours.</textarea>
-      <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:18px;">
-        <input id="agentAcceptCheck" type="checkbox" style="width:18px;height:18px;margin-top:4px;" />
-        <label for="agentAcceptCheck" style="font-size:14px;color:#333;line-height:1.4;">I have read and accept the terms and conditions.</label>
-      </div>
-      <div style="display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;">
-        <button id="btnCancelAgentApprove" type="button" style="border:1px solid #c8d4e3;background:#f3f6fb;color:#111;border-radius:8px;padding:10px 16px;">Cancel</button>
-        <button id="btnSubmitAgentApprove" type="button" style="background:#0b76d1;color:#fff;border:none;border-radius:8px;padding:10px 16px;">Confirm and Book</button>
-      </div>
+    <div id="svcChildWrap">
+      <label>Service / Child (PKR)</label>
+      <input id="svcPerChild" type="number" value="0" min="0" oninput="performCalculation()">
     </div>
-  </div>
-</div>
-
-<!-- ===============================
-     Package Calculation Section
-     =============================== -->
-
-<div class="section" id="calcSectionWrapper">
-  <div class="actions">
-    <button type="button" id="btnCalculate" class="green-btn">💰 Calculate Package</button>
-    <button type="button" id="btnRecalculate" class="blue-btn" style="display:none;">🔁 Recalculate Package</button>
-    <button type="button" id="btnGenerateQuotation" class="blue-btn" style="display:none;">📄 Generate Quotation</button>
-    <button type="button" id="btnExportExcel" class="green-btn" style="display:none;">📊 Export Cost Sheet</button>
+    <div id="svcInfantWrap">
+      <label>Service / Infant (PKR)</label>
+      <input id="svcPerInfant" type="number" value="0" min="0" oninput="performCalculation()">
+    </div>
   </div>
 </div>
 
@@ -4235,39 +4201,68 @@ This action will be treated as my confirmation that the customer has been proper
     </table>
   </div>
 
-  <div class="section" id="agentExtraSvc" style="margin-top: 20px; border: 1px dashed #ccc; padding: 15px; border-radius: 8px;">
-  <h4>Agent Service Charge Options (Optional)</h4>
-  <p class="small" style="color:#666; margin-top:-10px;">Choose one option for adding service fee to the final selling price.</p>
-  
-  <div style="margin-bottom: 15px; display:flex; flex-direction:column; align-items:flex-start;">
-    <label style="display: flex; justify-content:flex-start; align-items: center; gap: 8px; width:100%; margin-bottom: 10px;">
-      <input type="radio" name="svcOption" value="perPerson" onchange="toggleServiceOption('perPerson')" style="margin-right: 8px;">
-      <span>Add Service Fee Per Person (PKR)</span>
-    </label>
-    <label style="display: flex; justify-content:flex-start; align-items: center; gap: 8px; width:100%;">
-      <input type="radio" name="svcOption" value="none" checked onchange="toggleServiceOption('none')" style="margin-right: 8px;">
-      <span>No Service Charge</span>
-    </label>
+  <div id="calcTotals" style="margin-top:14px;font-weight:bold;"></div>
+</div>
+
+<div class="section" id="bottomActionSection" style="margin-top:20px; display:flex; flex-direction:column; gap:18px;">
+  <div id="statusSection" style="display:none; margin-top:0;">
+    <h3 style="margin-top:0;">Update Quotation Status</h3>
+    <div class="grid">
+      <div>
+        <label for="quotationStatus">Current Status</label>
+        <select id="quotationStatus">
+          <option value="pending">Pending</option>
+          <option value="followup">Follow-up Required</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+        <div id="quotationStatusLabel" style="display:none;margin-top:10px;font-weight:700;color:#0b76d1;"></div>
+      </div>
+    </div>
+    <div class="actions" style="margin-top:10px; flex-wrap:wrap; justify-content:flex-start;">
+      <button id="btnUpdateStatus" type="button">Update Status</button>
+      <button id="btnReopenPending" type="button" class="blue-btn" style="display:none;">↩ Reopen as Pending</button>
+      <button id="btnApproveCustomer" type="button" class="blue-btn" style="display:none;">✅ Approve Customer</button>
+      <button id="btnSelfBook" type="button" class="green-btn" style="display:none;">✅ Accept & Book</button>
+      <button id="btnCreateVoucher" type="button" class="green-btn" style="display:none;">🎫 Create Voucher</button>
+      <button id="btnEditVoucher" type="button" class="green-btn" style="display:none;">✏️ Edit Voucher</button>
+    </div>
+
+    <div id="agentApprovalModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);align-items:center;justify-content:center;z-index:9999;">
+      <div style="background:#fff;border-radius:14px;padding:22px;max-width:560px;width:100%;box-shadow:0 18px 40px rgba(0,0,0,0.18);">
+        <h2 style="margin-top:0;color:#0b76d1;">Agent Terms Confirmation</h2>
+        <p style="margin:0 0 16px;color:#333;">Please review the quotation terms and confirm that you have read and accept them before booking.</p>
+        <div id="agentApprovalSummary" style="margin-bottom:14px;padding:12px;border:1px solid #d9e6f3;border-radius:10px;background:#f7fbff;color:#111;font-size:14px;line-height:1.5;"></div>
+        <textarea id="agentApprovalTerms" readonly style="width:100%;min-height:160px;padding:12px;border:1px solid #ccc;border-radius:10px;background:#f8f9fb;margin-bottom:14px;">By accepting this quotation on behalf of the customer, I confirm that:
+
+- I have shared the full quotation details with the customer
+- I have explained all inclusions and exclusions
+- I have confirmed the total amount, travel dates, and number of passengers with the customer
+- The customer has verbally or via message agreed to proceed
+
+Important:
+I understand that this does not confirm booking. Booking will only be confirmed after availability is verified and full payment is received.
+
+Declaration:
+This action will be treated as my confirmation that the customer has been properly informed and has agreed to proceed with Flight Connection Travel & Tours.</textarea>
+        <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:18px;">
+          <input id="agentAcceptCheck" type="checkbox" style="width:18px;height:18px;margin-top:4px;" />
+          <label for="agentAcceptCheck" style="font-size:14px;color:#333;line-height:1.4;">I have read and accept the terms and conditions.</label>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;">
+          <button id="btnCancelAgentApprove" type="button" style="border:1px solid #c8d4e3;background:#f3f6fb;color:#111;border-radius:8px;padding:10px 16px;">Cancel</button>
+          <button id="btnSubmitAgentApprove" type="button" style="background:#0b76d1;color:#fff;border:none;border-radius:8px;padding:10px 16px;">Confirm and Book</button>
+        </div>
+      </div>
+    </div>
   </div>
-  
-  <!-- Per Person Service Option -->
-  <div id="perPersonSvcOption" class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 10px; display: none;">
-    <div id="svcAdultWrap">
-      <label>Service / Adult (PKR)</label>
-      <input id="svcPerAdult" type="number" value="0" min="0" oninput="performCalculation()">
-    </div>
-    <div id="svcChildWrap">
-      <label>Service / Child (PKR)</label>
-      <input id="svcPerChild" type="number" value="0" min="0" oninput="performCalculation()">
-    </div>
-    <div id="svcInfantWrap">
-      <label>Service / Infant (PKR)</label>
-      <input id="svcPerInfant" type="number" value="0" min="0" oninput="performCalculation()">
-    </div>
+
+  <div class="actions" style="margin-top:12px; justify-content:flex-start; width:100%;">
+    <button type="button" id="btnCalculate" class="green-btn">💰 Calculate Package</button>
+    <button type="button" id="btnRecalculate" class="blue-btn" style="display:none;">🔁 Recalculate Package</button>
+    <button type="button" id="btnGenerateQuotation" class="blue-btn" style="display:none;">📄 Generate Quotation</button>
+    <button type="button" id="btnExportExcel" class="green-btn" style="display:none;">📊 Export Cost Sheet</button>
   </div>
 </div>
-  
-  <div id="calcTotals" style="margin-top:14px;font-weight:bold;"></div>
 
 <!-- Quotation Modal -->
 <div id="quotationModal" class="modal-overlay no-print">
@@ -5832,6 +5827,22 @@ roeInput.addEventListener("input", performCalculation);
   });
 });
 
+['svcPerAdult', 'svcPerChild', 'svcPerInfant'].forEach((id) => {
+  const input = document.getElementById(id);
+  if (!input) return;
+  input.addEventListener('input', () => {
+    if ((document.querySelector('input[name="svcOption"]:checked')?.value || 'none') === 'perPerson') {
+      performCalculation();
+    }
+  });
+  input.addEventListener('change', () => {
+    markCalculationDirty();
+    if ((document.querySelector('input[name="svcOption"]:checked')?.value || 'none') === 'perPerson') {
+      performCalculation();
+    }
+  });
+});
+
 updateServiceChargeVisibility();
 refreshCalculationActionButtons();
 
@@ -6558,15 +6569,21 @@ console.log("Total package amount:", totalPackageAmount);
     const pricing = getTransferPricingSAR(idx, clientData, roe);
     const totalTransfer = (pricing.costSAR + pricing.svcSAR) * roe;
     const costPerAdult = clientData.adults > 0 ? pricing.perAdultPKR : 0;
-    const costPerChildBed = clientData.childBed > 0 ? pricing.perChildPKR : 0;
-    const costPerChildNoBed = clientData.childNoBed > 0 ? pricing.perChildPKR : 0;
+    const costPerChildBed = pricing.type === 'sharing' && clientData.childBed > 0 ? pricing.perChildPKR : 0;
+    const costPerChildNoBed = pricing.type === 'sharing' && clientData.childNoBed > 0 ? pricing.perChildPKR : 0;
     const costPerInfant = clientData.infants > 0 ? pricing.perInfantPKR : 0;
     
     addBreakdownRow(
       'Transfer',
       `${sanitizeInput(from)} -> ${sanitizeInput(to)} | ${sanitizeInput(vehicle)} (${sanitizeInput(type)}) | ${pricing.type === 'sharing' ? 'Sharing' : 'Private'}`,
       { adult: costPerAdult, childBed: costPerChildBed, childNoBed: costPerChildNoBed, infant: costPerInfant },
-      totalTransfer
+      totalTransfer,
+      {
+        adult: clientData.adults,
+        childBed: pricing.type === 'sharing' ? clientData.childBed : 0,
+        childNoBed: pricing.type === 'sharing' ? clientData.childNoBed : 0,
+        infant: clientData.infants
+      }
     );
   });
   
@@ -6718,14 +6735,15 @@ if (hasAddons) {
     const type = selects[2]?.value || "Not specified";
     const pricing = getZiyarahPricing(idx, clientData, roe);
     const totalCost = (pricing.costSAR + pricing.svcSAR) * roe;
+    const isSharing = pricing.type === 'sharing';
 
     quotationHTML += `
       <tr>
         <td style="padding:6px;border:1px solid #dbe6f3;font-weight:600;">Ziyarah ${labelIdx}</td>
         <td style="padding:6px;border:1px solid #dbe6f3;">${sanitizeInput(city)} ${sanitizeInput(type)} ${sanitizeInput(vehicle)} (PKR)</td>
         ${buildAddonCell(pricing.perAdultPKR, clientData.adults)}
-        ${breakdownShowChildBed ? buildAddonCell(pricing.perChildPKR, clientData.childBed) : ''}
-        ${breakdownShowChildNoBed ? buildAddonCell(pricing.perChildPKR, clientData.childNoBed) : ''}
+        ${breakdownShowChildBed ? buildAddonCell(isSharing ? pricing.perChildPKR : 0, isSharing ? clientData.childBed : 0) : ''}
+        ${breakdownShowChildNoBed ? buildAddonCell(isSharing ? pricing.perChildPKR : 0, isSharing ? clientData.childNoBed : 0) : ''}
         ${breakdownShowInfant ? buildAddonCell(pricing.perInfantPKR, clientData.infants) : ''}
         <td style="padding:6px;border:1px solid #dbe6f3;text-align:right;font-weight:700;color:#0b76d1;">${fmt(totalCost)}</td>
       </tr>
@@ -8121,6 +8139,14 @@ async function loadQuotation(quotationId) {
       
       // Mark client data as saved
       isClientDataSaved = true;
+
+      // Re-apply agent service settings after pax fields are restored.
+      // toggleServiceOption() calls updateServiceChargeVisibility(), which can clear child service when child pax is 0.
+      // Restoring here ensures saved svcPerChild survives quotation load.
+      if (document.getElementById('svcPerAdult')) document.getElementById('svcPerAdult').value = parseFloat(pricing.svcPerAdult || 0);
+      if (document.getElementById('svcPerChild')) document.getElementById('svcPerChild').value = parseFloat(pricing.svcPerChild || 0);
+      if (document.getElementById('svcPerInfant')) document.getElementById('svcPerInfant').value = parseFloat(pricing.svcPerInfant || 0);
+      toggleServiceOption(svcOptionToSet);
       
       console.log("Client data loaded successfully");
     }
@@ -8529,6 +8555,18 @@ async function loadQuotation(quotationId) {
     // Keep values loaded but do not auto-open quotation preview/cost sheet on reload
     updateServiceChargeVisibility();
     applyCalculationSnapshot(quotation.calculationSnapshot);
+
+    const flightLoadDelay = ((quotation.flights?.length || 0) * 200) + 200;
+    const directAddonDelay = ((quotation.addons?.directFlights?.length || 0) * 300) + 250;
+    const mealAddonDelay = ((quotation.addons?.meals?.length || 0) * 300) + 250;
+    const ziyarahAddonDelay = ((quotation.addons?.ziyarah?.length || 0) * 300) + 250;
+    const loadSettleDelay = Math.max(500, flightLoadDelay, directAddonDelay, mealAddonDelay, ziyarahAddonDelay);
+
+    if (loadQuotation._recalcTimer) clearTimeout(loadQuotation._recalcTimer);
+    loadQuotation._recalcTimer = setTimeout(() => {
+      performCalculation();
+    }, loadSettleDelay);
+
     accountsSupplierMap = quotation?.accountsSuppliers && typeof quotation.accountsSuppliers === 'object'
       ? { ...quotation.accountsSuppliers }
       : {};

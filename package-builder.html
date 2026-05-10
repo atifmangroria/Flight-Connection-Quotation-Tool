@@ -862,26 +862,40 @@ function resetDynamicSections() {
 
 async function loadPackageForEditing(packageId, options = {}) {
   const readOnly = !!options.readOnly;
-  const data = await window.firebaseDB.getData('packages', packageId);
+  const isObjectPackage = packageId && typeof packageId === 'object';
+  const data = isObjectPackage ? packageId : await window.firebaseDB.getData('packages', packageId);
   if (!data) {
     showNotification(readOnly ? 'Package not found for viewing' : 'Package not found for editing', 'error');
     return;
   }
 
   if (!readOnly) {
-    editingPackageId = packageId;
+    if (options.duplicate) {
+      editingPackageId = null;
+    } else if (!isObjectPackage) {
+      editingPackageId = packageId;
+    }
   }
 
-  if (!data.packageCode && !readOnly) {
+  const submitBtn = document.querySelector('#packageForm button[type="submit"]');
+  if (submitBtn && !readOnly) {
+    submitBtn.textContent = options.duplicate ? '💾 Save Package' : '💾 Update Package';
+  }
+
+  if (options.duplicate) {
+    data.name = `${data.name || 'Package'} Copy`;
+    currentPackageCode = await getNextPackageCode();
+    data.packageCode = currentPackageCode;
+  } else if (!data.packageCode && !readOnly) {
     const assignedPackageCode = await getNextPackageCode();
     data.packageCode = assignedPackageCode;
     currentPackageCode = assignedPackageCode;
-    await window.firebaseDB.saveData('packages', packageId, { packageCode: assignedPackageCode });
+    if (!isObjectPackage) {
+      await window.firebaseDB.saveData('packages', packageId, { packageCode: assignedPackageCode });
+    }
   } else {
     currentPackageCode = data.packageCode || null;
   }
-  const submitBtn = document.querySelector('#packageForm button[type="submit"]');
-  if (submitBtn && !readOnly) submitBtn.textContent = '💾 Update Package';
 
   document.getElementById('packageName').value = data.name || '';
   document.getElementById('packageType').value = data.type || '';
@@ -1141,7 +1155,8 @@ function loadPackageList() {
           <td>${pkg.validFrom || 'N/A'}</td>
           <td>${pkg.validTo || 'N/A'}</td>
           <td>
-            <button type="button" class="btn btn-primary" style="padding:6px 10px; font-size:12px;" onclick="openSavedPackage('${pkg.id || pkg.packageCode}')">Open</button>
+            <button type="button" class="btn btn-primary" style="padding:6px 10px; font-size:12px; margin-right:4px;" onclick="openSavedPackage('${pkg.id || pkg.packageCode}')">Open</button>
+            <button type="button" class="btn btn-secondary" style="padding:6px 10px; font-size:12px;" onclick="duplicatePackage('${pkg.id || pkg.packageCode}')">Duplicate</button>
           </td>
         </tr>
       `;
@@ -1166,6 +1181,19 @@ function openSavedPackage(packageId) {
   const params = new URLSearchParams();
   params.set('edit', packageId);
   window.location.search = params.toString();
+}
+
+async function duplicatePackage(packageId) {
+  if (!checkAdminAccess()) return;
+  closePackageListModal();
+  const data = await window.firebaseDB.getData('packages', packageId);
+  if (!data) {
+    showNotification('Package not found for duplication.', 'error');
+    return;
+  }
+
+  await loadPackageForEditing(data, { duplicate: true });
+  showNotification('Package duplicated. Edit and save as needed.', 'success');
 }
 
 function setupPackageListModal() {
