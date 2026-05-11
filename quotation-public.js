@@ -448,8 +448,9 @@ function renderQuotation() {
   if (!quotationDoc) return;
   const q = quotationDoc;
   const isBooked = q.status === 'booked';
+  const isSuperseded = q.isCurrent === false || String(q.status || '').toLowerCase() === 'superseded';
   const customerAccepted = !!q.customerAcceptance;
-  btnAcceptQuotation.style.display = (!isBooked && !customerAccepted) ? 'inline-flex' : 'none';
+  btnAcceptQuotation.style.display = (!isSuperseded && !isBooked && !customerAccepted) ? 'inline-flex' : 'none';
   btnOpenTerms.style.display = q.terms ? 'inline-flex' : 'none';
 
   const termsText = q.terms || q.termsAndConditions || q.customTerms || q.termsText || 'Terms and conditions are not available for this quotation.';
@@ -484,7 +485,9 @@ function renderQuotation() {
 
   attachSnapshotItineraryToggle();
 
-  if (isBooked) {
+  if (isSuperseded) {
+    setMessage('This quotation has been revised. A newer version is available. Please contact your agent for the latest quotation.', 'warning');
+  } else if (isBooked) {
     setMessage('This quotation is already booked and cannot be accepted again.', 'success');
   } else if (q.customerNeedsReaccept) {
     setMessage(buildPublicReviewMessage(q), 'warning');
@@ -558,6 +561,13 @@ function closeAcceptModal() {
 }
 
 async function submitCustomerAcceptance() {
+  if (quotationDoc?.isCurrent === false || String(quotationDoc?.status || '').toLowerCase() === 'superseded') {
+    alert('This quotation has been revised. Please request the latest quotation before accepting.');
+    closeAcceptModal();
+    renderQuotation();
+    return;
+  }
+
   const name = customerNameEl.value.trim();
   const phone = customerPhoneEl.value.trim();
   const accepted = customerAcceptCheck.checked;

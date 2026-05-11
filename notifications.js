@@ -610,6 +610,11 @@ function getNotificationBase(q) {
   };
 }
 
+function isCurrentQuotationVersion(quotation) {
+  if (!quotation) return false;
+  return quotation.isCurrent !== false && String(quotation.status || '').toLowerCase() !== 'superseded';
+}
+
 async function computeNotifications(quotations) {
   const now = new Date();
   const notifications = [];
@@ -729,7 +734,7 @@ async function loadNotifications() {
       ...(snapshot.umrah || []).map(q => ({ ...q, type: 'umrah' })),
       ...(snapshot.international || []).map(q => ({ ...q, type: 'international' })),
       ...(snapshot.domestic || []).map(q => ({ ...q, type: 'domestic' }))
-    ];
+    ].filter(isCurrentQuotationVersion);
 
     const computed = await computeNotifications(allQuotations);
     currentNotifications = computed.notifications;

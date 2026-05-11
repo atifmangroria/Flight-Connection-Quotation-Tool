@@ -1677,6 +1677,11 @@ function getVoucherIdForQuotation(quotation) {
   return maps[quotation.id] || '';
 }
 
+function isCurrentQuotationVersion(quotation) {
+  if (!quotation) return false;
+  return quotation.isCurrent !== false && String(quotation.status || '').toLowerCase() !== 'superseded';
+}
+
 function getNotificationKey(item) {
   return `${item.quotationType}:${item.quotationId}:${item.type}:${item.title}`;
 }
@@ -1694,7 +1699,8 @@ async function loadDismissedNotificationKeys(ownerId) {
 }
 
 async function buildNotifications() {
-  const ownQuotations = [...allUmrahQuotations, ...allInternationalQuotations, ...allDomesticQuotations];
+  const ownQuotations = [...allUmrahQuotations, ...allInternationalQuotations, ...allDomesticQuotations]
+    .filter(isCurrentQuotationVersion);
   const now = new Date();
   const voucherMap = getVoucherIdMaps();
   const dismissKeys = await loadDismissedNotificationKeys(getOwnerId(checkAgentLogin()));
@@ -1939,21 +1945,21 @@ async function loadAllQuotations() {
   let updatedDomestic = false;
   
   allUmrahQuotations.forEach(q => {
-    if (new Date(q.expiresAt) < now && q.status !== 'booked' && q.status !== 'vouchered' && q.status !== 'cancelled') {
+    if (isCurrentQuotationVersion(q) && new Date(q.expiresAt) < now && q.status !== 'booked' && q.status !== 'vouchered' && q.status !== 'cancelled') {
       q.status = 'expired';
       updatedUmrah = true;
     }
   });
   
   allInternationalQuotations.forEach(q => {
-    if (new Date(q.expiresAt) < now && q.status !== 'booked' && q.status !== 'vouchered' && q.status !== 'cancelled') {
+    if (isCurrentQuotationVersion(q) && new Date(q.expiresAt) < now && q.status !== 'booked' && q.status !== 'vouchered' && q.status !== 'cancelled') {
       q.status = 'expired';
       updatedInternational = true;
     }
   });
 
   allDomesticQuotations.forEach(q => {
-    if (new Date(q.expiresAt) < now && q.status !== 'booked' && q.status !== 'vouchered' && q.status !== 'cancelled') {
+    if (isCurrentQuotationVersion(q) && new Date(q.expiresAt) < now && q.status !== 'booked' && q.status !== 'vouchered' && q.status !== 'cancelled') {
       q.status = 'expired';
       updatedDomestic = true;
     }
@@ -2020,6 +2026,7 @@ function applyFilter() {
     // Agents + admin active/expired views: only own quotations
     baseQuotations = [...allUmrahQuotations, ...allInternationalQuotations, ...allDomesticQuotations];
   }
+  baseQuotations = baseQuotations.filter(isCurrentQuotationVersion);
   
   // Separate active (< 30 days old) from archived (30+ days expired)
   const now = new Date();
