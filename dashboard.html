@@ -10,7 +10,7 @@
   // Import the functions you need from the SDKs you need
   import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
   import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
 
   // Your web app's Firebase configuration
   const firebaseConfig = {
@@ -30,6 +30,7 @@
   // Make db and auth global
   window.db = db;
   window.auth = auth;
+  window.sendPasswordResetEmailViaFirebase = (email) => sendPasswordResetEmail(auth, email);
 
   // ========== Firebase Cloud Storage Utility Functions ==========
   window.firebaseDB = {
@@ -501,6 +502,7 @@
           <a class="tools-item" id="adminMenuItem" onclick="showPackageModal();closeToolsMenu();return false;" href="#" style="display:none;">Manage Packages</a>
           <a class="tools-item" id="agentMenuItem" onclick="showPackageModal();closeToolsMenu();return false;" href="#" style="display:none;">View Packages</a>
           <a class="tools-item" id="userMgmtMenuItem" href="user-management.html" style="display:none;">User Management</a>
+          <a class="tools-item" onclick="requestOwnPasswordReset();closeToolsMenu();return false;" href="#">Change Password</a>
           <a class="tools-item" href="reports.html">Reports</a>
         </div>
       </div>
@@ -1875,6 +1877,31 @@ function loadAgentInfo() {
       const agentMenuItem = document.getElementById('agentMenuItem');
       if (agentMenuItem) agentMenuItem.style.display = 'block';
     }
+  }
+}
+
+async function requestOwnPasswordReset() {
+  const agent = checkAgentLogin();
+  if (!agent) return;
+
+  const email = (agent.email || window.auth?.currentUser?.email || '').trim();
+  if (!email) {
+    showNotification('No email is linked to your account. Please contact admin.', 'error');
+    return;
+  }
+
+  const confirmed = confirm(`Send password reset email to ${email}?`);
+  if (!confirmed) return;
+
+  try {
+    if (typeof window.sendPasswordResetEmailViaFirebase !== 'function') {
+      throw new Error('Firebase auth reset function is unavailable.');
+    }
+    await window.sendPasswordResetEmailViaFirebase(email);
+    showNotification(`Password reset email sent to ${email}`, 'success');
+  } catch (error) {
+    console.error('Password reset request failed:', error);
+    showNotification('Failed to send reset email: ' + (error.message || error), 'error');
   }
 }
 

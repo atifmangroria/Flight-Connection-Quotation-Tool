@@ -732,6 +732,7 @@
         <td>
           <div class="action-group">
             <button class="btn btn-view" onclick="viewUser('${user.id}', '${user.status}')">View</button>
+            ${user.email ? `<button class="btn btn-approve" onclick="sendPasswordResetToUser('${user.id}', '${user.email}', '${(user.fullName || '').replace(/'/g, "\\'")}')">Reset Password</button>` : ''}
             ${user.id !== currentUser?.uid && user.status !== 'inactive' ? `<button class="btn btn-inactive" onclick="setUserInactive('${user.id}')">Inactive</button>` : ''}
             ${user.id !== currentUser?.uid && user.status === 'inactive' ? `<button class="btn btn-reactivate" onclick="reactivateUser('${user.id}')">Reactivate</button>` : ''}
             ${user.id !== currentUser?.uid && user.deletePending ? `<button class="btn btn-delete-user" style="background:#dc2626;" onclick="removeSoftDeleted('${user.id}', '${user.fullName || 'this user'}')">🗑️ Remove from System</button>` : ''}
@@ -740,6 +741,25 @@
         </td>
       </tr>
     `).join('');
+  }
+
+  async function sendPasswordResetToUser(userId, userEmail, userName = 'this user') {
+    const safeEmail = String(userEmail || '').trim();
+    if (!safeEmail) {
+      showNotification('No email found for this user.', 'error');
+      return;
+    }
+
+    const confirmReset = confirm(`Send password reset email to ${userName || 'this user'} (${safeEmail})?`);
+    if (!confirmReset) return;
+
+    try {
+      await auth.sendPasswordResetEmail(safeEmail);
+      showNotification(`✅ Password reset email sent to ${safeEmail}`, 'success');
+    } catch (error) {
+      console.error('Error sending password reset email:', error);
+      showNotification('Error sending reset email: ' + (error.message || error), 'error');
+    }
   }
 
   function isActiveQuotationStatus(status) {

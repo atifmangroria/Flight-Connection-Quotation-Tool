@@ -676,7 +676,7 @@ async function computeNotifications(quotations) {
       );
     }
 
-    if (q.shareLinkId && q.customerNeedsReaccept) {
+    if (q.shareLinkId && q.customerNeedsReaccept && q.agentApproval?.approvedAt) {
       pushNotification(
         'Quotation Updated After Share',
         `Quotation ${base.quoteLabel} was updated after sharing. Ask the customer to review and accept the latest quotation.`,

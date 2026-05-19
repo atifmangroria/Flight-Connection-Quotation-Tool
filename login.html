@@ -66,6 +66,9 @@
       </div>
       <button type="submit" class="btn btn-primary">Login</button>
     </form>
+    <div class="signup-link" style="margin-top:10px;">
+      <a onclick="requestPasswordResetFromLogin(); return false;">Change Password (Send Reset Email)</a>
+    </div>
     <div class="signup-link">
       New agent? <a onclick="switchTab('signup'); return false;">Request Access</a>
     </div>
@@ -291,6 +294,25 @@
       } else {
         showMessage('signup', 'Registration failed: ' + error.message, 'error');
       }
+    }
+  }
+
+  async function requestPasswordResetFromLogin() {
+    const emailInput = document.getElementById('loginEmail');
+    const typedEmail = (emailInput?.value || '').trim();
+    const email = typedEmail || prompt('Enter your account email for password reset:')?.trim();
+
+    if (!email) {
+      showMessage('login', 'Please enter your email first.', 'warning');
+      return;
+    }
+
+    try {
+      await auth.sendPasswordResetEmail(email);
+      showMessage('login', `Password reset email sent to ${email}. Please check inbox/spam.`, 'success');
+    } catch (error) {
+      console.error('Password reset error:', error);
+      showMessage('login', 'Failed to send reset email: ' + (error.message || error), 'error');
     }
   }
 
