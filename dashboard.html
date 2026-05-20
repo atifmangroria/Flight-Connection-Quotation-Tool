@@ -1547,20 +1547,30 @@ async function saveQuotationsToFirebase(agent, umrahQuotations, internationalQuo
         const snap = await transaction.get(ref);
         const serverList = snap.exists ? (snap.data().quotations || []) : [];
 
+        const clientMap = new Map();
         const mergedMap = new Map();
-        // Start with server values
-        serverList.forEach(q => { if (q && q.id) mergedMap.set(q.id, q); });
-        // Merge client values, preferring the one with newer timestamp
-        clientList.forEach(q => {
+        
+        // Build map of client items (after deletions)
+        clientList.forEach(q => { if (q && q.id) clientMap.set(q.id, q); });
+        
+        // Keep server items only if they exist on client (deletion check)
+        serverList.forEach(q => {
           if (!q || !q.id) return;
-          const existing = mergedMap.get(q.id);
-          if (!existing) {
-            mergedMap.set(q.id, q);
+          if (!clientMap.has(q.id)) {
+            // Item deleted on client, skip it
             return;
           }
-          const existingTime = Math.max(parseTime(existing.updatedAt), parseTime(existing.transferredAt), parseTime(existing.createdAt));
-          const clientTime = Math.max(parseTime(q.updatedAt), parseTime(q.transferredAt), parseTime(q.createdAt));
-          if (clientTime >= existingTime) {
+          // Item exists on both, prefer newer
+          const clientItem = clientMap.get(q.id);
+          const existingTime = Math.max(parseTime(q.updatedAt), parseTime(q.transferredAt), parseTime(q.createdAt));
+          const clientTime = Math.max(parseTime(clientItem.updatedAt), parseTime(clientItem.transferredAt), parseTime(clientItem.createdAt));
+          mergedMap.set(q.id, clientTime >= existingTime ? clientItem : q);
+        });
+        
+        // Add new items from client that don't exist on server
+        clientList.forEach(q => {
+          if (!q || !q.id) return;
+          if (!mergedMap.has(q.id)) {
             mergedMap.set(q.id, q);
           }
         });
