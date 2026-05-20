@@ -1529,47 +1529,61 @@ async function saveQuotationsToFirebase(agent, umrahQuotations, internationalQuo
       showNotification('Running without Firebase session. Changes saved locally.', 'warning');
       return true;
     }
-    
-    // Save Umrah quotations
-    if (umrahQuotations) {
-      const success = await window.firebaseDB.saveData('umrah_quotations', ownerId, { 
-        quotations: umrahQuotations, 
-        updatedAt: new Date(),
-        agentId: ownerId,
-        userId: ownerId
-      });
-      if (!success) throw new Error('Failed to save Umrah quotations to Firebase');
-    }
-    
-    // Save International quotations
-    if (internationalQuotations) {
-      const success = await window.firebaseDB.saveData('international_quotations', ownerId, { 
-        quotations: internationalQuotations, 
-        updatedAt: new Date(),
-        agentId: ownerId,
-        userId: ownerId
-      });
-      if (!success) throw new Error('Failed to save International quotations to Firebase');
-    }
 
-    if (Array.isArray(domesticQuotations)) {
-      const success = await window.firebaseDB.saveData('domestic_quotations', ownerId, {
-        quotations: domesticQuotations,
-        updatedAt: new Date(),
-        agentId: ownerId,
-        userId: ownerId
-      }, { silentPermissionDenied: true });
-      if (!success) {
-        if (!window.__domesticPermissionsWarned) {
-          showNotification('Domestic quotations are currently not synced (Firestore permissions).', 'warning');
-          window.__domesticPermissionsWarned = true;
-        }
-      }
-    }
+    // Helper to safely merge client list into server list using a transaction.
+    const parseTime = (t) => {
+      try {
+        if (!t) return 0;
+        if (typeof t === 'object' && typeof t.toDate === 'function') return t.toDate().getTime();
+        const n = Date.parse(String(t));
+        return isNaN(n) ? 0 : n;
+      } catch (e) { return 0; }
+    };
 
-    // Keep local snapshots aligned only after successful Firebase writes.
+    const txnSave = async (collectionName, clientList, options = {}) => {
+      if (!Array.isArray(clientList)) return;
+      const ref = window.doc(window.db, collectionName, ownerId);
+      await window.runTransaction(window.db, async (transaction) => {
+        const snap = await transaction.get(ref);
+        const serverList = snap.exists ? (snap.data().quotations || []) : [];
+
+        const mergedMap = new Map();
+        // Start with server values
+        serverList.forEach(q => { if (q && q.id) mergedMap.set(q.id, q); });
+        // Merge client values, preferring the one with newer timestamp
+        clientList.forEach(q => {
+          if (!q || !q.id) return;
+          const existing = mergedMap.get(q.id);
+          if (!existing) {
+            mergedMap.set(q.id, q);
+            return;
+          }
+          const existingTime = Math.max(parseTime(existing.updatedAt), parseTime(existing.transferredAt), parseTime(existing.createdAt));
+          const clientTime = Math.max(parseTime(q.updatedAt), parseTime(q.transferredAt), parseTime(q.createdAt));
+          if (clientTime >= existingTime) {
+            mergedMap.set(q.id, q);
+          }
+        });
+
+        const merged = Array.from(mergedMap.values());
+        transaction.set(ref, {
+          quotations: merged,
+          updatedAt: new Date(),
+          agentId: ownerId,
+          userId: ownerId
+        }, { merge: true });
+      });
+    };
+
+    // Run transactional saves in parallel (they internally run transactions).
+    await Promise.all([
+      txnSave('umrah_quotations', umrahQuotations),
+      txnSave('international_quotations', internationalQuotations),
+      txnSave('domestic_quotations', domesticQuotations)
+    ]);
+
+    // Update local snapshot after successful writes
     saveLocalQuotationsSnapshot(umrahQuotations, internationalQuotations, domesticQuotations);
-    
     return true;
   } catch (error) {
     console.error('Error saving quotations to Firebase:', error);
