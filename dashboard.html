@@ -2626,13 +2626,15 @@ async function transferQuotation(quotationId, quotationType, fromAgentId) {
         throw new Error('Quotation not found in source user account');
       }
 
+      const agent = checkAgentLogin();
       const quotationToTransfer = {
         ...sourceList[sourceIndex],
         updatedAt: new Date().toISOString(),
         transferredAt: new Date().toISOString(),
-        transferredBy: admin.id,
+        transferredBy: agent.id,
         transferredFrom: fromAgentId,
-        transferredTo: targetUser.id
+        transferredTo: targetUser.id,
+        agentId: targetUser.id
       };
 
       sourceList.splice(sourceIndex, 1);
