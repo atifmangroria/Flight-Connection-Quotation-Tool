@@ -1515,6 +1515,182 @@ function saveLocalQuotationsSnapshot(umrahQuotations, internationalQuotations, d
   }
 }
 
+function getQuotationCollectionName(quotationType) {
+  return quotationType === 'umrah'
+    ? 'umrah_quotations'
+    : quotationType === 'domestic'
+      ? 'domestic_quotations'
+      : 'international_quotations';
+}
+
+function normalizeQuotationOwnerFields(quotation, ownerId) {
+  if (!quotation || typeof quotation !== 'object') return quotation;
+  return {
+    ...quotation,
+    ownerId: quotation.ownerId || quotation.agentId || ownerId,
+    agentId: quotation.agentId || ownerId
+  };
+}
+
+async function retryTransaction(operation, maxAttempts = 3) {
+  let attempt = 0;
+  while (attempt < maxAttempts) {
+    attempt += 1;
+    try {
+      return await operation();
+    } catch (error) {
+      const message = String(error?.message || '').toLowerCase();
+      const shouldRetry = /aborted|deadline-exceeded|unavailable|internal|already exists|failed-precondition/.test(message);
+      if (attempt >= maxAttempts || !shouldRetry) {
+        throw error;
+      }
+      console.warn(`Transaction attempt ${attempt} failed, retrying...`, error);
+      await new Promise(resolve => setTimeout(resolve, 100 * attempt));
+    }
+  }
+}
+
+async function deleteQuotationFromOwner(ownerId, quotationId, quotationType, performedBy) {
+  const collectionName = getQuotationCollectionName(quotationType);
+  const ref = doc(db, collectionName, ownerId);
+
+  return retryTransaction(async () => {
+    return window.runTransaction(window.db, async (transaction) => {
+      const snap = await transaction.get(ref);
+      if (!snap.exists) {
+        throw new Error('Owner quotation record not found.');
+      }
+
+      const serverList = Array.isArray(snap.data().quotations) ? [...snap.data().quotations] : [];
+      const index = serverList.findIndex(q => q?.id === quotationId);
+      if (index === -1) {
+        throw new Error('Quotation not found in owner record.');
+      }
+
+      const deletedQuotation = {
+        ...serverList[index],
+        deleted: true,
+        deletedAt: new Date().toISOString(),
+        deletedBy: performedBy.id,
+        deletedByName: performedBy.name || '',
+        deletedFromOwner: ownerId
+      };
+      serverList[index] = deletedQuotation;
+
+      const existingDeletionLog = Array.isArray(snap.data().deletionLog) ? [...snap.data().deletionLog] : [];
+      const deletionEntry = {
+        quotationId,
+        quotationType,
+        deletedAt: deletedQuotation.deletedAt,
+        deletedBy: performedBy.id,
+        deletedByName: deletedQuotation.deletedByName,
+        ownerId
+      };
+      existingDeletionLog.push(deletionEntry);
+      if (existingDeletionLog.length > 50) {
+        existingDeletionLog.splice(0, existingDeletionLog.length - 50);
+      }
+
+      transaction.set(ref, {
+        quotations: serverList,
+        updatedAt: new Date(),
+        agentId: ownerId,
+        userId: ownerId,
+        deletionLog: existingDeletionLog
+      }, { merge: true });
+
+      return deletedQuotation;
+    });
+  });
+}
+
+async function transferQuotationBetweenAgents(fromAgentId, toAgentId, quotationId, quotationType, performedBy) {
+  const collectionName = getQuotationCollectionName(quotationType);
+  const sourceRef = doc(db, collectionName, fromAgentId);
+  const targetRef = doc(db, collectionName, toAgentId);
+
+  return retryTransaction(async () => {
+    return window.runTransaction(window.db, async (transaction) => {
+      const [sourceSnap, targetSnap] = await Promise.all([
+        transaction.get(sourceRef),
+        transaction.get(targetRef)
+      ]);
+
+      if (!sourceSnap.exists) {
+        throw new Error('Source owner quotation record not found.');
+      }
+
+      const sourceList = Array.isArray(sourceSnap.data().quotations) ? [...sourceSnap.data().quotations] : [];
+      const targetList = Array.isArray(targetSnap.data().quotations) ? [...targetSnap.data().quotations] : [];
+
+      const sourceIndex = sourceList.findIndex(q => q?.id === quotationId);
+      if (sourceIndex === -1) {
+        throw new Error('Quotation not found in source owner record.');
+      }
+
+      const sourceQuotation = sourceList[sourceIndex];
+      const transferRecord = {
+        ...sourceQuotation,
+        agentId: toAgentId,
+        ownerId: toAgentId,
+        updatedAt: new Date().toISOString(),
+        transferredAt: new Date().toISOString(),
+        transferredBy: performedBy.id,
+        transferredByName: performedBy.name || '',
+        transferredFrom: fromAgentId,
+        transferredTo: toAgentId,
+        deleted: false
+      };
+
+      sourceList.splice(sourceIndex, 1);
+
+      const duplicateIndex = targetList.findIndex(q => q?.id === quotationId);
+      if (duplicateIndex !== -1) {
+        targetList.splice(duplicateIndex, 1);
+      }
+      targetList.push(transferRecord);
+
+      const sourceTransferLog = Array.isArray(sourceSnap.data().transferLog) ? [...sourceSnap.data().transferLog] : [];
+      const targetTransferLog = Array.isArray(targetSnap.data().transferLog) ? [...targetSnap.data().transferLog] : [];
+      const transferEntry = {
+        quotationId,
+        quotationType,
+        transferredAt: transferRecord.transferredAt,
+        transferredBy: performedBy.id,
+        transferredByName: performedBy.name || '',
+        transferredFrom: fromAgentId,
+        transferredTo: toAgentId
+      };
+      sourceTransferLog.push(transferEntry);
+      targetTransferLog.push(transferEntry);
+      if (sourceTransferLog.length > 50) {
+        sourceTransferLog.splice(0, sourceTransferLog.length - 50);
+      }
+      if (targetTransferLog.length > 50) {
+        targetTransferLog.splice(0, targetTransferLog.length - 50);
+      }
+
+      transaction.set(sourceRef, {
+        quotations: sourceList,
+        updatedAt: new Date(),
+        agentId: fromAgentId,
+        userId: fromAgentId,
+        transferLog: sourceTransferLog
+      }, { merge: true });
+
+      transaction.set(targetRef, {
+        quotations: targetList,
+        updatedAt: new Date(),
+        agentId: toAgentId,
+        userId: toAgentId,
+        transferLog: targetTransferLog
+      }, { merge: true });
+
+      return transferRecord;
+    });
+  });
+}
+
 // Helper function to save quotations to Firebase
 async function saveQuotationsToFirebase(agent, umrahQuotations, internationalQuotations, domesticQuotations, explicitOwnerId = null) {
   try {
@@ -1541,33 +1717,40 @@ async function saveQuotationsToFirebase(agent, umrahQuotations, internationalQuo
     };
 
     const txnSave = async (collectionName, clientList, options = {}) => {
-      if (!Array.isArray(clientList)) return;
+      if (!Array.isArray(clientList)) return true;
+      
       const ref = window.doc(window.db, collectionName, ownerId);
-      await window.runTransaction(window.db, async (transaction) => {
+      let blocked = false;
+      const success = await window.runTransaction(window.db, async (transaction) => {
         const snap = await transaction.get(ref);
         const serverList = snap.exists ? (snap.data().quotations || []) : [];
+
+        if (clientList.length === 0) {
+          if (serverList.length === 0) {
+            return true;
+          }
+          if (!options.allowEmptySave) {
+            blocked = true;
+            return false;
+          }
+        }
 
         const clientMap = new Map();
         const mergedMap = new Map();
         
-        // Build map of client items (after deletions)
         clientList.forEach(q => { if (q && q.id) clientMap.set(q.id, q); });
         
-        // Keep server items only if they exist on client (deletion check)
         serverList.forEach(q => {
           if (!q || !q.id) return;
           if (!clientMap.has(q.id)) {
-            // Item deleted on client, skip it
             return;
           }
-          // Item exists on both, prefer newer
           const clientItem = clientMap.get(q.id);
           const existingTime = Math.max(parseTime(q.updatedAt), parseTime(q.transferredAt), parseTime(q.createdAt));
           const clientTime = Math.max(parseTime(clientItem.updatedAt), parseTime(clientItem.transferredAt), parseTime(clientItem.createdAt));
           mergedMap.set(q.id, clientTime >= existingTime ? clientItem : q);
         });
         
-        // Add new items from client that don't exist on server
         clientList.forEach(q => {
           if (!q || !q.id) return;
           if (!mergedMap.has(q.id)) {
@@ -1582,15 +1765,29 @@ async function saveQuotationsToFirebase(agent, umrahQuotations, internationalQuo
           agentId: ownerId,
           userId: ownerId
         }, { merge: true });
+
+        return true;
       });
+
+      if (blocked) {
+        console.warn(`⚠️ Blocked empty save to ${collectionName} for ${ownerId}. Server data preserved.`);
+        showNotification(`Prevented unsafe empty save for ${collectionName}. Refresh and retry if you intended to remove all items.`, 'warning');
+      }
+
+      return success;
     };
 
     // Run transactional saves in parallel (they internally run transactions).
-    await Promise.all([
+    const results = await Promise.all([
       txnSave('umrah_quotations', umrahQuotations),
       txnSave('international_quotations', internationalQuotations),
       txnSave('domestic_quotations', domesticQuotations)
     ]);
+
+    if (results.includes(false)) {
+      console.warn('Some quotation saves were blocked to prevent unsafe empty-array overwrites.');
+      return false;
+    }
 
     // Update local snapshot after successful writes
     saveLocalQuotationsSnapshot(umrahQuotations, internationalQuotations, domesticQuotations);
@@ -1616,9 +1813,9 @@ async function loadQuotationsFromFirebase(agent, explicitOwnerId = null) {
     const internationalData = await window.firebaseDB.getData('international_quotations', ownerId);
     const domesticData = await window.firebaseDB.getData('domestic_quotations', ownerId, { silentPermissionDenied: true });
     const result = {
-      umrah: umrahData?.quotations || [],
-      international: internationalData?.quotations || [],
-      domestic: domesticData?.quotations || []
+      umrah: (umrahData?.quotations || []).map(q => normalizeQuotationOwnerFields(q, ownerId)),
+      international: (internationalData?.quotations || []).map(q => normalizeQuotationOwnerFields(q, ownerId)),
+      domestic: (domesticData?.quotations || []).map(q => normalizeQuotationOwnerFields(q, ownerId))
     };
 
     saveLocalQuotationsSnapshot(result.umrah, result.international, result.domestic);
@@ -1706,6 +1903,7 @@ function getVoucherIdForQuotation(quotation) {
 
 function isCurrentQuotationVersion(quotation) {
   if (!quotation) return false;
+  if (quotation.deleted === true) return false;
   return quotation.isCurrent !== false && String(quotation.status || '').toLowerCase() !== 'superseded';
 }
 
@@ -2625,66 +2823,8 @@ async function transferQuotation(quotationId, quotationType, fromAgentId) {
       return;
     }
 
-    const collectionName = quotationType === 'umrah'
-      ? 'umrah_quotations'
-      : quotationType === 'domestic'
-        ? 'domestic_quotations'
-        : 'international_quotations';
-
-    const sourceRef = doc(db, collectionName, fromAgentId);
-    const targetRef = doc(db, collectionName, targetUser.id);
-
-    await runTransaction(db, async (transaction) => {
-      const [sourceSnap, targetSnap] = await Promise.all([
-        transaction.get(sourceRef),
-        transaction.get(targetRef)
-      ]);
-
-      const sourceDoc = sourceSnap.exists ? sourceSnap.data() : {};
-      const targetDoc = targetSnap.exists ? targetSnap.data() : {};
-      const sourceList = Array.isArray(sourceDoc.quotations) ? [...sourceDoc.quotations] : [];
-      const targetList = Array.isArray(targetDoc.quotations) ? [...targetDoc.quotations] : [];
-
-      const sourceIndex = sourceList.findIndex(q => q.id === quotationId);
-      if (sourceIndex === -1) {
-        throw new Error('Quotation not found in source user account');
-      }
-
-      const agent = checkAgentLogin();
-      const quotationToTransfer = {
-        ...sourceList[sourceIndex],
-        updatedAt: new Date().toISOString(),
-        transferredAt: new Date().toISOString(),
-        transferredBy: agent.id,
-        transferredFrom: fromAgentId,
-        transferredTo: targetUser.id,
-        agentId: targetUser.id
-      };
-
-      sourceList.splice(sourceIndex, 1);
-
-      const duplicateIndexOnTarget = targetList.findIndex(q => q.id === quotationId);
-      if (duplicateIndexOnTarget !== -1) {
-        targetList.splice(duplicateIndexOnTarget, 1);
-      }
-      targetList.push(quotationToTransfer);
-
-      transaction.set(sourceRef, {
-        quotations: sourceList,
-        updatedAt: new Date(),
-        agentId: fromAgentId,
-        userId: fromAgentId
-      }, { merge: true });
-
-      transaction.set(targetRef, {
-        quotations: targetList,
-        updatedAt: new Date(),
-        agentId: targetUser.id,
-        userId: targetUser.id
-      }, { merge: true });
-    });
-
-    showNotification('Quotation transferred successfully', 'success');
+    await transferQuotationBetweenAgents(fromAgentId, targetUser.id, quotationId, quotationType, { id: admin.id, name: admin.name || admin.email || 'admin' });
+    showNotification('Quotation transferred successfully.', 'success');
     await loadAllQuotations();
   } catch (error) {
     console.error('Error transferring quotation:', error);
@@ -2806,43 +2946,28 @@ function editQuotation(quotationId, quotationType) {
 
 async function deleteQuotation(quotationId, quotationType, ownerIdHint = '') {
   if (!confirm('Are you sure you want to delete this quotation?')) return;
-  
+
   const agent = checkAgentLogin();
   if (!agent) return;
 
   const ownerId = ownerIdHint || findQuotationOwnerId(quotationId, quotationType) || getOwnerId(agent);
-  
-  // Load current data from Firebase
-  const firebaseData = await loadQuotationsFromFirebase(agent, ownerId);
-  let quotations = quotationType === 'umrah'
-    ? firebaseData.umrah
-    : quotationType === 'domestic'
-      ? firebaseData.domestic
-      : firebaseData.international;
-  const beforeCount = quotations.length;
-  
-  quotations = quotations.filter(q => q.id !== quotationId);
-  const afterCount = quotations.length;
-
-  if (afterCount === beforeCount) {
-    showNotification('Quotation was not found in latest owner data. Please refresh and try again.', 'warning');
-    await loadAllQuotations();
+  if (!ownerId) {
+    showNotification('Unable to determine quotation owner for deletion.', 'error');
     return;
   }
-  
-  // Save updated data to Firebase
-  const success = await saveQuotationsToFirebase(
-    agent,
-    quotationType === 'umrah' ? quotations : firebaseData.umrah,
-    quotationType === 'international' ? quotations : firebaseData.international,
-    quotationType === 'domestic' ? quotations : firebaseData.domestic,
-    ownerId
-  );
-  if (success) {
-    await loadAllQuotations(); // Reload to reflect changes
-    showNotification('Quotation deleted successfully', 'success');
-  } else {
-    showNotification('Delete failed due to Firebase permissions. No local-only changes applied.', 'error');
+
+  if (!window.db || !isFirebaseAvailableForDashboard()) {
+    showNotification('Active Firebase session required to delete quotation', 'error');
+    return;
+  }
+
+  try {
+    await deleteQuotationFromOwner(ownerId, quotationId, quotationType, { id: agent.id, name: agent.name || agent.email || 'admin' });
+    showNotification('Quotation deleted successfully.', 'success');
+    await loadAllQuotations();
+  } catch (error) {
+    console.error('Error deleting quotation:', error);
+    showNotification(`Delete failed: ${error.message || 'Unable to remove quotation.'}`, 'error');
   }
 }
 

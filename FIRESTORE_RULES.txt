@@ -71,81 +71,42 @@ service cloud.firestore {
     }
     
     // ==================== UMRAH QUOTATIONS ====================
-    // Umrah Quotations - Approved users only
-    match /umrah_quotations/{quotationId} {
-       // Authenticated users can read only their own doc; admins can read all docs
-       allow read: if request.auth != null && (quotationId == request.auth.uid || isAdmin());
-      
-      // Approved users can create quotations
-      allow create: if isApproved();
-      
-      // Users can update their own quotations; admins can manage all for reassignment
-      allow update: if isApproved() && (
-        resource.data.userId == request.auth.uid
-        || resource.data.agentId == request.auth.uid
-        || quotationId == request.auth.uid
-        || isAdmin()
-      );
-      
-      // Users can delete their own quotations; admins can delete during transfers/removals
-      allow delete: if isApproved() && (
-        resource.data.userId == request.auth.uid
-        || resource.data.agentId == request.auth.uid
-        || quotationId == request.auth.uid
-        || isAdmin()
-      );
+    match /umrah_quotations/{ownerId} {
+      allow read: if request.auth != null && (ownerId == request.auth.uid || isAdmin());
+
+      allow create: if (isApproved() && ownerId == request.auth.uid || isAdmin())
+        && isValidQuotationDocument(ownerId);
+
+      allow update: if (isAdmin() || (isApproved() && ownerId == request.auth.uid))
+        && isValidQuotationDocument(ownerId);
+
+      allow delete: if request.auth != null && (ownerId == request.auth.uid || isAdmin());
     }
     
     // ==================== INTERNATIONAL QUOTATIONS ====================
-    // International Quotations - Approved users only
-    match /international_quotations/{quotationId} {
-       // Authenticated users can read only their own doc; admins can read all docs
-       allow read: if request.auth != null && (quotationId == request.auth.uid || isAdmin());
-      
-      // Approved users can create quotations
-      allow create: if isApproved();
-      
-      // Users can update their own quotations; admins can manage all for reassignment
-      allow update: if isApproved() && (
-        resource.data.userId == request.auth.uid
-        || resource.data.agentId == request.auth.uid
-        || quotationId == request.auth.uid
-        || isAdmin()
-      );
-      
-      // Users can delete their own quotations; admins can delete during transfers/removals
-      allow delete: if isApproved() && (
-        resource.data.userId == request.auth.uid
-        || resource.data.agentId == request.auth.uid
-        || quotationId == request.auth.uid
-        || isAdmin()
-      );
+    match /international_quotations/{ownerId} {
+      allow read: if request.auth != null && (ownerId == request.auth.uid || isAdmin());
+
+      allow create: if (isApproved() && ownerId == request.auth.uid || isAdmin())
+        && isValidQuotationDocument(ownerId);
+
+      allow update: if (isAdmin() || (isApproved() && ownerId == request.auth.uid))
+        && isValidQuotationDocument(ownerId);
+
+      allow delete: if request.auth != null && (ownerId == request.auth.uid || isAdmin());
     }
 
     // ==================== DOMESTIC QUOTATIONS ====================
-    // Domestic Quotations - Approved users only
-    match /domestic_quotations/{quotationId} {
-       // Authenticated users can read only their own doc; admins can read all docs
-       allow read: if request.auth != null && (quotationId == request.auth.uid || isAdmin());
+    match /domestic_quotations/{ownerId} {
+      allow read: if request.auth != null && (ownerId == request.auth.uid || isAdmin());
 
-      // Approved users can create quotations
-      allow create: if isApproved();
+      allow create: if (isApproved() && ownerId == request.auth.uid || isAdmin())
+        && isValidQuotationDocument(ownerId);
 
-      // Users can update their own quotations; admins can manage all for reassignment
-      allow update: if isApproved() && (
-        resource.data.userId == request.auth.uid
-        || resource.data.agentId == request.auth.uid
-        || quotationId == request.auth.uid
-        || isAdmin()
-      );
+      allow update: if (isAdmin() || (isApproved() && ownerId == request.auth.uid))
+        && isValidQuotationDocument(ownerId);
 
-      // Users can delete their own quotations; admins can delete during transfers/removals
-      allow delete: if isApproved() && (
-        resource.data.userId == request.auth.uid
-        || resource.data.agentId == request.auth.uid
-        || quotationId == request.auth.uid
-        || isAdmin()
-      );
+      allow delete: if request.auth != null && (ownerId == request.auth.uid || isAdmin());
     }
 
     // ==================== QUOTATION LINKS COLLECTION ====================
@@ -293,6 +254,12 @@ service cloud.firestore {
     // Check if user document exists
     function userExists(userId) {
       return exists(/databases/$(database)/documents/users/$(userId));
+    }
+
+    function isValidQuotationDocument(ownerId) {
+      return request.resource.data.agentId == ownerId
+        && request.resource.data.userId == ownerId
+        && request.resource.data.quotations is list;
     }
 
     // Check if voucher belongs to the authenticated user
