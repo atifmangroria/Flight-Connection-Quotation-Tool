@@ -878,6 +878,112 @@ function formatMoney(v) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// Compute quotation-style per-person price lines (Double/Triple/Quad/CWB/CNB/Infant)
+function computeQuotationPriceLines() {
+  const toNumber = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+  const toPKR = (value, currency = 'PKR', roe = 1) => {
+    const amount = toNumber(value);
+    if (!amount) return 0;
+    const cur = (currency || 'PKR').toUpperCase();
+    if (cur === 'PKR') return amount;
+    const rate = toNumber(roe) > 0 ? toNumber(roe) : 1;
+    return amount * rate;
+  };
+
+  let adultDouble = 0, adultTriple = 0, adultQuad = 0, childWithBed = 0, childWithoutBed = 0, infant = 0;
+  let hasQuad = false;
+
+  document.querySelectorAll('#flightsContainer .subsection').forEach(item => {
+    const c = item.querySelector('.flCurrency')?.value || 'PKR';
+    const r = item.querySelector('.flROE')?.value || 1;
+    adultDouble += toPKR(item.querySelector('.flAdult')?.value, c, r);
+    adultTriple += toPKR(item.querySelector('.flAdult')?.value, c, r);
+    adultQuad += toPKR(item.querySelector('.flAdult')?.value, c, r);
+    const childTicket = toPKR(item.querySelector('.flChild')?.value, c, r);
+    childWithBed += childTicket;
+    childWithoutBed += childTicket;
+    infant += toPKR(item.querySelector('.flInfant')?.value, c, r);
+  });
+
+  document.querySelectorAll('#hotelsContainer .subsection').forEach(item => {
+    const c = item.querySelector('.htlCurrency')?.value || 'PKR';
+    const r = item.querySelector('.htlROE')?.value || 1;
+    const nights = toNumber(item.querySelector('.htlNights')?.value);
+    const doubleRate = toNumber(item.querySelector('.htlDouble')?.value);
+    const tripleRate = toNumber(item.querySelector('.htlTriple')?.value);
+    const quadRate = toNumber(item.querySelector('.htlQuad')?.value);
+    const childBedCharge = toNumber(item.querySelector('.htlChildBed')?.value);
+    const perAdultDoubleHotel = toPKR((doubleRate * nights) / 2, c, r);
+    const perAdultTripleHotel = toPKR((tripleRate * nights) / 3, c, r);
+    const perAdultQuadHotel = toPKR((quadRate * nights) / 4, c, r);
+    const perChildWithBedHotel = toPKR((childBedCharge * nights), c, r);
+    adultDouble += perAdultDoubleHotel;
+    adultTriple += perAdultTripleHotel;
+    adultQuad += perAdultQuadHotel;
+    hasQuad = hasQuad || quadRate > 0;
+    childWithBed += perChildWithBedHotel;
+  });
+
+  const applyMoveService = (item, prefix) => {
+    const currency = item.querySelector(`.${prefix}Currency`)?.value || 'PKR';
+    const roe = item.querySelector(`.${prefix}ROE`)?.value || 1;
+    const perVehicleRaw = toNumber(item.querySelector(`.${prefix}PerVehicle`)?.value);
+    const perVehicle = toPKR(perVehicleRaw, currency, roe);
+    if (perVehicleRaw > 0) {
+      const doubleShare = perVehicle / 2;
+      const tripleShare = perVehicle / 3;
+      const quadShare = perVehicle / 4;
+      adultDouble += doubleShare;
+      adultTriple += tripleShare;
+      adultQuad += quadShare;
+      return;
+    }
+    const a = toPKR(item.querySelector(`.${prefix}Adult`)?.value, currency, roe);
+    const childPriceRaw = item.querySelector(`.${prefix}ChildPrice`)?.value || item.querySelector(`.${prefix}ChildNoBed`)?.value || item.querySelector(`.${prefix}ChildBed`)?.value;
+    const cnb = toPKR(childPriceRaw, currency, roe);
+    adultDouble += a;
+    adultTriple += a;
+    adultQuad += a;
+    childWithoutBed += cnb;
+    const cwbRaw = item.querySelector(`.${prefix}ChildBed`)?.value || item.querySelector(`.${prefix}ChildPrice`)?.value || item.querySelector(`.${prefix}ChildNoBed`)?.value;
+    childWithBed += cwbRaw !== null && cwbRaw !== undefined && cwbRaw !== '' ? toPKR(cwbRaw, currency, roe) : cnb;
+  };
+
+  document.querySelectorAll('#transfersContainer .subsection').forEach(item => applyMoveService(item, 'tf'));
+  document.querySelectorAll('#toursContainer .subsection').forEach(item => applyMoveService(item, 'tr'));
+  document.querySelectorAll('#visasContainer .subsection').forEach(item => {
+    const c = item.querySelector('.vsCurrency')?.value || 'PKR';
+    const r = item.querySelector('.vsROE')?.value || 1;
+    const a = toPKR(item.querySelector('.vsAdult')?.value, c, r);
+    const ch = toPKR(item.querySelector('.vsChild')?.value, c, r);
+    const inf = toPKR(item.querySelector('.vsInfant')?.value, c, r);
+    adultDouble += a;
+    adultTriple += a;
+    adultQuad += a;
+    childWithBed += ch;
+    childWithoutBed += ch;
+    infant += inf;
+  });
+
+  adultDouble += toNumber(document.getElementById('chargeAdult')?.value);
+  adultTriple += toNumber(document.getElementById('chargeAdult')?.value);
+  adultQuad += toNumber(document.getElementById('chargeAdult')?.value);
+  childWithBed += toNumber(document.getElementById('chargeChildBed')?.value);
+  childWithoutBed += toNumber(document.getElementById('chargeChildNoBed')?.value);
+  infant += toNumber(document.getElementById('chargeInfant')?.value);
+
+  const fmtPKR = (n) => `PKR ${Math.round(toNumber(n)).toLocaleString('en-PK')}`;
+  const priceLines = [
+    `Per Person on Double bed: ${fmtPKR(adultDouble)}`,
+    `Per Person on Triple bed: ${fmtPKR(adultTriple)}`,
+    ...(hasQuad ? [`Per Person on Quad bed: ${fmtPKR(adultQuad)}`] : []),
+    `Per Child (2-12) with bed: ${fmtPKR(childWithBed)}`,
+    `Per Child (2-12) without bed: ${fmtPKR(childWithoutBed)}`,
+    `Per Infant (0-2): ${fmtPKR(infant)}`
+  ];
+  return { priceLines, adultDouble, adultTriple, adultQuad, childWithBed, childWithoutBed, infant };
+}
+
 function calculateCostBreakup() {
   const toNumber = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
   const toPKR = (value, currency = 'PKR', roe = 1) => {
@@ -1103,35 +1209,26 @@ function calculateCostBreakup() {
 }
 
 function showCostingModal() {
-  const { rows, total, totalPax, adultsCount, childrenCount, infantsCount } = calculateCostBreakup();
+  // Show a single quotation-style calculation summary (no user inputs required)
+  const out = computeQuotationPriceLines();
   const tbody = document.getElementById('costingTableBody');
   tbody.innerHTML = '';
-  rows.forEach(r => {
+  out.priceLines.forEach(line => {
     const tr = document.createElement('tr');
-    const makeCell = (value, align = 'left') => {
-      const td = document.createElement('td');
-      td.style.padding = '10px';
-      td.style.border = '1px solid #d6e4ff';
-      td.style.textAlign = align;
-      td.textContent = value || '-';
-      return td;
-    };
-
-    tr.appendChild(makeCell(r.desc));
-    tr.appendChild(makeCell(r.vendor));
-    tr.appendChild(makeCell(r.currencyRoe));
-    tr.appendChild(makeCell(r.adult, 'right'));
-    tr.appendChild(makeCell(r.child, 'right'));
-    tr.appendChild(makeCell(r.infant, 'right'));
-    tr.appendChild(makeCell(formatMoney(r.amount), 'right'));
+    const td = document.createElement('td');
+    td.style.padding = '10px';
+    td.style.border = '1px solid #d6e4ff';
+    td.colSpan = 7;
+    td.textContent = line;
+    tr.appendChild(td);
     tbody.appendChild(tr);
   });
-
   document.getElementById('costingPackageName').textContent = document.getElementById('packageName')?.value || 'N/A';
   document.getElementById('costingTravelDates').textContent = getTravelPeriodDisplay();
-  document.getElementById('costingPaxSummary').textContent = `${adultsCount} Adult(s), ${childrenCount} Child(ren), ${infantsCount} Infant(s)`;
-  document.getElementById('costingTotal').textContent = formatMoney(total);
-  document.getElementById('costingPerPaxTotal').textContent = formatMoney(total / Math.max(1, totalPax));
+  document.getElementById('costingPaxSummary').textContent = 'Calculation shown per person (no pax input required)';
+  // Totals: show sum of adultDouble as indicative total per person double
+  document.getElementById('costingTotal').textContent = '—';
+  document.getElementById('costingPerPaxTotal').textContent = '—';
   document.getElementById('costingModal').classList.add('visible');
 }
 
@@ -1140,13 +1237,28 @@ function closeCostingModal() {
 }
 
 function exportCostingPdf() {
-  const el = document.getElementById('costingContent');
-  const packageName = (document.getElementById('packageName')?.value || 'package-costing').replace(/[^a-z0-9\-\_]/ig, '-');
-  if (window.html2pdf) {
-    const opt = { margin: 10, filename: `${packageName}.pdf`, html2canvas: { scale: 2 }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } };
-    html2pdf().set(opt).from(el).save();
-  } else {
-    alert('PDF export not available.');
+  // Export a clean quotation-style PDF (no modal chrome)
+  const pkgName = document.getElementById('packageName')?.value || 'package-costing';
+  const safeName = pkgName.replace(/[^a-z0-9\-\_]/ig, '-');
+  const data = computeQuotationPriceLines();
+  // Use jsPDF to generate a clean PDF
+  try {
+    const doc = (window.jspdf && window.jspdf.jsPDF) ? new window.jspdf.jsPDF('p','mm','a4') : new window.jsPDF('p','mm','a4');
+    const left = 15; let y = 20;
+    doc.setFontSize(16); doc.setTextColor('#0b76d1'); doc.text('PACKAGE QUOTATION', 105, y, { align: 'center' }); y += 10;
+    doc.setFontSize(11); doc.setTextColor('#222'); doc.text(`Package: ${pkgName}`, left, y); y += 8;
+    doc.text(`Travel Period: ${getTravelPeriodDisplay()}`, left, y); y += 12;
+    doc.setFontSize(12); doc.setTextColor('#0b76d1'); doc.text('Price (All amounts in PKR)', left, y); y += 8;
+    doc.setFontSize(10); doc.setTextColor('#000');
+    data.priceLines.forEach(line => {
+      const split = doc.splitTextToSize('• ' + line, 180);
+      doc.text(split, left, y);
+      y += (split.length * 6) + 2;
+      if (y > 270) { doc.addPage(); y = 20; }
+    });
+    doc.save(`${safeName}.pdf`);
+  } catch (e) {
+    alert('PDF export failed: ' + (e && e.message ? e.message : 'unknown'));
   }
 }
 
