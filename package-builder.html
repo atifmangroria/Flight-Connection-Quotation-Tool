@@ -236,7 +236,6 @@
       <div class="header-actions">
         <button type="button" class="btn btn-secondary" onclick="window.location.href='dashboard.html'">Dashboard</button>
         <button type="button" class="btn btn-primary" id="btnViewPackages">View Packages</button>
-        <button type="button" class="btn btn-primary" id="btnCostingSummary" onclick="showCostingModal()">Costing Summary</button>
       </div>
     </div>
   </div>
@@ -293,31 +292,51 @@
   
     <!-- COSTING SUMMARY MODAL -->
     <div id="costingModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="costingTitle">
-      <div class="modal-content" style="max-width:760px;">
+      <div class="modal-content" style="max-width:880px;">
         <div class="modal-header">
           <h3 id="costingTitle">Costing Summary</h3>
           <button type="button" class="modal-close" onclick="closeCostingModal()">×</button>
         </div>
         <div id="costingContent">
-          <div style="margin-bottom:12px;color:#5f6d7b;font-size:13px;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;">
-            <div>Below is the cost breakup for the current package. Use <strong>Export PDF</strong> to download.</div>
-            <div style="display:flex;gap:8px;align-items:center;">
-              <label style="font-size:13px;color:#5f6d7b;">Adults&nbsp;<input id="costingAdultsCount" type="number" min="0" value="1" style="width:72px;margin-left:6px;padding:6px;border:1px solid #ddd;border-radius:4px;"/></label>
-              <label style="font-size:13px;color:#5f6d7b;">Children&nbsp;<input id="costingChildrenCount" type="number" min="0" value="0" style="width:72px;margin-left:6px;padding:6px;border:1px solid #ddd;border-radius:4px;"/></label>
-              <label style="font-size:13px;color:#5f6d7b;">Infants&nbsp;<input id="costingInfantsCount" type="number" min="0" value="0" style="width:72px;margin-left:6px;padding:6px;border:1px solid #ddd;border-radius:4px;"/></label>
-            </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+            <div><strong>Package</strong><div id="costingPackageName" style="margin-top:6px;color:#1f2937;"></div></div>
+            <div><strong>Travel Dates</strong><div id="costingTravelDates" style="margin-top:6px;color:#1f2937;"></div></div>
+            <div><strong>Passengers</strong><div id="costingPaxSummary" style="margin-top:6px;color:#1f2937;"></div></div>
+            <div><strong>Note</strong><div style="margin-top:6px;color:#475569;">Vendor, currency and ROE details are shown for each service with adult/child/infant pricing.</div></div>
           </div>
-          <table style="width:100%;border-collapse:collapse;margin-bottom:12px;">
-            <thead>
-              <tr style="background:#f1f7ff;color:#0b76d1;text-align:left;"><th style="padding:8px;border:1px solid #e6eefb;">Item</th><th style="padding:8px;border:1px solid #e6eefb;text-align:right;">Amount</th><th style="padding:8px;border:1px solid #e6eefb;text-align:right;">Per Pax</th></tr>
-            </thead>
-            <tbody id="costingTableBody"></tbody>
-            <tfoot>
-              <tr><td style="padding:8px;border:1px solid #e6eefb;font-weight:700;">Total</td><td id="costingTotal" style="padding:8px;border:1px solid #e6eefb;text-align:right;font-weight:700;">0</td><td id="costingPerPaxTotal" style="padding:8px;border:1px solid #e6eefb;text-align:right;font-weight:700;">0</td></tr>
-            </tfoot>
-          </table>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px;">
+            <label style="font-size:13px;color:#475569;">Adults&nbsp;<input id="costingAdultsCount" type="number" min="0" value="1" style="width:72px;margin-left:6px;padding:6px;border:1px solid #ddd;border-radius:4px;"/></label>
+            <label style="font-size:13px;color:#475569;">Children&nbsp;<input id="costingChildrenCount" type="number" min="0" value="0" style="width:72px;margin-left:6px;padding:6px;border:1px solid #ddd;border-radius:4px;"/></label>
+            <label style="font-size:13px;color:#475569;">Infants&nbsp;<input id="costingInfantsCount" type="number" min="0" value="0" style="width:72px;margin-left:6px;padding:6px;border:1px solid #ddd;border-radius:4px;"/></label>
+          </div>
+          <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;margin-bottom:12px;min-width:780px;">
+              <thead>
+                <tr style="background:#eef4ff;color:#0f4c81;text-align:left;">
+                  <th style="padding:10px;border:1px solid #d6e4ff;">Service</th>
+                  <th style="padding:10px;border:1px solid #d6e4ff;">Vendor</th>
+                  <th style="padding:10px;border:1px solid #d6e4ff;">Currency / ROE</th>
+                  <th style="padding:10px;border:1px solid #d6e4ff;text-align:right;">Per Adult</th>
+                  <th style="padding:10px;border:1px solid #d6e4ff;text-align:right;">Per Child</th>
+                  <th style="padding:10px;border:1px solid #d6e4ff;text-align:right;">Per Infant</th>
+                  <th style="padding:10px;border:1px solid #d6e4ff;text-align:right;">Total PKR</th>
+                </tr>
+              </thead>
+              <tbody id="costingTableBody"></tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="6" style="padding:10px;border:1px solid #d6e4ff;font-weight:700;">Total</td>
+                  <td id="costingTotal" style="padding:10px;border:1px solid #d6e4ff;text-align:right;font-weight:700;">0</td>
+                </tr>
+                <tr>
+                  <td colspan="6" style="padding:10px;border:1px solid #d6e4ff;font-weight:700;">Total Per Pax</td>
+                  <td id="costingPerPaxTotal" style="padding:10px;border:1px solid #d6e4ff;text-align:right;font-weight:700;">0</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         </div>
-        <div style="display:flex;justify-content:flex-end;gap:10px;">
+        <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px;">
           <button type="button" class="btn btn-secondary" onclick="closeCostingModal()">Close</button>
           <button type="button" class="btn btn-primary" onclick="exportCostingPdf()">Export PDF</button>
         </div>
@@ -437,6 +456,9 @@
           <label>Service Charge Per Infant <span class="req">*</span></label>
           <input type="number" id="chargeInfant" min="0" step="0.01" required placeholder="0">
         </div>
+      </div>
+      <div style="margin-top:16px;text-align:right;">
+        <button type="button" class="btn btn-primary" onclick="showCostingModal()">Costing Summary</button>
       </div>
     </div>
 
@@ -866,134 +888,250 @@ function calculateCostBreakup() {
     const rate = toNumber(roe) > 0 ? toNumber(roe) : 1;
     return amount * rate;
   };
+  const formatCurrencyRoe = (currency, roe) => {
+    const cur = (currency || 'PKR').toUpperCase();
+    const rate = toNumber(roe) > 0 ? toNumber(roe) : 1;
+    return cur === 'PKR' ? 'PKR' : `${cur} @ ${formatMoney(rate)}`;
+  };
 
-  const rows = [];
-  let total = 0;
-
-  // Passenger multipliers from modal (defaults)
   const adultsCount = Math.max(0, parseInt(document.getElementById('costingAdultsCount')?.value || '1', 10) || 0);
   const childrenCount = Math.max(0, parseInt(document.getElementById('costingChildrenCount')?.value || '0', 10) || 0);
   const infantsCount = Math.max(0, parseInt(document.getElementById('costingInfantsCount')?.value || '0', 10) || 0);
   const totalPax = Math.max(1, adultsCount + childrenCount + infantsCount);
 
-  // Flights
+  const rows = [];
+  let total = 0;
+  const addRow = ({ desc, vendor = '-', currency = 'PKR', roe = 1, adult = '-', child = '-', infant = '-', amount = 0 }) => {
+    rows.push({ desc, vendor, currencyRoe: formatCurrencyRoe(currency, roe), adult, child, infant, amount });
+    total += amount;
+  };
+
   document.querySelectorAll('#flightsContainer .subsection').forEach(item => {
-    const airline = item.querySelector('.flAirline')?.value || '';
+    const airline = item.querySelector('.flAirline')?.value || 'Flight';
     const sector = item.querySelector('.flSector')?.value || '';
-    const c = item.querySelector('.flCurrency')?.value || 'PKR';
-    const r = item.querySelector('.flROE')?.value || 1;
-    const adultPrice = toPKR(item.querySelector('.flAdult')?.value || 0, c, r);
-    const childPrice = toPKR(item.querySelector('.flChild')?.value || 0, c, r);
-    const infantPrice = toPKR(item.querySelector('.flInfant')?.value || 0, c, r);
-    const adultTotal = adultPrice * adultsCount;
-    const childTotal = childPrice * childrenCount;
-    const infantTotal = infantPrice * infantsCount;
-    const subtotal = adultTotal + childTotal + infantTotal;
-    const perPax = subtotal / totalPax;
-    rows.push({ desc: `Flight${sector ? ' ' + sector : ''} ${airline}`.trim(), amount: subtotal, perPax });
-    total += subtotal;
+    const vendor = item.querySelector('.flVendor')?.value || '-';
+    const currency = item.querySelector('.flCurrency')?.value || 'PKR';
+    const roe = item.querySelector('.flROE')?.value || 1;
+    const adultPrice = toPKR(item.querySelector('.flAdult')?.value || 0, currency, roe);
+    const childPrice = toPKR(item.querySelector('.flChild')?.value || 0, currency, roe);
+    const infantPrice = toPKR(item.querySelector('.flInfant')?.value || 0, currency, roe);
+    const subtotal = (adultPrice * adultsCount) + (childPrice * childrenCount) + (infantPrice * infantsCount);
+    addRow({
+      desc: `Flight${sector ? ' ' + sector : ''} ${airline}`.trim(),
+      vendor,
+      currency,
+      roe,
+      adult: adultPrice ? formatMoney(adultPrice) : '-',
+      child: childPrice ? formatMoney(childPrice) : '-',
+      infant: infantPrice ? formatMoney(infantPrice) : '-',
+      amount: subtotal
+    });
   });
 
-  // Hotels
   document.querySelectorAll('#hotelsContainer .subsection').forEach(item => {
     const name = item.querySelector('.htlName')?.value || 'Hotel';
-    const nights = toNumber(item.querySelector('.htlNights')?.value || 1);
-    const c = item.querySelector('.htlCurrency')?.value || 'PKR';
-    const r = item.querySelector('.htlROE')?.value || 1;
-    const doubleRate = toPKR(item.querySelector('.htlDouble')?.value || 0, c, r);
-    const subtotal = doubleRate * Math.max(1, nights);
-    const perPax = subtotal / totalPax;
-    rows.push({ desc: `Hotel: ${name} (${nights} nights)`, amount: subtotal, perPax });
-    total += subtotal;
+    const nights = Math.max(1, toNumber(item.querySelector('.htlNights')?.value || 1));
+    const vendor = item.querySelector('.htlVendor')?.value || '-';
+    const currency = item.querySelector('.htlCurrency')?.value || 'PKR';
+    const roe = item.querySelector('.htlROE')?.value || 1;
+    const doubleRate = toPKR(item.querySelector('.htlDouble')?.value || 0, currency, roe);
+    const subtotal = doubleRate * nights;
+    addRow({
+      desc: `Hotel: ${name} (${nights} nights)`,
+      vendor,
+      currency,
+      roe,
+      adult: doubleRate ? formatMoney(doubleRate) : '-',
+      child: '-',
+      infant: '-',
+      amount: subtotal
+    });
   });
 
-  // Tours
   document.querySelectorAll('#toursContainer .subsection').forEach(item => {
     const name = item.querySelector('.trName')?.value || 'Tour';
-    const c = item.querySelector('.trCurrency')?.value || 'PKR';
-    const r = item.querySelector('.trROE')?.value || 1;
-    const perVehicle = toPKR(item.querySelector('.trPerVehicle')?.value || 0, c, r);
-    const adultPrice = toPKR(item.querySelector('.trAdult')?.value || 0, c, r);
-    const childPrice = toPKR(item.querySelector('.trChildPrice')?.value || 0, c, r);
-    const infantPrice = toPKR(item.querySelector('.trInfant')?.value || 0, c, r);
+    const vendor = item.querySelector('.trVendor')?.value || '-';
+    const currency = item.querySelector('.trCurrency')?.value || 'PKR';
+    const roe = item.querySelector('.trROE')?.value || 1;
+    const vehicleRate = toPKR(item.querySelector('.trPerVehicle')?.value || 0, currency, roe);
+    const adultPrice = toPKR(item.querySelector('.trAdult')?.value || 0, currency, roe);
+    const childPrice = toPKR(item.querySelector('.trChildPrice')?.value || 0, currency, roe);
+    const infantPrice = toPKR(item.querySelector('.trInfant')?.value || 0, currency, roe);
     let subtotal = 0;
-    if (perVehicle > 0) {
-      subtotal = perVehicle;
+    if (vehicleRate > 0) {
+      subtotal = vehicleRate;
+      addRow({
+        desc: `Tour: ${name} (vehicle)`,
+        vendor,
+        currency,
+        roe,
+        adult: vehicleRate ? formatMoney(vehicleRate) : '-',
+        child: '-',
+        infant: '-',
+        amount: subtotal
+      });
     } else {
       subtotal = (adultPrice * adultsCount) + (childPrice * childrenCount) + (infantPrice * infantsCount);
+      addRow({
+        desc: `Tour: ${name}`,
+        vendor,
+        currency,
+        roe,
+        adult: adultPrice ? formatMoney(adultPrice) : '-',
+        child: childPrice ? formatMoney(childPrice) : '-',
+        infant: infantPrice ? formatMoney(infantPrice) : '-',
+        amount: subtotal
+      });
     }
-    const perPax = subtotal / totalPax;
-    rows.push({ desc: `Tour: ${name}`, amount: subtotal, perPax });
-    total += subtotal;
   });
 
-  // Transfers
   document.querySelectorAll('#transfersContainer .subsection').forEach(item => {
     const from = item.querySelector('.tfFrom')?.value || '';
     const to = item.querySelector('.tfTo')?.value || '';
-    const label = `${from}${from && to ? ' → ' : ''}${to}`.trim();
-    const c = item.querySelector('.tfCurrency')?.value || 'PKR';
-    const r = item.querySelector('.tfROE')?.value || 1;
-    const perVehicle = toPKR(item.querySelector('.tfPerVehicle')?.value || 0, c, r);
-    const adultPrice = toPKR(item.querySelector('.tfAdult')?.value || 0, c, r);
-    const childBedPrice = toPKR(item.querySelector('.tfChildBed')?.value || 0, c, r);
-    const childNoBedPrice = toPKR(item.querySelector('.tfChildNoBed')?.value || 0, c, r);
-    const infantPrice = toPKR(item.querySelector('.tfInfant')?.value || 0, c, r);
+    const label = `${from}${from && to ? ' → ' : ''}${to}`.trim() || 'Transfer';
+    const vendor = item.querySelector('.tfVendor')?.value || '-';
+    const currency = item.querySelector('.tfCurrency')?.value || 'PKR';
+    const roe = item.querySelector('.tfROE')?.value || 1;
+    const vehicleRate = toPKR(item.querySelector('.tfPerVehicle')?.value || 0, currency, roe);
+    const adultPrice = toPKR(item.querySelector('.tfAdult')?.value || 0, currency, roe);
+    const childBedPrice = toPKR(item.querySelector('.tfChildBed')?.value || 0, currency, roe);
+    const childNoBedPrice = toPKR(item.querySelector('.tfChildNoBed')?.value || 0, currency, roe);
+    const infantPrice = toPKR(item.querySelector('.tfInfant')?.value || 0, currency, roe);
     let subtotal = 0;
-    if (perVehicle > 0) {
-      subtotal = perVehicle;
+    if (vehicleRate > 0) {
+      subtotal = vehicleRate;
+      addRow({
+        desc: `Transfer: ${label}`,
+        vendor,
+        currency,
+        roe,
+        adult: vehicleRate ? formatMoney(vehicleRate) : '-',
+        child: '-',
+        infant: '-',
+        amount: subtotal
+      });
     } else {
       subtotal = (adultPrice * adultsCount) + (childBedPrice * childrenCount) + (childNoBedPrice * childrenCount) + (infantPrice * infantsCount);
+      addRow({
+        desc: `Transfer: ${label}`,
+        vendor,
+        currency,
+        roe,
+        adult: adultPrice ? formatMoney(adultPrice) : '-',
+        child: childBedPrice ? formatMoney(childBedPrice) : '-',
+        infant: infantPrice ? formatMoney(infantPrice) : '-',
+        amount: subtotal
+      });
     }
-    const perPax = subtotal / totalPax;
-    rows.push({ desc: `Transfer: ${label}`, amount: subtotal, perPax });
-    total += subtotal;
   });
 
-  // Visas
   document.querySelectorAll('#visasContainer .subsection').forEach(item => {
     const country = item.querySelector('.vsCountry')?.value || 'Visa';
-    const c = item.querySelector('.vsCurrency')?.value || 'PKR';
-    const r = item.querySelector('.vsROE')?.value || 1;
-    const adultPrice = toPKR(item.querySelector('.vsAdult')?.value || 0, c, r);
-    const childPrice = toPKR(item.querySelector('.vsChild')?.value || 0, c, r);
-    const infantPrice = toPKR(item.querySelector('.vsInfant')?.value || 0, c, r);
-    const adultTotal = adultPrice * adultsCount;
-    const childTotal = childPrice * childrenCount;
-    const infantTotal = infantPrice * infantsCount;
-    const subtotal = adultTotal + childTotal + infantTotal;
-    const perPax = subtotal / totalPax;
-    rows.push({ desc: `Visa: ${country}`, amount: subtotal, perPax });
-    total += subtotal;
+    const vendor = item.querySelector('.vsVendor')?.value || '-';
+    const currency = item.querySelector('.vsCurrency')?.value || 'PKR';
+    const roe = item.querySelector('.vsROE')?.value || 1;
+    const adultPrice = toPKR(item.querySelector('.vsAdult')?.value || 0, currency, roe);
+    const childPrice = toPKR(item.querySelector('.vsChild')?.value || 0, currency, roe);
+    const infantPrice = toPKR(item.querySelector('.vsInfant')?.value || 0, currency, roe);
+    const subtotal = (adultPrice * adultsCount) + (childPrice * childrenCount) + (infantPrice * infantsCount);
+    addRow({
+      desc: `Visa: ${country}`,
+      vendor,
+      currency,
+      roe,
+      adult: adultPrice ? formatMoney(adultPrice) : '-',
+      child: childPrice ? formatMoney(childPrice) : '-',
+      infant: infantPrice ? formatMoney(infantPrice) : '-',
+      amount: subtotal
+    });
   });
 
-  // Service charges (per unit shown as-is)
   const svcAdult = toNumber(document.getElementById('chargeAdult')?.value || 0);
   const svcChildBed = toNumber(document.getElementById('chargeChildBed')?.value || 0);
   const svcChildNoBed = toNumber(document.getElementById('chargeChildNoBed')?.value || 0);
-  if (svcAdult) { const amt = svcAdult * adultsCount; rows.push({ desc: 'Service charge (adults)', amount: amt, perPax: svcAdult }); total += amt; }
-  if (svcChildBed) { const amt = svcChildBed * childrenCount; rows.push({ desc: 'Service charge (children with bed)', amount: amt, perPax: svcChildBed }); total += amt; }
-  if (svcChildNoBed) { const amt = svcChildNoBed * childrenCount; rows.push({ desc: 'Service charge (children no bed)', amount: amt, perPax: svcChildNoBed }); total += amt; }
+  const svcInfant = toNumber(document.getElementById('chargeInfant')?.value || 0);
+  if (svcAdult) {
+    addRow({
+      desc: 'Service charge (per adult)',
+      vendor: 'Service',
+      currency: 'PKR',
+      roe: 1,
+      adult: formatMoney(svcAdult),
+      child: '-',
+      infant: '-',
+      amount: svcAdult * adultsCount
+    });
+  }
+  if (svcChildBed) {
+    addRow({
+      desc: 'Service charge (child with bed)',
+      vendor: 'Service',
+      currency: 'PKR',
+      roe: 1,
+      adult: '-',
+      child: formatMoney(svcChildBed),
+      infant: '-',
+      amount: svcChildBed * childrenCount
+    });
+  }
+  if (svcChildNoBed) {
+    addRow({
+      desc: 'Service charge (child without bed)',
+      vendor: 'Service',
+      currency: 'PKR',
+      roe: 1,
+      adult: '-',
+      child: formatMoney(svcChildNoBed),
+      infant: '-',
+      amount: svcChildNoBed * childrenCount
+    });
+  }
+  if (svcInfant) {
+    addRow({
+      desc: 'Service charge (per infant)',
+      vendor: 'Service',
+      currency: 'PKR',
+      roe: 1,
+      adult: '-',
+      child: '-',
+      infant: formatMoney(svcInfant),
+      amount: svcInfant * infantsCount
+    });
+  }
 
-  return { rows, total, totalPax };
-
-  return { rows, total };
+  return { rows, total, totalPax, adultsCount, childrenCount, infantsCount };
 }
 
 function showCostingModal() {
-  const { rows, total, totalPax } = calculateCostBreakup();
+  const { rows, total, totalPax, adultsCount, childrenCount, infantsCount } = calculateCostBreakup();
   const tbody = document.getElementById('costingTableBody');
   tbody.innerHTML = '';
   rows.forEach(r => {
     const tr = document.createElement('tr');
-    const td1 = document.createElement('td'); td1.style.padding = '8px'; td1.style.border = '1px solid #e6eefb'; td1.textContent = r.desc;
-    const td2 = document.createElement('td'); td2.style.padding = '8px'; td2.style.border = '1px solid #e6eefb'; td2.style.textAlign = 'right'; td2.textContent = formatMoney(r.amount);
-    const td3 = document.createElement('td'); td3.style.padding = '8px'; td3.style.border = '1px solid #e6eefb'; td3.style.textAlign = 'right'; td3.textContent = formatMoney((r.perPax || 0));
-    tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tbody.appendChild(tr);
+    const makeCell = (value, align = 'left') => {
+      const td = document.createElement('td');
+      td.style.padding = '10px';
+      td.style.border = '1px solid #d6e4ff';
+      td.style.textAlign = align;
+      td.textContent = value || '-';
+      return td;
+    };
+
+    tr.appendChild(makeCell(r.desc));
+    tr.appendChild(makeCell(r.vendor));
+    tr.appendChild(makeCell(r.currencyRoe));
+    tr.appendChild(makeCell(r.adult, 'right'));
+    tr.appendChild(makeCell(r.child, 'right'));
+    tr.appendChild(makeCell(r.infant, 'right'));
+    tr.appendChild(makeCell(formatMoney(r.amount), 'right'));
+    tbody.appendChild(tr);
   });
+
+  document.getElementById('costingPackageName').textContent = document.getElementById('packageName')?.value || 'N/A';
+  document.getElementById('costingTravelDates').textContent = getTravelPeriodDisplay();
+  document.getElementById('costingPaxSummary').textContent = `${adultsCount} Adult(s), ${childrenCount} Child(ren), ${infantsCount} Infant(s)`;
   document.getElementById('costingTotal').textContent = formatMoney(total);
-  const perPaxTotalEl = document.getElementById('costingPerPaxTotal');
-  perPaxTotalEl.textContent = formatMoney(total / Math.max(1, totalPax));
+  document.getElementById('costingPerPaxTotal').textContent = formatMoney(total / Math.max(1, totalPax));
   document.getElementById('costingModal').classList.add('visible');
 }
 
