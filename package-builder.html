@@ -177,7 +177,9 @@
   .temp-notification.info { background-color: #e2f2ff; color: #004085; border: 2px solid #007bff; }
   .hidden { display: none !important; }
   .badge { display: inline-block; background: #0b76d1; color: white; padding: 3px 8px; border-radius: 3px; font-size: 11px; margin-left: 5px; }
-  
+  .helper-text { display: block; margin-top: 6px; color: #5f6d7b; font-size: 12px; }
+  .info-box { background: #eef7ff; border: 1px solid #cce4ff; color: #1f496d; padding: 14px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; }
+  .hidden-field { display: none !important; }
   /* Print Styles */
   .print-document {
     display: none;
@@ -268,6 +270,10 @@
         </table>
       </div>
     </div>
+  </div>
+
+  <div class="info-box no-print">
+    <strong>Tip:</strong> You may save a package with only one service type. Missing services will be listed before saving so you can confirm.
   </div>
 
   <form id="packageForm">
@@ -775,6 +781,11 @@ document.addEventListener('DOMContentLoaded', () => {
       servicePanels.forEach(panel => panel.classList.toggle('active', panel.dataset.service === service));
     });
   });
+
+  // Default first tab for better UX.
+  if (serviceTabs.length && servicePanels.length) {
+    serviceTabs[0].click();
+  }
 });
 
 function toIsoDateString(value) {
@@ -1012,6 +1023,12 @@ async function loadPackageForEditing(packageId, options = {}) {
       row.querySelector('.trChildBed').value = t.priceChildBed ?? '';
       row.querySelector('.trChildNoBed').value = t.priceChildNoBed ?? '';
       row.querySelector('.trInfant').value = t.priceInfant ?? '';
+      const occupancyField = row.querySelector('.trOccupancy');
+      const occupancyValue = t.occupancy || ((t.pricePerVehicle || 0) > 0 ? 'private' : 'sharing');
+      if (occupancyField) {
+        occupancyField.value = occupancyValue;
+      }
+      attachTourModeHandlers(row);
     });
   }
 
@@ -1093,6 +1110,49 @@ function updateTourDaySelectors() {
       select.value = currentValue;
     }
   });
+}
+
+function toggleTourPricingFields(row) {
+  if (!row) return;
+  const occupancy = row.querySelector('.trOccupancy')?.value || 'private';
+  const vehicleWrapper = row.querySelector('.trVehicleWrapper');
+  const perVehicleInput = row.querySelector('.trPerVehicle');
+  const perPersonFields = Array.from(row.querySelectorAll('.trPerPersonFields'));
+  const adultInput = row.querySelector('.trAdult');
+  const childBedInput = row.querySelector('.trChildBed');
+  const childNoBedInput = row.querySelector('.trChildNoBed');
+  const infantInput = row.querySelector('.trInfant');
+
+  if (occupancy === 'sharing') {
+    vehicleWrapper?.classList.add('hidden-field');
+    perVehicleInput?.removeAttribute('required');
+    if (perVehicleInput) perVehicleInput.value = '';
+    perPersonFields.forEach(el => el.classList.remove('hidden-field'));
+    adultInput?.setAttribute('required', '');
+    childBedInput?.setAttribute('required', '');
+    childNoBedInput?.setAttribute('required', '');
+    infantInput?.setAttribute('required', '');
+  } else {
+    vehicleWrapper?.classList.remove('hidden-field');
+    perVehicleInput?.setAttribute('required', '');
+    perPersonFields.forEach(el => el.classList.add('hidden-field'));
+    adultInput?.removeAttribute('required');
+    childBedInput?.removeAttribute('required');
+    childNoBedInput?.removeAttribute('required');
+    infantInput?.removeAttribute('required');
+    if (adultInput) adultInput.value = '';
+    if (childBedInput) childBedInput.value = '';
+    if (childNoBedInput) childNoBedInput.value = '';
+    if (infantInput) infantInput.value = '';
+  }
+}
+
+function attachTourModeHandlers(row) {
+  if (!row) return;
+  const select = row.querySelector('.trOccupancy');
+  if (!select) return;
+  select.addEventListener('change', () => toggleTourPricingFields(row));
+  toggleTourPricingFields(row);
 }
 
 // Add event listener to totalNights field to update tour day options
@@ -1227,6 +1287,21 @@ function updateSections() {
     if (visaContainer && visaContainer.children.length === 0) {
       addVisa();
     }
+  }
+
+  const tourTab = document.querySelector('.service-tab[data-service="tour"]');
+  const visaTab = document.querySelector('.service-tab[data-service="visa"]');
+  if (tourTab) {
+    tourTab.style.display = (type === 'international' || type === 'domestic') ? '' : 'none';
+  }
+  if (visaTab) {
+    visaTab.style.display = (type === 'domestic') ? 'none' : '';
+  }
+
+  const activeTab = document.querySelector('.service-tab.active');
+  if (activeTab && activeTab.style.display === 'none') {
+    const firstVisible = document.querySelector('.service-tab:not([style*="display: none"])');
+    if (firstVisible) firstVisible.click();
   }
 
   updatePackageDestinationField(type);
@@ -1393,21 +1468,27 @@ function addTour() {
         <div><label>Tour Type <span class="req">*</span></label><select class="trType" required><option>Full Day</option><option>Half Day</option><option>Evening</option></select></div>
       </div>
       <div class="grid cols3">
+        <div><label>Tour Pricing <span class="req">*</span></label><select class="trOccupancy" required><option value="private">Private (Per Vehicle)</option><option value="sharing">Sharing (Per Person)</option></select><span class="helper-text">Choose pricing mode before entering amounts.</span></div>
         <div><label>Vehicle Type <span class="req">*</span></label><select class="trVehicle" required><option>Bus</option><option>Van</option><option>Car</option></select></div>
         <div><label>City <span class="req">*</span></label><select class="trCity" required>${cityOptions}</select></div>
-        <div><label>Price Per Vehicle</label><input type="number" class="trPerVehicle" min="0" step="0.01" placeholder="Optional - if entered, per person prices below are optional"></div>
       </div>
-      <div class="grid cols3">
-        <div><label>Price Per Adult</label><input type="number" class="trAdult" min="0" step="0.01" placeholder="Required if no vehicle price"></div>
-        <div><label>Price Per Child (With Bed)</label><input type="number" class="trChildBed" min="0" step="0.01" placeholder="Required if no vehicle price"></div>
-        <div><label>Price Per Child (Without Bed)</label><input type="number" class="trChildNoBed" min="0" step="0.01" placeholder="Required if no vehicle price"></div>
+      <div class="grid cols3 trVehicleWrapper">
+        <div><label>Price Per Vehicle <span class="req">*</span></label><input type="number" class="trPerVehicle" min="0" step="0.01" placeholder="Private only"></div>
+        <div class="helper-text" style="grid-column: span 3;">Private tours require a vehicle price; sharing tours require per person prices.</div>
       </div>
-      <div class="grid cols1">
-        <div><label>Price Per Infant</label><input type="number" class="trInfant" min="0" step="0.01" placeholder="Required if no vehicle price"></div>
+      <div class="grid cols3 trPerPersonFields hidden-field">
+        <div><label>Price Per Adult <span class="req">*</span></label><input type="number" class="trAdult" min="0" step="0.01" placeholder="Sharing only"></div>
+        <div><label>Price Per Child (With Bed) <span class="req">*</span></label><input type="number" class="trChildBed" min="0" step="0.01" placeholder="Sharing only"></div>
+        <div><label>Price Per Child (Without Bed) <span class="req">*</span></label><input type="number" class="trChildNoBed" min="0" step="0.01" placeholder="Sharing only"></div>
+      </div>
+      <div class="grid cols1 trPerPersonFields hidden-field">
+        <div><label>Price Per Infant <span class="req">*</span></label><input type="number" class="trInfant" min="0" step="0.01" placeholder="Sharing only"></div>
       </div>
     </div>
   `;
   container.insertAdjacentHTML('beforeend', html);
+  const row = document.getElementById(`tour_${id}`);
+  attachTourModeHandlers(row);
   updateCitySelectors();
   updateTourDaySelectors();
 }
@@ -1566,7 +1647,6 @@ document.getElementById('packageForm').addEventListener('submit', async (e) => {
       priceInfant: parseFloat(item.querySelector('.flInfant').value)
     });
   });
-  if (flights.length === 0) { showNotification('Add at least one flight', 'error'); return; }
 
   // Collect hotels
   const hotels = [];
@@ -1586,7 +1666,6 @@ document.getElementById('packageForm').addEventListener('submit', async (e) => {
       childBedCharge: parseFloat(item.querySelector('.htlChildBed').value) || 0
     });
   });
-  if (hotels.length === 0) { showNotification('Add at least one hotel', 'error'); return; }
 
   // Collect transfers
   const transfers = [];
@@ -1607,7 +1686,6 @@ document.getElementById('packageForm').addEventListener('submit', async (e) => {
       priceInfant: parseFloat(item.querySelector('.tfInfant').value) || 0
     });
   });
-  if (transfers.length === 0) { showNotification('Add at least one transfer', 'error'); return; }
 
   // Collect visas (domestic does not include visa)
   const visas = [];
@@ -1652,14 +1730,19 @@ document.getElementById('packageForm').addEventListener('submit', async (e) => {
   if (pkgType === 'international' || pkgType === 'domestic') {
     let invalidTour = false;
     document.querySelectorAll('#toursContainer .subsection').forEach((item, index) => {
+      const occupancy = item.querySelector('.trOccupancy')?.value || 'private';
       const perVehicle = parseFloat(item.querySelector('.trPerVehicle').value) || 0;
       const adult = parseFloat(item.querySelector('.trAdult').value) || 0;
       const childBed = parseFloat(item.querySelector('.trChildBed').value) || 0;
       const childNoBed = parseFloat(item.querySelector('.trChildNoBed').value) || 0;
       const infant = parseFloat(item.querySelector('.trInfant').value) || 0;
-      
-      if (perVehicle === 0 && (adult === 0 || childBed === 0 || childNoBed === 0 || infant === 0)) {
-        showNotification(`Tour ${index + 1}: Either enter price per vehicle OR all per person prices`, 'error');
+
+      if (occupancy === 'private' && perVehicle <= 0) {
+        showNotification(`Tour ${index + 1}: Enter a valid vehicle price for private tours`, 'error');
+        invalidTour = true;
+      }
+      if (occupancy === 'sharing' && (adult <= 0 || childBed <= 0 || childNoBed <= 0 || infant <= 0)) {
+        showNotification(`Tour ${index + 1}: Enter all per person prices for sharing tours`, 'error');
         invalidTour = true;
       }
     });
@@ -1674,13 +1757,29 @@ document.getElementById('packageForm').addEventListener('submit', async (e) => {
     const childBed = parseFloat(item.querySelector('.tfChildBed').value) || 0;
     const childNoBed = parseFloat(item.querySelector('.tfChildNoBed').value) || 0;
     const infant = parseFloat(item.querySelector('.tfInfant').value) || 0;
-    
+
     if (perVehicle === 0 && (adult === 0 || childBed === 0 || childNoBed === 0 || infant === 0)) {
       showNotification(`Transfer ${index + 1}: Either enter price per vehicle OR all per person prices`, 'error');
       invalidTransfer = true;
     }
   });
   if (invalidTransfer) return;
+
+  const missingServices = [];
+  if (flights.length === 0) missingServices.push('Flight');
+  if (hotels.length === 0) missingServices.push('Hotel');
+  if (transfers.length === 0) missingServices.push('Transfer');
+  if (pkgType !== 'domestic' && visas.length === 0) missingServices.push('Visa');
+  if ((pkgType === 'international' || pkgType === 'domestic') && tours.length === 0) missingServices.push('Tour');
+
+  if (missingServices.length) {
+    const message = `Missing services: ${missingServices.join(', ')}. Save package anyway?`;
+    if (!window.confirm(message)) {
+      showNotification('Save cancelled. Please add the missing services or confirm to save without them.', 'info', 5000);
+      return;
+    }
+    showNotification(`Saving without: ${missingServices.join(', ')}.`, 'info', 5000);
+  }
 
   const agent = JSON.parse(localStorage.getItem("loggedInAgent"));
   console.log('Agent data:', agent);
