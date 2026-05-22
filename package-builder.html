@@ -65,7 +65,7 @@
   :root{--accent:#0b76d1;--bg:#f3f6fb;--card:#ffffff;--muted:#5f6d7b;--danger:#dc3545;--success:#28a745}
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: Arial, Helvetica, sans-serif; background: var(--bg); color: #111; }
-  .header { background: var(--card); color: #1b2533; padding: 14px; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; border-radius: 10px; box-shadow: 0 8px 20px rgba(0,0,0,0.06); }
+  .header { background: transparent; color: #1b2533; padding: 0; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
   .header-left { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; }
   .header-actions { display: flex; gap: 10px; flex-wrap: wrap; }
   .header h1 { font-size: 22px; font-weight: 700; margin: 0; white-space: nowrap; }
@@ -111,7 +111,7 @@
   .package-table { width: 100%; border-collapse: collapse; margin-top: 16px; }
   .package-table th, .package-table td { border: 1px solid #e1e8f5; padding: 10px 12px; text-align: left; font-size: 13px; }
   .package-table th { background: #f1f7ff; color: #0b76d1; }
-  .wrap { max-width: 1100px; margin: 20px auto; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); max-height: calc(100vh - 150px); overflow-y: auto; }
+  .wrap { max-width: 1100px; margin: 20px auto; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
   .section { margin-bottom: 30px; padding: 20px; background: #f9f9f9; border-radius: 8px; border-left: 4px solid #0b76d1; }
   .section h3 { margin: 0 0 20px 0; color: #0b76d1; font-size: 18px; display: flex; align-items: center; gap: 10px; }
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; }
@@ -229,17 +229,17 @@
 </head>
 <body>
 
-<div class="header">
-  <div class="header-left">
-    <h1>📦 Advanced Package Builder</h1>
-    <div class="header-actions">
-      <button type="button" class="btn btn-secondary" onclick="window.location.href='dashboard.html'">Dashboard</button>
-      <button type="button" class="btn btn-primary" id="btnViewPackages">View Packages</button>
+<div class="wrap">
+  <div class="header">
+    <div class="header-left">
+      <h1>📦 Advanced Package Builder</h1>
+      <div class="header-actions">
+        <button type="button" class="btn btn-secondary" onclick="window.location.href='dashboard.html'">Dashboard</button>
+        <button type="button" class="btn btn-primary" id="btnViewPackages">View Packages</button>
+      </div>
     </div>
   </div>
-</div>
 
-<div class="wrap">
   <div class="temp-notification-overlay" id="notificationOverlay">
     <div class="temp-notification" id="notification"></div>
   </div>
