@@ -235,6 +235,7 @@
       <h1>📦 Advanced Package Builder</h1>
       <div class="header-actions">
         <button type="button" class="btn btn-secondary" onclick="window.location.href='dashboard.html'">Dashboard</button>
+        <button type="button" class="btn btn-secondary" id="btnCreatePackage">Create New Package</button>
         <button type="button" class="btn btn-primary" id="btnViewPackages">View Packages</button>
       </div>
     </div>
@@ -1033,6 +1034,12 @@ async function loadPackageForEditing(packageId, options = {}) {
     row.querySelector('.tfChildBed').value = t.priceChildBed ?? '';
     row.querySelector('.tfChildNoBed').value = t.priceChildNoBed ?? '';
     row.querySelector('.tfInfant').value = t.priceInfant ?? '';
+    const occupancyField = row.querySelector('.tfOccupancy');
+    const occupancyValue = t.occupancy || ((t.pricePerVehicle || 0) > 0 ? 'private' : 'sharing');
+    if (occupancyField) {
+      occupancyField.value = occupancyValue;
+    }
+    attachTransferModeHandlers(row);
   });
 
   (data.visas || []).forEach(v => {
@@ -1085,6 +1092,8 @@ async function loadPackageForEditing(packageId, options = {}) {
   updateServiceTabVisibility();
   showNotification(readOnly ? 'Package loaded for viewing' : 'Package loaded for editing', 'success');
 }
+
+function enableReadOnlyMode() {
   isReadOnlyMode = true;
 
   const headerTitle = document.querySelector('.header h1');
@@ -1313,6 +1322,22 @@ function openSavedPackage(packageId) {
   window.location.search = params.toString();
 }
 
+function createNewPackage() {
+  const params = new URLSearchParams(window.location.search);
+  params.delete('edit');
+  params.delete('view');
+  window.history.replaceState({}, '', `${window.location.pathname}${params.toString() ? '?' + params.toString() : ''}`);
+  editingPackageId = null;
+  currentPackageCode = null;
+  document.getElementById('packageForm').reset();
+  resetDynamicSections();
+  updateSections();
+  updateServiceTabVisibility();
+  updateCitySelectors();
+  updateTourDaySelectors();
+  showNotification('Ready for a new package', 'success');
+}
+
 async function duplicatePackage(packageId) {
   if (!checkAdminAccess()) return;
   closePackageListModal();
@@ -1327,6 +1352,10 @@ async function duplicatePackage(packageId) {
 }
 
 function setupPackageListModal() {
+  const createBtn = document.getElementById('btnCreatePackage');
+  if (createBtn) {
+    createBtn.addEventListener('click', createNewPackage);
+  }
   const viewBtn = document.getElementById('btnViewPackages');
   if (viewBtn) {
     viewBtn.addEventListener('click', openPackageListModal);
@@ -1565,6 +1594,48 @@ function addTour() {
   updateServiceTabVisibility();
 }
 
+function toggleTransferPricingFields(row) {
+  if (!row) return;
+  const occupancy = row.querySelector('.tfOccupancy')?.value || 'private';
+  const vehicleWrapper = row.querySelector('.tfVehicleWrapper');
+  const perPersonFields = Array.from(row.querySelectorAll('.tfPerPersonFields'));
+  const perVehicleInput = row.querySelector('.tfPerVehicle');
+  const adultInput = row.querySelector('.tfAdult');
+  const childBedInput = row.querySelector('.tfChildBed');
+  const childNoBedInput = row.querySelector('.tfChildNoBed');
+  const infantInput = row.querySelector('.tfInfant');
+
+  if (occupancy === 'sharing') {
+    vehicleWrapper?.classList.add('hidden-field');
+    perVehicleInput?.removeAttribute('required');
+    perPersonFields.forEach(el => el.classList.remove('hidden-field'));
+    adultInput?.setAttribute('required', '');
+    childBedInput?.setAttribute('required', '');
+    childNoBedInput?.setAttribute('required', '');
+    infantInput?.removeAttribute('required');
+  } else {
+    vehicleWrapper?.classList.remove('hidden-field');
+    perVehicleInput?.setAttribute('required', '');
+    perPersonFields.forEach(el => el.classList.add('hidden-field'));
+    adultInput?.removeAttribute('required');
+    childBedInput?.removeAttribute('required');
+    childNoBedInput?.removeAttribute('required');
+    infantInput?.removeAttribute('required');
+    if (adultInput) adultInput.value = '';
+    if (childBedInput) childBedInput.value = '';
+    if (childNoBedInput) childNoBedInput.value = '';
+    if (infantInput) infantInput.value = '';
+  }
+}
+
+function attachTransferModeHandlers(row) {
+  if (!row) return;
+  const select = row.querySelector('.tfOccupancy');
+  if (!select) return;
+  select.addEventListener('change', () => toggleTransferPricingFields(row));
+  toggleTransferPricingFields(row);
+}
+
 // TRANSFERS
 function getTransferFromToFieldHtml(fieldClass, label, packageType, value = '') {
   const safeValue = String(value || '').replace(/"/g, '&quot;');
@@ -1631,21 +1702,28 @@ function addTransfer() {
         <div><label>Transfer Type <span class="req">*</span></label><select class="tfType" required><option>One Way</option><option>Round Trip</option><option>Multi-Day</option></select></div>
       </div>
       <div class="grid cols3">
+        <div><label>Transfer Pricing <span class="req">*</span></label><select class="tfOccupancy" required><option value="private">Private (Per Vehicle)</option><option value="sharing">Sharing (Per Person)</option></select><span class="helper-text">Choose pricing mode before entering amounts.</span></div>
         <div><label>Vehicle Type <span class="req">*</span></label><select class="tfVehicle" required>${transferVehicleOptions}</select></div>
         <div><label>City <span class="req">*</span></label><select class="tfCity" required>${cityOptions}</select></div>
-        <div><label>Price Per Vehicle</label><input type="number" class="tfPerVehicle" min="0" step="0.01" placeholder="Optional - if entered, per person prices below are optional"></div>
       </div>
-      <div class="grid cols3">
-        <div><label>Price Per Adult</label><input type="number" class="tfAdult" min="0" step="0.01" placeholder="Required if no vehicle price"></div>
-        <div><label>Price Per Child (With Bed)</label><input type="number" class="tfChildBed" min="0" step="0.01" placeholder="Required if no vehicle price"></div>
-        <div><label>Price Per Child (Without Bed)</label><input type="number" class="tfChildNoBed" min="0" step="0.01" placeholder="Required if no vehicle price"></div>
+      <div class="grid cols3 tfVehicleWrapper">
+        <div><label>Price Per Vehicle <span class="req">*</span></label><input type="number" class="tfPerVehicle" min="0" step="0.01" placeholder="Private only"></div>
+        <div class="helper-text" style="grid-column: span 3;">Private transfers require a vehicle price; sharing transfers require per person prices.</div>
       </div>
-      <div class="grid cols1">
-        <div><label>Price Per Infant</label><input type="number" class="tfInfant" min="0" step="0.01" placeholder="Required if no vehicle price"></div>
+      <div class="grid cols3 tfPerPersonFields hidden-field">
+        <div><label>Price Per Adult <span class="req">*</span></label><input type="number" class="tfAdult" min="0" step="0.01" placeholder="Sharing only"></div>
+        <div><label>Price Per Child (With Bed) <span class="req">*</span></label><input type="number" class="tfChildBed" min="0" step="0.01" placeholder="Sharing only"></div>
+        <div><label>Price Per Child (Without Bed) <span class="req">*</span></label><input type="number" class="tfChildNoBed" min="0" step="0.01" placeholder="Sharing only"></div>
+      </div>
+      <div class="grid cols1 tfPerPersonFields hidden-field">
+        <div><label>Price Per Infant <span class="req">*</span></label><input type="number" class="tfInfant" min="0" step="0.01" placeholder="Sharing only"></div>
       </div>
     </div>
   `;
   container.insertAdjacentHTML('beforeend', html);
+  const row = document.getElementById(`transfer_${id}`);
+  attachTransferModeHandlers(row);
+  updateCitySelectors();
   updateServiceTabVisibility();
 }
 
@@ -1753,6 +1831,7 @@ document.getElementById('packageForm').addEventListener('submit', async (e) => {
       type: item.querySelector('.tfType').value,
       vehicle: item.querySelector('.tfVehicle').value,
       city: item.querySelector('.tfCity').value,
+      occupancy: item.querySelector('.tfOccupancy')?.value || 'private',
       pricePerVehicle: parseFloat(item.querySelector('.tfPerVehicle').value) || 0,
       priceAdult: parseFloat(item.querySelector('.tfAdult').value) || 0,
       priceChildBed: parseFloat(item.querySelector('.tfChildBed').value) || 0,
@@ -1826,14 +1905,19 @@ document.getElementById('packageForm').addEventListener('submit', async (e) => {
   // Validate transfers
   let invalidTransfer = false;
   document.querySelectorAll('#transfersContainer .subsection').forEach((item, index) => {
+    const occupancy = item.querySelector('.tfOccupancy')?.value || 'private';
     const perVehicle = parseFloat(item.querySelector('.tfPerVehicle').value) || 0;
     const adult = parseFloat(item.querySelector('.tfAdult').value) || 0;
     const childBed = parseFloat(item.querySelector('.tfChildBed').value) || 0;
     const childNoBed = parseFloat(item.querySelector('.tfChildNoBed').value) || 0;
     const infant = parseFloat(item.querySelector('.tfInfant').value) || 0;
 
-    if (perVehicle === 0 && (adult === 0 || childBed === 0 || childNoBed === 0 || infant === 0)) {
-      showNotification(`Transfer ${index + 1}: Either enter price per vehicle OR all per person prices`, 'error');
+    if (occupancy === 'private' && perVehicle <= 0) {
+      showNotification(`Transfer ${index + 1}: Enter a valid vehicle price for private transfers`, 'error');
+      invalidTransfer = true;
+    }
+    if (occupancy === 'sharing' && (adult <= 0 || childBed <= 0 || childNoBed <= 0 || infant <= 0)) {
+      showNotification(`Transfer ${index + 1}: Enter valid per-person prices for sharing transfers`, 'error');
       invalidTransfer = true;
     }
   });
