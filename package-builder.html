@@ -236,6 +236,7 @@
       <div class="header-actions">
         <button type="button" class="btn btn-secondary" onclick="window.location.href='dashboard.html'">Dashboard</button>
         <button type="button" class="btn btn-primary" id="btnViewPackages">View Packages</button>
+        <button type="button" class="btn btn-primary" id="btnCostingSummary" onclick="showCostingModal()">Costing Summary</button>
       </div>
     </div>
   </div>
@@ -289,8 +290,41 @@
       </div>
     </div>
   </div>
+  
+    <!-- COSTING SUMMARY MODAL -->
+    <div id="costingModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="costingTitle">
+      <div class="modal-content" style="max-width:760px;">
+        <div class="modal-header">
+          <h3 id="costingTitle">Costing Summary</h3>
+          <button type="button" class="modal-close" onclick="closeCostingModal()">×</button>
+        </div>
+        <div id="costingContent">
+          <div style="margin-bottom:12px;color:#5f6d7b;font-size:13px;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;">
+            <div>Below is the cost breakup for the current package. Use <strong>Export PDF</strong> to download.</div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <label style="font-size:13px;color:#5f6d7b;">Adults&nbsp;<input id="costingAdultsCount" type="number" min="0" value="1" style="width:72px;margin-left:6px;padding:6px;border:1px solid #ddd;border-radius:4px;"/></label>
+              <label style="font-size:13px;color:#5f6d7b;">Children&nbsp;<input id="costingChildrenCount" type="number" min="0" value="0" style="width:72px;margin-left:6px;padding:6px;border:1px solid #ddd;border-radius:4px;"/></label>
+              <label style="font-size:13px;color:#5f6d7b;">Infants&nbsp;<input id="costingInfantsCount" type="number" min="0" value="0" style="width:72px;margin-left:6px;padding:6px;border:1px solid #ddd;border-radius:4px;"/></label>
+            </div>
+          </div>
+          <table style="width:100%;border-collapse:collapse;margin-bottom:12px;">
+            <thead>
+              <tr style="background:#f1f7ff;color:#0b76d1;text-align:left;"><th style="padding:8px;border:1px solid #e6eefb;">Item</th><th style="padding:8px;border:1px solid #e6eefb;text-align:right;">Amount</th><th style="padding:8px;border:1px solid #e6eefb;text-align:right;">Per Pax</th></tr>
+            </thead>
+            <tbody id="costingTableBody"></tbody>
+            <tfoot>
+              <tr><td style="padding:8px;border:1px solid #e6eefb;font-weight:700;">Total</td><td id="costingTotal" style="padding:8px;border:1px solid #e6eefb;text-align:right;font-weight:700;">0</td><td id="costingPerPaxTotal" style="padding:8px;border:1px solid #e6eefb;text-align:right;font-weight:700;">0</td></tr>
+            </tfoot>
+          </table>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:10px;">
+          <button type="button" class="btn btn-secondary" onclick="closeCostingModal()">Close</button>
+          <button type="button" class="btn btn-primary" onclick="exportCostingPdf()">Export PDF</button>
+        </div>
+      </div>
+    </div>
 
-  <div class="info-box no-print">
+    <div class="info-box no-print">
     <strong>Tip:</strong> You may save a package with only one service type. Missing services will be listed before saving so you can confirm.
   </div>
 
@@ -815,6 +849,168 @@ document.addEventListener('DOMContentLoaded', () => {
     initialTabWithContent.click();
   }
 });
+
+// ---------------- Costing summary helpers ----------------
+function formatMoney(v) {
+  const n = Number(v) || 0;
+  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function calculateCostBreakup() {
+  const toNumber = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+  const toPKR = (value, currency = 'PKR', roe = 1) => {
+    const amount = toNumber(value);
+    if (!amount) return 0;
+    const cur = (currency || 'PKR').toUpperCase();
+    if (cur === 'PKR') return amount;
+    const rate = toNumber(roe) > 0 ? toNumber(roe) : 1;
+    return amount * rate;
+  };
+
+  const rows = [];
+  let total = 0;
+
+  // Passenger multipliers from modal (defaults)
+  const adultsCount = Math.max(0, parseInt(document.getElementById('costingAdultsCount')?.value || '1', 10) || 0);
+  const childrenCount = Math.max(0, parseInt(document.getElementById('costingChildrenCount')?.value || '0', 10) || 0);
+  const infantsCount = Math.max(0, parseInt(document.getElementById('costingInfantsCount')?.value || '0', 10) || 0);
+  const totalPax = Math.max(1, adultsCount + childrenCount + infantsCount);
+
+  // Flights
+  document.querySelectorAll('#flightsContainer .subsection').forEach(item => {
+    const airline = item.querySelector('.flAirline')?.value || '';
+    const sector = item.querySelector('.flSector')?.value || '';
+    const c = item.querySelector('.flCurrency')?.value || 'PKR';
+    const r = item.querySelector('.flROE')?.value || 1;
+    const adultPrice = toPKR(item.querySelector('.flAdult')?.value || 0, c, r);
+    const childPrice = toPKR(item.querySelector('.flChild')?.value || 0, c, r);
+    const infantPrice = toPKR(item.querySelector('.flInfant')?.value || 0, c, r);
+    const adultTotal = adultPrice * adultsCount;
+    const childTotal = childPrice * childrenCount;
+    const infantTotal = infantPrice * infantsCount;
+    const subtotal = adultTotal + childTotal + infantTotal;
+    const perPax = subtotal / totalPax;
+    rows.push({ desc: `Flight${sector ? ' ' + sector : ''} ${airline}`.trim(), amount: subtotal, perPax });
+    total += subtotal;
+  });
+
+  // Hotels
+  document.querySelectorAll('#hotelsContainer .subsection').forEach(item => {
+    const name = item.querySelector('.htlName')?.value || 'Hotel';
+    const nights = toNumber(item.querySelector('.htlNights')?.value || 1);
+    const c = item.querySelector('.htlCurrency')?.value || 'PKR';
+    const r = item.querySelector('.htlROE')?.value || 1;
+    const doubleRate = toPKR(item.querySelector('.htlDouble')?.value || 0, c, r);
+    const subtotal = doubleRate * Math.max(1, nights);
+    const perPax = subtotal / totalPax;
+    rows.push({ desc: `Hotel: ${name} (${nights} nights)`, amount: subtotal, perPax });
+    total += subtotal;
+  });
+
+  // Tours
+  document.querySelectorAll('#toursContainer .subsection').forEach(item => {
+    const name = item.querySelector('.trName')?.value || 'Tour';
+    const c = item.querySelector('.trCurrency')?.value || 'PKR';
+    const r = item.querySelector('.trROE')?.value || 1;
+    const perVehicle = toPKR(item.querySelector('.trPerVehicle')?.value || 0, c, r);
+    const adultPrice = toPKR(item.querySelector('.trAdult')?.value || 0, c, r);
+    const childPrice = toPKR(item.querySelector('.trChildPrice')?.value || 0, c, r);
+    const infantPrice = toPKR(item.querySelector('.trInfant')?.value || 0, c, r);
+    let subtotal = 0;
+    if (perVehicle > 0) {
+      subtotal = perVehicle;
+    } else {
+      subtotal = (adultPrice * adultsCount) + (childPrice * childrenCount) + (infantPrice * infantsCount);
+    }
+    const perPax = subtotal / totalPax;
+    rows.push({ desc: `Tour: ${name}`, amount: subtotal, perPax });
+    total += subtotal;
+  });
+
+  // Transfers
+  document.querySelectorAll('#transfersContainer .subsection').forEach(item => {
+    const from = item.querySelector('.tfFrom')?.value || '';
+    const to = item.querySelector('.tfTo')?.value || '';
+    const label = `${from}${from && to ? ' → ' : ''}${to}`.trim();
+    const c = item.querySelector('.tfCurrency')?.value || 'PKR';
+    const r = item.querySelector('.tfROE')?.value || 1;
+    const perVehicle = toPKR(item.querySelector('.tfPerVehicle')?.value || 0, c, r);
+    const adultPrice = toPKR(item.querySelector('.tfAdult')?.value || 0, c, r);
+    const childBedPrice = toPKR(item.querySelector('.tfChildBed')?.value || 0, c, r);
+    const childNoBedPrice = toPKR(item.querySelector('.tfChildNoBed')?.value || 0, c, r);
+    const infantPrice = toPKR(item.querySelector('.tfInfant')?.value || 0, c, r);
+    let subtotal = 0;
+    if (perVehicle > 0) {
+      subtotal = perVehicle;
+    } else {
+      subtotal = (adultPrice * adultsCount) + (childBedPrice * childrenCount) + (childNoBedPrice * childrenCount) + (infantPrice * infantsCount);
+    }
+    const perPax = subtotal / totalPax;
+    rows.push({ desc: `Transfer: ${label}`, amount: subtotal, perPax });
+    total += subtotal;
+  });
+
+  // Visas
+  document.querySelectorAll('#visasContainer .subsection').forEach(item => {
+    const country = item.querySelector('.vsCountry')?.value || 'Visa';
+    const c = item.querySelector('.vsCurrency')?.value || 'PKR';
+    const r = item.querySelector('.vsROE')?.value || 1;
+    const adultPrice = toPKR(item.querySelector('.vsAdult')?.value || 0, c, r);
+    const childPrice = toPKR(item.querySelector('.vsChild')?.value || 0, c, r);
+    const infantPrice = toPKR(item.querySelector('.vsInfant')?.value || 0, c, r);
+    const adultTotal = adultPrice * adultsCount;
+    const childTotal = childPrice * childrenCount;
+    const infantTotal = infantPrice * infantsCount;
+    const subtotal = adultTotal + childTotal + infantTotal;
+    const perPax = subtotal / totalPax;
+    rows.push({ desc: `Visa: ${country}`, amount: subtotal, perPax });
+    total += subtotal;
+  });
+
+  // Service charges (per unit shown as-is)
+  const svcAdult = toNumber(document.getElementById('chargeAdult')?.value || 0);
+  const svcChildBed = toNumber(document.getElementById('chargeChildBed')?.value || 0);
+  const svcChildNoBed = toNumber(document.getElementById('chargeChildNoBed')?.value || 0);
+  if (svcAdult) { const amt = svcAdult * adultsCount; rows.push({ desc: 'Service charge (adults)', amount: amt, perPax: svcAdult }); total += amt; }
+  if (svcChildBed) { const amt = svcChildBed * childrenCount; rows.push({ desc: 'Service charge (children with bed)', amount: amt, perPax: svcChildBed }); total += amt; }
+  if (svcChildNoBed) { const amt = svcChildNoBed * childrenCount; rows.push({ desc: 'Service charge (children no bed)', amount: amt, perPax: svcChildNoBed }); total += amt; }
+
+  return { rows, total, totalPax };
+
+  return { rows, total };
+}
+
+function showCostingModal() {
+  const { rows, total, totalPax } = calculateCostBreakup();
+  const tbody = document.getElementById('costingTableBody');
+  tbody.innerHTML = '';
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    const td1 = document.createElement('td'); td1.style.padding = '8px'; td1.style.border = '1px solid #e6eefb'; td1.textContent = r.desc;
+    const td2 = document.createElement('td'); td2.style.padding = '8px'; td2.style.border = '1px solid #e6eefb'; td2.style.textAlign = 'right'; td2.textContent = formatMoney(r.amount);
+    const td3 = document.createElement('td'); td3.style.padding = '8px'; td3.style.border = '1px solid #e6eefb'; td3.style.textAlign = 'right'; td3.textContent = formatMoney((r.perPax || 0));
+    tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tbody.appendChild(tr);
+  });
+  document.getElementById('costingTotal').textContent = formatMoney(total);
+  const perPaxTotalEl = document.getElementById('costingPerPaxTotal');
+  perPaxTotalEl.textContent = formatMoney(total / Math.max(1, totalPax));
+  document.getElementById('costingModal').classList.add('visible');
+}
+
+function closeCostingModal() {
+  document.getElementById('costingModal').classList.remove('visible');
+}
+
+function exportCostingPdf() {
+  const el = document.getElementById('costingContent');
+  const packageName = (document.getElementById('packageName')?.value || 'package-costing').replace(/[^a-z0-9\-\_]/ig, '-');
+  if (window.html2pdf) {
+    const opt = { margin: 10, filename: `${packageName}.pdf`, html2canvas: { scale: 2 }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } };
+    html2pdf().set(opt).from(el).save();
+  } else {
+    alert('PDF export not available.');
+  }
+}
 
 function toIsoDateString(value) {
   const dateObj = new Date(value);
