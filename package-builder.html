@@ -95,6 +95,13 @@
   .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 9999; padding: 20px; }
   .modal-overlay.visible { display: flex; }
   .modal-content { width: 100%; max-width: 1040px; max-height: calc(100vh - 100px); overflow-y: auto; background: white; border-radius: 14px; padding: 24px; box-shadow: 0 24px 60px rgba(0,0,0,0.18); }
+  .confirm-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.65); display: none; align-items: center; justify-content: center; z-index: 10001; padding: 20px; }
+  .confirm-overlay.visible { display: flex; }
+  .confirm-box { width: 100%; max-width: 420px; background: #fff; border-radius: 14px; padding: 24px; box-shadow: 0 18px 50px rgba(0,0,0,0.18); text-align: left; }
+  .confirm-box h4 { margin: 0 0 14px 0; font-size: 18px; color: #0b76d1; }
+  .confirm-box p { color: #333; line-height: 1.6; margin-bottom: 20px; font-size: 14px; }
+  .confirm-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+  .confirm-actions button { min-width: 100px; }
   .modal-header { display: flex; justify-content: flex-start; align-items: center; gap: 10px; margin-bottom: 20px; position: relative; width: 100%; }
   .modal-header h3 { margin: 0; font-size: 20px; color: #0b76d1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; padding-right: 60px; width: 100%; max-width: calc(100% - 60px); }
   .modal-close { background: none; border: none; font-size: 26px; cursor: pointer; color: #333; position: absolute; top: 8px; right: 8px; z-index: 2; line-height: 1; padding: 6px 8px; }
@@ -268,6 +275,17 @@
             <tr><td colspan="8" style="text-align:center;padding:24px;">Loading saved packages...</td></tr>
           </tbody>
         </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="confirmModal" class="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="confirmModalTitle">
+    <div class="confirm-box">
+      <h4 id="confirmModalTitle">Confirm Save</h4>
+      <p id="confirmModalMessage">Are you sure you want to continue?</p>
+      <div class="confirm-actions">
+        <button type="button" class="btn btn-secondary" id="confirmCancelBtn">Cancel</button>
+        <button type="button" class="btn btn-primary" id="confirmOkBtn">Save anyway</button>
       </div>
     </div>
   </div>
@@ -557,12 +575,13 @@ async function generateImage() {
       return;
     }
     const a = toPKR(item.querySelector(`.${prefix}Adult`)?.value, currency, roe);
-    const cnb = toPKR(item.querySelector(`.${prefix}ChildNoBed`)?.value, currency, roe);
+    const childPriceRaw = item.querySelector(`.${prefix}ChildPrice`)?.value || item.querySelector(`.${prefix}ChildNoBed`)?.value || item.querySelector(`.${prefix}ChildBed`)?.value;
+    const cnb = toPKR(childPriceRaw, currency, roe);
     adultDouble += a;
     adultTriple += a;
     adultQuad += a;
     childWithoutBed += cnb;
-    const cwbRaw = item.querySelector(`.${prefix}ChildBed`)?.value;
+    const cwbRaw = item.querySelector(`.${prefix}ChildBed`)?.value || item.querySelector(`.${prefix}ChildPrice`)?.value || item.querySelector(`.${prefix}ChildNoBed`)?.value;
     childWithBed += cwbRaw !== null && cwbRaw !== undefined && cwbRaw !== '' ? toPKR(cwbRaw, currency, roe) : cnb;
   };
   document.querySelectorAll('#transfersContainer .subsection').forEach(item => applyMoveService(item, 'tf'));
@@ -1020,8 +1039,7 @@ async function loadPackageForEditing(packageId, options = {}) {
       row.querySelector('.trCity').value = t.city || '';
       row.querySelector('.trPerVehicle').value = t.pricePerVehicle ?? '';
       row.querySelector('.trAdult').value = t.priceAdult ?? '';
-      row.querySelector('.trChildBed').value = t.priceChildBed ?? '';
-      row.querySelector('.trChildNoBed').value = t.priceChildNoBed ?? '';
+      row.querySelector('.trChildPrice').value = t.priceChild ?? t.priceChildBed ?? t.priceChildNoBed ?? '';
       row.querySelector('.trInfant').value = t.priceInfant ?? '';
       const occupancyField = row.querySelector('.trOccupancy');
       const occupancyValue = t.occupancy || ((t.pricePerVehicle || 0) > 0 ? 'private' : 'sharing');
@@ -1119,8 +1137,7 @@ function toggleTourPricingFields(row) {
   const perVehicleInput = row.querySelector('.trPerVehicle');
   const perPersonFields = Array.from(row.querySelectorAll('.trPerPersonFields'));
   const adultInput = row.querySelector('.trAdult');
-  const childBedInput = row.querySelector('.trChildBed');
-  const childNoBedInput = row.querySelector('.trChildNoBed');
+  const childPriceInput = row.querySelector('.trChildPrice');
   const infantInput = row.querySelector('.trInfant');
 
   if (occupancy === 'sharing') {
@@ -1129,20 +1146,17 @@ function toggleTourPricingFields(row) {
     if (perVehicleInput) perVehicleInput.value = '';
     perPersonFields.forEach(el => el.classList.remove('hidden-field'));
     adultInput?.setAttribute('required', '');
-    childBedInput?.setAttribute('required', '');
-    childNoBedInput?.setAttribute('required', '');
-    infantInput?.setAttribute('required', '');
+    childPriceInput?.setAttribute('required', '');
+    infantInput?.removeAttribute('required');
   } else {
     vehicleWrapper?.classList.remove('hidden-field');
     perVehicleInput?.setAttribute('required', '');
     perPersonFields.forEach(el => el.classList.add('hidden-field'));
     adultInput?.removeAttribute('required');
-    childBedInput?.removeAttribute('required');
-    childNoBedInput?.removeAttribute('required');
+    childPriceInput?.removeAttribute('required');
     infantInput?.removeAttribute('required');
     if (adultInput) adultInput.value = '';
-    if (childBedInput) childBedInput.value = '';
-    if (childNoBedInput) childNoBedInput.value = '';
+    if (childPriceInput) childPriceInput.value = '';
     if (infantInput) infantInput.value = '';
   }
 }
@@ -1178,6 +1192,38 @@ function showNotification(msg, type = 'success', duration = 3000) {
   notif.className = 'temp-notification ' + type;
   overlay.classList.add('visible');
   setTimeout(() => { overlay.classList.remove('visible'); }, duration);
+}
+
+function showConfirmationModal(message, confirmText = 'Save anyway', cancelText = 'Cancel') {
+  const overlay = document.getElementById('confirmModal');
+  const messageEl = document.getElementById('confirmModalMessage');
+  const okBtn = document.getElementById('confirmOkBtn');
+  const cancelBtn = document.getElementById('confirmCancelBtn');
+
+  return new Promise(resolve => {
+    const clean = () => {
+      overlay.classList.remove('visible');
+      okBtn.removeEventListener('click', onOk);
+      cancelBtn.removeEventListener('click', onCancel);
+    };
+
+    const onOk = () => {
+      clean();
+      resolve(true);
+    };
+    const onCancel = () => {
+      clean();
+      resolve(false);
+    };
+
+    messageEl.textContent = message;
+    okBtn.textContent = confirmText;
+    cancelBtn.textContent = cancelText;
+    overlay.classList.add('visible');
+
+    okBtn.addEventListener('click', onOk);
+    cancelBtn.addEventListener('click', onCancel);
+  });
 }
 
 function loadPackageList() {
@@ -1478,11 +1524,8 @@ function addTour() {
       </div>
       <div class="grid cols3 trPerPersonFields hidden-field">
         <div><label>Price Per Adult <span class="req">*</span></label><input type="number" class="trAdult" min="0" step="0.01" placeholder="Sharing only"></div>
-        <div><label>Price Per Child (With Bed) <span class="req">*</span></label><input type="number" class="trChildBed" min="0" step="0.01" placeholder="Sharing only"></div>
-        <div><label>Price Per Child (Without Bed) <span class="req">*</span></label><input type="number" class="trChildNoBed" min="0" step="0.01" placeholder="Sharing only"></div>
-      </div>
-      <div class="grid cols1 trPerPersonFields hidden-field">
-        <div><label>Price Per Infant <span class="req">*</span></label><input type="number" class="trInfant" min="0" step="0.01" placeholder="Sharing only"></div>
+        <div><label>Price Per Child <span class="req">*</span></label><input type="number" class="trChildPrice" min="0" step="0.01" placeholder="Sharing only"></div>
+        <div><label>Price Per Infant</label><input type="number" class="trInfant" min="0" step="0.01" placeholder="Sharing only"></div>
       </div>
     </div>
   `;
@@ -1717,10 +1760,11 @@ document.getElementById('packageForm').addEventListener('submit', async (e) => {
         type: item.querySelector('.trType').value,
         vehicle: item.querySelector('.trVehicle').value,
         city: item.querySelector('.trCity').value,
-        pricePerVehicle: parseFloat(item.querySelector('.trPerVehicle').value) || 0,
+            pricePerVehicle: parseFloat(item.querySelector('.trPerVehicle').value) || 0,
         priceAdult: parseFloat(item.querySelector('.trAdult').value) || 0,
-        priceChildBed: parseFloat(item.querySelector('.trChildBed').value) || 0,
-        priceChildNoBed: parseFloat(item.querySelector('.trChildNoBed').value) || 0,
+        priceChild: parseFloat(item.querySelector('.trChildPrice').value) || 0,
+        priceChildBed: parseFloat(item.querySelector('.trChildPrice').value) || 0,
+        priceChildNoBed: parseFloat(item.querySelector('.trChildPrice').value) || 0,
         priceInfant: parseFloat(item.querySelector('.trInfant').value) || 0
       });
     });
@@ -1733,16 +1777,15 @@ document.getElementById('packageForm').addEventListener('submit', async (e) => {
       const occupancy = item.querySelector('.trOccupancy')?.value || 'private';
       const perVehicle = parseFloat(item.querySelector('.trPerVehicle').value) || 0;
       const adult = parseFloat(item.querySelector('.trAdult').value) || 0;
-      const childBed = parseFloat(item.querySelector('.trChildBed').value) || 0;
-      const childNoBed = parseFloat(item.querySelector('.trChildNoBed').value) || 0;
+      const childPrice = parseFloat(item.querySelector('.trChildPrice').value) || 0;
       const infant = parseFloat(item.querySelector('.trInfant').value) || 0;
 
       if (occupancy === 'private' && perVehicle <= 0) {
         showNotification(`Tour ${index + 1}: Enter a valid vehicle price for private tours`, 'error');
         invalidTour = true;
       }
-      if (occupancy === 'sharing' && (adult <= 0 || childBed <= 0 || childNoBed <= 0 || infant <= 0)) {
-        showNotification(`Tour ${index + 1}: Enter all per person prices for sharing tours`, 'error');
+      if (occupancy === 'sharing' && (adult <= 0 || childPrice <= 0)) {
+        showNotification(`Tour ${index + 1}: Enter both adult and child prices for sharing tours`, 'error');
         invalidTour = true;
       }
     });
@@ -1774,7 +1817,8 @@ document.getElementById('packageForm').addEventListener('submit', async (e) => {
 
   if (missingServices.length) {
     const message = `Missing services: ${missingServices.join(', ')}. Save package anyway?`;
-    if (!window.confirm(message)) {
+    const confirmed = await showConfirmationModal(message, 'Save anyway', 'Cancel');
+    if (!confirmed) {
       showNotification('Save cancelled. Please add the missing services or confirm to save without them.', 'info', 5000);
       return;
     }
@@ -2073,15 +2117,16 @@ async function generatePDF() {
 
     // Per person case
     const a = toPKR(item.querySelector(`.${prefix}Adult`)?.value, currency, roe);
-    const cnb = toPKR(item.querySelector(`.${prefix}ChildNoBed`)?.value, currency, roe);
+    const childPriceRaw = item.querySelector(`.${prefix}ChildPrice`)?.value || item.querySelector(`.${prefix}ChildNoBed`)?.value || item.querySelector(`.${prefix}ChildBed`)?.value;
 
     adultDouble += a;
     adultTriple += a;
     adultQuad += a;
+    const cnb = toPKR(childPriceRaw, currency, roe);
     childWithoutBed += cnb;
 
-    // Child with bed: if explicit child-bed exists use it, else use child-no-bed as closest per-person input.
-    const cwbRaw = item.querySelector(`.${prefix}ChildBed`)?.value;
+    // Child with bed: if explicit child-bed exists use it, else use shared child price or child no bed.
+    const cwbRaw = item.querySelector(`.${prefix}ChildBed`)?.value || item.querySelector(`.${prefix}ChildPrice`)?.value || item.querySelector(`.${prefix}ChildNoBed`)?.value;
     childWithBed += cwbRaw !== null && cwbRaw !== undefined && cwbRaw !== ''
       ? toPKR(cwbRaw, currency, roe)
       : cnb;
