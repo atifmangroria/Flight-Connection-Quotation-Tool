@@ -111,7 +111,7 @@
   .package-table { width: 100%; border-collapse: collapse; margin-top: 16px; }
   .package-table th, .package-table td { border: 1px solid #e1e8f5; padding: 10px 12px; text-align: left; font-size: 13px; }
   .package-table th { background: #f1f7ff; color: #0b76d1; }
-  .wrap { max-width: 1100px; margin: 20px auto; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+  .wrap { max-width: 1200px; margin: 20px auto; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
   .section { margin-bottom: 30px; padding: 20px; background: #f9f9f9; border-radius: 8px; border-left: 4px solid #0b76d1; }
   .section h3 { margin: 0 0 20px 0; color: #0b76d1; font-size: 18px; display: flex; align-items: center; gap: 10px; }
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; }
@@ -509,8 +509,16 @@ async function generateImage() {
     }
   });
 
+  const missingServiceExclusions = [];
+  if (!document.querySelector('#flightsContainer .subsection')) missingServiceExclusions.push('Flight services are not included unless added.');
+  if (!document.querySelector('#hotelsContainer .subsection')) missingServiceExclusions.push('Hotel services are not included unless added.');
+  if (!document.querySelector('#toursContainer .subsection')) missingServiceExclusions.push('Tour services are not included unless added.');
+  if (!document.querySelector('#transfersContainer .subsection')) missingServiceExclusions.push('Transfer services are not included unless added.');
+  if (!document.querySelector('#visasContainer .subsection')) missingServiceExclusions.push('Visa services are not included unless added.');
+
   const exclusions = [
     ...hotelExclusions,
+    ...missingServiceExclusions,
     'Lunch and Dinner (if not explicitly mentioned)',
     'Early check-in / Late check-out',
     'Entrance tickets if not mentioned',
@@ -801,9 +809,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Default first tab for better UX.
-  if (serviceTabs.length && servicePanels.length) {
-    serviceTabs[0].click();
+  const serviceRowExists = (service) => !!document.querySelector(`#${service}sContainer .subsection`);
+  const initialTabWithContent = Array.from(serviceTabs).find(tab => serviceRowExists(tab.dataset.service));
+  if (initialTabWithContent) {
+    initialTabWithContent.click();
   }
 });
 
@@ -2243,8 +2252,16 @@ async function generatePDF() {
     }
   });
 
+  const missingServiceExclusions = [];
+  if (!document.querySelector('#flightsContainer .subsection')) missingServiceExclusions.push('Flight services are not included unless added.');
+  if (!document.querySelector('#hotelsContainer .subsection')) missingServiceExclusions.push('Hotel services are not included unless added.');
+  if (!document.querySelector('#toursContainer .subsection')) missingServiceExclusions.push('Tour services are not included unless added.');
+  if (!document.querySelector('#transfersContainer .subsection')) missingServiceExclusions.push('Transfer services are not included unless added.');
+  if (!document.querySelector('#visasContainer .subsection')) missingServiceExclusions.push('Visa services are not included unless added.');
+
   const exclusions = [
     ...hotelExclusions,
+    ...missingServiceExclusions,
     'Lunch and Dinner (if not explicitly mentioned)',
     'Early check-in / Late check-out',
     'Entrance tickets if not mentioned',
