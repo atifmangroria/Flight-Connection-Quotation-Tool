@@ -290,59 +290,6 @@
     </div>
   </div>
   
-    <!-- COSTING SUMMARY MODAL -->
-    <div id="costingModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="costingTitle">
-      <div class="modal-content" style="max-width:880px;">
-        <div class="modal-header">
-          <h3 id="costingTitle">Costing Summary</h3>
-          <button type="button" class="modal-close" onclick="closeCostingModal()">×</button>
-        </div>
-        <div id="costingContent">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
-            <div><strong>Package</strong><div id="costingPackageName" style="margin-top:6px;color:#1f2937;"></div></div>
-            <div><strong>Travel Dates</strong><div id="costingTravelDates" style="margin-top:6px;color:#1f2937;"></div></div>
-            <div><strong>Passengers</strong><div id="costingPaxSummary" style="margin-top:6px;color:#1f2937;"></div></div>
-            <div><strong>Note</strong><div style="margin-top:6px;color:#475569;">Vendor, currency and ROE details are shown for each service with adult/child/infant pricing.</div></div>
-          </div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px;">
-            <label style="font-size:13px;color:#475569;">Adults&nbsp;<input id="costingAdultsCount" type="number" min="0" value="1" style="width:72px;margin-left:6px;padding:6px;border:1px solid #ddd;border-radius:4px;"/></label>
-            <label style="font-size:13px;color:#475569;">Children&nbsp;<input id="costingChildrenCount" type="number" min="0" value="0" style="width:72px;margin-left:6px;padding:6px;border:1px solid #ddd;border-radius:4px;"/></label>
-            <label style="font-size:13px;color:#475569;">Infants&nbsp;<input id="costingInfantsCount" type="number" min="0" value="0" style="width:72px;margin-left:6px;padding:6px;border:1px solid #ddd;border-radius:4px;"/></label>
-          </div>
-          <div style="overflow-x:auto;">
-            <table style="width:100%;border-collapse:collapse;margin-bottom:12px;min-width:780px;">
-              <thead>
-                <tr style="background:#eef4ff;color:#0f4c81;text-align:left;">
-                  <th style="padding:10px;border:1px solid #d6e4ff;">Service</th>
-                  <th style="padding:10px;border:1px solid #d6e4ff;">Vendor</th>
-                  <th style="padding:10px;border:1px solid #d6e4ff;">Currency / ROE</th>
-                  <th style="padding:10px;border:1px solid #d6e4ff;text-align:right;">Per Adult</th>
-                  <th style="padding:10px;border:1px solid #d6e4ff;text-align:right;">Per Child</th>
-                  <th style="padding:10px;border:1px solid #d6e4ff;text-align:right;">Per Infant</th>
-                  <th style="padding:10px;border:1px solid #d6e4ff;text-align:right;">Total PKR</th>
-                </tr>
-              </thead>
-              <tbody id="costingTableBody"></tbody>
-              <tfoot>
-                <tr>
-                  <td colspan="6" style="padding:10px;border:1px solid #d6e4ff;font-weight:700;">Total</td>
-                  <td id="costingTotal" style="padding:10px;border:1px solid #d6e4ff;text-align:right;font-weight:700;">0</td>
-                </tr>
-                <tr>
-                  <td colspan="6" style="padding:10px;border:1px solid #d6e4ff;font-weight:700;">Total Per Pax</td>
-                  <td id="costingPerPaxTotal" style="padding:10px;border:1px solid #d6e4ff;text-align:right;font-weight:700;">0</td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </div>
-        <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px;">
-          <button type="button" class="btn btn-secondary" onclick="closeCostingModal()">Close</button>
-          <button type="button" class="btn btn-primary" onclick="exportCostingPdf()">Export PDF</button>
-        </div>
-      </div>
-    </div>
-
     <div class="info-box no-print">
     <strong>Tip:</strong> You may save a package with only one service type. Missing services will be listed before saving so you can confirm.
   </div>
@@ -456,9 +403,6 @@
           <label>Service Charge Per Infant <span class="req">*</span></label>
           <input type="number" id="chargeInfant" min="0" step="0.01" required placeholder="0">
         </div>
-      </div>
-      <div style="margin-top:16px;text-align:right;">
-        <button type="button" class="btn btn-primary" onclick="showCostingModal()">Costing Summary</button>
       </div>
     </div>
 
@@ -870,395 +814,25 @@ document.addEventListener('DOMContentLoaded', () => {
   if (initialTabWithContent) {
     initialTabWithContent.click();
   }
+
+  updateServiceTabVisibility();
 });
 
-// ---------------- Costing summary helpers ----------------
-function formatMoney(v) {
-  const n = Number(v) || 0;
-  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-// Compute quotation-style per-person price lines (Double/Triple/Quad/CWB/CNB/Infant)
-function computeQuotationPriceLines() {
-  const toNumber = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
-  const toPKR = (value, currency = 'PKR', roe = 1) => {
-    const amount = toNumber(value);
-    if (!amount) return 0;
-    const cur = (currency || 'PKR').toUpperCase();
-    if (cur === 'PKR') return amount;
-    const rate = toNumber(roe) > 0 ? toNumber(roe) : 1;
-    return amount * rate;
-  };
-
-  let adultDouble = 0, adultTriple = 0, adultQuad = 0, childWithBed = 0, childWithoutBed = 0, infant = 0;
-  let hasQuad = false;
-
-  document.querySelectorAll('#flightsContainer .subsection').forEach(item => {
-    const c = item.querySelector('.flCurrency')?.value || 'PKR';
-    const r = item.querySelector('.flROE')?.value || 1;
-    adultDouble += toPKR(item.querySelector('.flAdult')?.value, c, r);
-    adultTriple += toPKR(item.querySelector('.flAdult')?.value, c, r);
-    adultQuad += toPKR(item.querySelector('.flAdult')?.value, c, r);
-    const childTicket = toPKR(item.querySelector('.flChild')?.value, c, r);
-    childWithBed += childTicket;
-    childWithoutBed += childTicket;
-    infant += toPKR(item.querySelector('.flInfant')?.value, c, r);
+function updateServiceTabVisibility() {
+  const serviceTabs = document.querySelectorAll('.service-tab');
+  serviceTabs.forEach(tab => {
+    const service = tab.dataset.service;
+    const container = document.querySelector(`#${service}sContainer`);
+    const hasRow = container ? !!container.querySelector('.subsection') : false;
+    tab.style.display = hasRow ? '' : 'none';
   });
 
-  document.querySelectorAll('#hotelsContainer .subsection').forEach(item => {
-    const c = item.querySelector('.htlCurrency')?.value || 'PKR';
-    const r = item.querySelector('.htlROE')?.value || 1;
-    const nights = toNumber(item.querySelector('.htlNights')?.value);
-    const doubleRate = toNumber(item.querySelector('.htlDouble')?.value);
-    const tripleRate = toNumber(item.querySelector('.htlTriple')?.value);
-    const quadRate = toNumber(item.querySelector('.htlQuad')?.value);
-    const childBedCharge = toNumber(item.querySelector('.htlChildBed')?.value);
-    const perAdultDoubleHotel = toPKR((doubleRate * nights) / 2, c, r);
-    const perAdultTripleHotel = toPKR((tripleRate * nights) / 3, c, r);
-    const perAdultQuadHotel = toPKR((quadRate * nights) / 4, c, r);
-    const perChildWithBedHotel = toPKR((childBedCharge * nights), c, r);
-    adultDouble += perAdultDoubleHotel;
-    adultTriple += perAdultTripleHotel;
-    adultQuad += perAdultQuadHotel;
-    hasQuad = hasQuad || quadRate > 0;
-    childWithBed += perChildWithBedHotel;
-  });
-
-  const applyMoveService = (item, prefix) => {
-    const currency = item.querySelector(`.${prefix}Currency`)?.value || 'PKR';
-    const roe = item.querySelector(`.${prefix}ROE`)?.value || 1;
-    const perVehicleRaw = toNumber(item.querySelector(`.${prefix}PerVehicle`)?.value);
-    const perVehicle = toPKR(perVehicleRaw, currency, roe);
-    if (perVehicleRaw > 0) {
-      const doubleShare = perVehicle / 2;
-      const tripleShare = perVehicle / 3;
-      const quadShare = perVehicle / 4;
-      adultDouble += doubleShare;
-      adultTriple += tripleShare;
-      adultQuad += quadShare;
-      return;
+  const activeTab = document.querySelector('.service-tab.active:not([style*="display: none"])');
+  if (!activeTab) {
+    const firstVisible = document.querySelector('.service-tab:not([style*="display: none"])');
+    if (firstVisible) {
+      firstVisible.click();
     }
-    const a = toPKR(item.querySelector(`.${prefix}Adult`)?.value, currency, roe);
-    const childPriceRaw = item.querySelector(`.${prefix}ChildPrice`)?.value || item.querySelector(`.${prefix}ChildNoBed`)?.value || item.querySelector(`.${prefix}ChildBed`)?.value;
-    const cnb = toPKR(childPriceRaw, currency, roe);
-    adultDouble += a;
-    adultTriple += a;
-    adultQuad += a;
-    childWithoutBed += cnb;
-    const cwbRaw = item.querySelector(`.${prefix}ChildBed`)?.value || item.querySelector(`.${prefix}ChildPrice`)?.value || item.querySelector(`.${prefix}ChildNoBed`)?.value;
-    childWithBed += cwbRaw !== null && cwbRaw !== undefined && cwbRaw !== '' ? toPKR(cwbRaw, currency, roe) : cnb;
-  };
-
-  document.querySelectorAll('#transfersContainer .subsection').forEach(item => applyMoveService(item, 'tf'));
-  document.querySelectorAll('#toursContainer .subsection').forEach(item => applyMoveService(item, 'tr'));
-  document.querySelectorAll('#visasContainer .subsection').forEach(item => {
-    const c = item.querySelector('.vsCurrency')?.value || 'PKR';
-    const r = item.querySelector('.vsROE')?.value || 1;
-    const a = toPKR(item.querySelector('.vsAdult')?.value, c, r);
-    const ch = toPKR(item.querySelector('.vsChild')?.value, c, r);
-    const inf = toPKR(item.querySelector('.vsInfant')?.value, c, r);
-    adultDouble += a;
-    adultTriple += a;
-    adultQuad += a;
-    childWithBed += ch;
-    childWithoutBed += ch;
-    infant += inf;
-  });
-
-  adultDouble += toNumber(document.getElementById('chargeAdult')?.value);
-  adultTriple += toNumber(document.getElementById('chargeAdult')?.value);
-  adultQuad += toNumber(document.getElementById('chargeAdult')?.value);
-  childWithBed += toNumber(document.getElementById('chargeChildBed')?.value);
-  childWithoutBed += toNumber(document.getElementById('chargeChildNoBed')?.value);
-  infant += toNumber(document.getElementById('chargeInfant')?.value);
-
-  const fmtPKR = (n) => `PKR ${Math.round(toNumber(n)).toLocaleString('en-PK')}`;
-  const priceLines = [
-    `Per Person on Double bed: ${fmtPKR(adultDouble)}`,
-    `Per Person on Triple bed: ${fmtPKR(adultTriple)}`,
-    ...(hasQuad ? [`Per Person on Quad bed: ${fmtPKR(adultQuad)}`] : []),
-    `Per Child (2-12) with bed: ${fmtPKR(childWithBed)}`,
-    `Per Child (2-12) without bed: ${fmtPKR(childWithoutBed)}`,
-    `Per Infant (0-2): ${fmtPKR(infant)}`
-  ];
-  return { priceLines, adultDouble, adultTriple, adultQuad, childWithBed, childWithoutBed, infant };
-}
-
-function calculateCostBreakup() {
-  const toNumber = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
-  const toPKR = (value, currency = 'PKR', roe = 1) => {
-    const amount = toNumber(value);
-    if (!amount) return 0;
-    const cur = (currency || 'PKR').toUpperCase();
-    if (cur === 'PKR') return amount;
-    const rate = toNumber(roe) > 0 ? toNumber(roe) : 1;
-    return amount * rate;
-  };
-  const formatCurrencyRoe = (currency, roe) => {
-    const cur = (currency || 'PKR').toUpperCase();
-    const rate = toNumber(roe) > 0 ? toNumber(roe) : 1;
-    return cur === 'PKR' ? 'PKR' : `${cur} @ ${formatMoney(rate)}`;
-  };
-
-  const adultsCount = Math.max(0, parseInt(document.getElementById('costingAdultsCount')?.value || '1', 10) || 0);
-  const childrenCount = Math.max(0, parseInt(document.getElementById('costingChildrenCount')?.value || '0', 10) || 0);
-  const infantsCount = Math.max(0, parseInt(document.getElementById('costingInfantsCount')?.value || '0', 10) || 0);
-  const totalPax = Math.max(1, adultsCount + childrenCount + infantsCount);
-
-  const rows = [];
-  let total = 0;
-  const addRow = ({ desc, vendor = '-', currency = 'PKR', roe = 1, adult = '-', child = '-', infant = '-', amount = 0 }) => {
-    rows.push({ desc, vendor, currencyRoe: formatCurrencyRoe(currency, roe), adult, child, infant, amount });
-    total += amount;
-  };
-
-  document.querySelectorAll('#flightsContainer .subsection').forEach(item => {
-    const airline = item.querySelector('.flAirline')?.value || 'Flight';
-    const sector = item.querySelector('.flSector')?.value || '';
-    const vendor = item.querySelector('.flVendor')?.value || '-';
-    const currency = item.querySelector('.flCurrency')?.value || 'PKR';
-    const roe = item.querySelector('.flROE')?.value || 1;
-    const adultPrice = toPKR(item.querySelector('.flAdult')?.value || 0, currency, roe);
-    const childPrice = toPKR(item.querySelector('.flChild')?.value || 0, currency, roe);
-    const infantPrice = toPKR(item.querySelector('.flInfant')?.value || 0, currency, roe);
-    const subtotal = (adultPrice * adultsCount) + (childPrice * childrenCount) + (infantPrice * infantsCount);
-    addRow({
-      desc: `Flight${sector ? ' ' + sector : ''} ${airline}`.trim(),
-      vendor,
-      currency,
-      roe,
-      adult: adultPrice ? formatMoney(adultPrice) : '-',
-      child: childPrice ? formatMoney(childPrice) : '-',
-      infant: infantPrice ? formatMoney(infantPrice) : '-',
-      amount: subtotal
-    });
-  });
-
-  document.querySelectorAll('#hotelsContainer .subsection').forEach(item => {
-    const name = item.querySelector('.htlName')?.value || 'Hotel';
-    const nights = Math.max(1, toNumber(item.querySelector('.htlNights')?.value || 1));
-    const vendor = item.querySelector('.htlVendor')?.value || '-';
-    const currency = item.querySelector('.htlCurrency')?.value || 'PKR';
-    const roe = item.querySelector('.htlROE')?.value || 1;
-    const doubleRate = toPKR(item.querySelector('.htlDouble')?.value || 0, currency, roe);
-    const subtotal = doubleRate * nights;
-    addRow({
-      desc: `Hotel: ${name} (${nights} nights)`,
-      vendor,
-      currency,
-      roe,
-      adult: doubleRate ? formatMoney(doubleRate) : '-',
-      child: '-',
-      infant: '-',
-      amount: subtotal
-    });
-  });
-
-  document.querySelectorAll('#toursContainer .subsection').forEach(item => {
-    const name = item.querySelector('.trName')?.value || 'Tour';
-    const vendor = item.querySelector('.trVendor')?.value || '-';
-    const currency = item.querySelector('.trCurrency')?.value || 'PKR';
-    const roe = item.querySelector('.trROE')?.value || 1;
-    const vehicleRate = toPKR(item.querySelector('.trPerVehicle')?.value || 0, currency, roe);
-    const adultPrice = toPKR(item.querySelector('.trAdult')?.value || 0, currency, roe);
-    const childPrice = toPKR(item.querySelector('.trChildPrice')?.value || 0, currency, roe);
-    const infantPrice = toPKR(item.querySelector('.trInfant')?.value || 0, currency, roe);
-    let subtotal = 0;
-    if (vehicleRate > 0) {
-      subtotal = vehicleRate;
-      addRow({
-        desc: `Tour: ${name} (vehicle)`,
-        vendor,
-        currency,
-        roe,
-        adult: vehicleRate ? formatMoney(vehicleRate) : '-',
-        child: '-',
-        infant: '-',
-        amount: subtotal
-      });
-    } else {
-      subtotal = (adultPrice * adultsCount) + (childPrice * childrenCount) + (infantPrice * infantsCount);
-      addRow({
-        desc: `Tour: ${name}`,
-        vendor,
-        currency,
-        roe,
-        adult: adultPrice ? formatMoney(adultPrice) : '-',
-        child: childPrice ? formatMoney(childPrice) : '-',
-        infant: infantPrice ? formatMoney(infantPrice) : '-',
-        amount: subtotal
-      });
-    }
-  });
-
-  document.querySelectorAll('#transfersContainer .subsection').forEach(item => {
-    const from = item.querySelector('.tfFrom')?.value || '';
-    const to = item.querySelector('.tfTo')?.value || '';
-    const label = `${from}${from && to ? ' → ' : ''}${to}`.trim() || 'Transfer';
-    const vendor = item.querySelector('.tfVendor')?.value || '-';
-    const currency = item.querySelector('.tfCurrency')?.value || 'PKR';
-    const roe = item.querySelector('.tfROE')?.value || 1;
-    const vehicleRate = toPKR(item.querySelector('.tfPerVehicle')?.value || 0, currency, roe);
-    const adultPrice = toPKR(item.querySelector('.tfAdult')?.value || 0, currency, roe);
-    const childBedPrice = toPKR(item.querySelector('.tfChildBed')?.value || 0, currency, roe);
-    const childNoBedPrice = toPKR(item.querySelector('.tfChildNoBed')?.value || 0, currency, roe);
-    const infantPrice = toPKR(item.querySelector('.tfInfant')?.value || 0, currency, roe);
-    let subtotal = 0;
-    if (vehicleRate > 0) {
-      subtotal = vehicleRate;
-      addRow({
-        desc: `Transfer: ${label}`,
-        vendor,
-        currency,
-        roe,
-        adult: vehicleRate ? formatMoney(vehicleRate) : '-',
-        child: '-',
-        infant: '-',
-        amount: subtotal
-      });
-    } else {
-      subtotal = (adultPrice * adultsCount) + (childBedPrice * childrenCount) + (childNoBedPrice * childrenCount) + (infantPrice * infantsCount);
-      addRow({
-        desc: `Transfer: ${label}`,
-        vendor,
-        currency,
-        roe,
-        adult: adultPrice ? formatMoney(adultPrice) : '-',
-        child: childBedPrice ? formatMoney(childBedPrice) : '-',
-        infant: infantPrice ? formatMoney(infantPrice) : '-',
-        amount: subtotal
-      });
-    }
-  });
-
-  document.querySelectorAll('#visasContainer .subsection').forEach(item => {
-    const country = item.querySelector('.vsCountry')?.value || 'Visa';
-    const vendor = item.querySelector('.vsVendor')?.value || '-';
-    const currency = item.querySelector('.vsCurrency')?.value || 'PKR';
-    const roe = item.querySelector('.vsROE')?.value || 1;
-    const adultPrice = toPKR(item.querySelector('.vsAdult')?.value || 0, currency, roe);
-    const childPrice = toPKR(item.querySelector('.vsChild')?.value || 0, currency, roe);
-    const infantPrice = toPKR(item.querySelector('.vsInfant')?.value || 0, currency, roe);
-    const subtotal = (adultPrice * adultsCount) + (childPrice * childrenCount) + (infantPrice * infantsCount);
-    addRow({
-      desc: `Visa: ${country}`,
-      vendor,
-      currency,
-      roe,
-      adult: adultPrice ? formatMoney(adultPrice) : '-',
-      child: childPrice ? formatMoney(childPrice) : '-',
-      infant: infantPrice ? formatMoney(infantPrice) : '-',
-      amount: subtotal
-    });
-  });
-
-  const svcAdult = toNumber(document.getElementById('chargeAdult')?.value || 0);
-  const svcChildBed = toNumber(document.getElementById('chargeChildBed')?.value || 0);
-  const svcChildNoBed = toNumber(document.getElementById('chargeChildNoBed')?.value || 0);
-  const svcInfant = toNumber(document.getElementById('chargeInfant')?.value || 0);
-  if (svcAdult) {
-    addRow({
-      desc: 'Service charge (per adult)',
-      vendor: 'Service',
-      currency: 'PKR',
-      roe: 1,
-      adult: formatMoney(svcAdult),
-      child: '-',
-      infant: '-',
-      amount: svcAdult * adultsCount
-    });
-  }
-  if (svcChildBed) {
-    addRow({
-      desc: 'Service charge (child with bed)',
-      vendor: 'Service',
-      currency: 'PKR',
-      roe: 1,
-      adult: '-',
-      child: formatMoney(svcChildBed),
-      infant: '-',
-      amount: svcChildBed * childrenCount
-    });
-  }
-  if (svcChildNoBed) {
-    addRow({
-      desc: 'Service charge (child without bed)',
-      vendor: 'Service',
-      currency: 'PKR',
-      roe: 1,
-      adult: '-',
-      child: formatMoney(svcChildNoBed),
-      infant: '-',
-      amount: svcChildNoBed * childrenCount
-    });
-  }
-  if (svcInfant) {
-    addRow({
-      desc: 'Service charge (per infant)',
-      vendor: 'Service',
-      currency: 'PKR',
-      roe: 1,
-      adult: '-',
-      child: '-',
-      infant: formatMoney(svcInfant),
-      amount: svcInfant * infantsCount
-    });
-  }
-
-  return { rows, total, totalPax, adultsCount, childrenCount, infantsCount };
-}
-
-function showCostingModal() {
-  // Show a single quotation-style calculation summary (no user inputs required)
-  const out = computeQuotationPriceLines();
-  const tbody = document.getElementById('costingTableBody');
-  tbody.innerHTML = '';
-  out.priceLines.forEach(line => {
-    const tr = document.createElement('tr');
-    const td = document.createElement('td');
-    td.style.padding = '10px';
-    td.style.border = '1px solid #d6e4ff';
-    td.colSpan = 7;
-    td.textContent = line;
-    tr.appendChild(td);
-    tbody.appendChild(tr);
-  });
-  document.getElementById('costingPackageName').textContent = document.getElementById('packageName')?.value || 'N/A';
-  document.getElementById('costingTravelDates').textContent = getTravelPeriodDisplay();
-  document.getElementById('costingPaxSummary').textContent = 'Calculation shown per person (no pax input required)';
-  // Totals: show sum of adultDouble as indicative total per person double
-  document.getElementById('costingTotal').textContent = '—';
-  document.getElementById('costingPerPaxTotal').textContent = '—';
-  document.getElementById('costingModal').classList.add('visible');
-}
-
-function closeCostingModal() {
-  document.getElementById('costingModal').classList.remove('visible');
-}
-
-function exportCostingPdf() {
-  // Export a clean quotation-style PDF (no modal chrome)
-  const pkgName = document.getElementById('packageName')?.value || 'package-costing';
-  const safeName = pkgName.replace(/[^a-z0-9\-\_]/ig, '-');
-  const data = computeQuotationPriceLines();
-  // Use jsPDF to generate a clean PDF
-  try {
-    const doc = (window.jspdf && window.jspdf.jsPDF) ? new window.jspdf.jsPDF('p','mm','a4') : new window.jsPDF('p','mm','a4');
-    const left = 15; let y = 20;
-    doc.setFontSize(16); doc.setTextColor('#0b76d1'); doc.text('PACKAGE QUOTATION', 105, y, { align: 'center' }); y += 10;
-    doc.setFontSize(11); doc.setTextColor('#222'); doc.text(`Package: ${pkgName}`, left, y); y += 8;
-    doc.text(`Travel Period: ${getTravelPeriodDisplay()}`, left, y); y += 12;
-    doc.setFontSize(12); doc.setTextColor('#0b76d1'); doc.text('Price (All amounts in PKR)', left, y); y += 8;
-    doc.setFontSize(10); doc.setTextColor('#000');
-    data.priceLines.forEach(line => {
-      const split = doc.splitTextToSize('• ' + line, 180);
-      doc.text(split, left, y);
-      y += (split.length * 6) + 2;
-      if (y > 270) { doc.addPage(); y = 20; }
-    });
-    doc.save(`${safeName}.pdf`);
-  } catch (e) {
-    alert('PDF export failed: ' + (e && e.message ? e.message : 'unknown'));
   }
 }
 
@@ -1423,7 +997,6 @@ async function loadPackageForEditing(packageId, options = {}) {
     row.querySelector('.flChild').value = f.priceChild ?? '';
     row.querySelector('.flInfant').value = f.priceInfant ?? '';
   });
-  if (!(data.flights || []).length) addFlight();
 
   (data.hotels || []).forEach(h => {
     addHotel();
@@ -1442,7 +1015,6 @@ async function loadPackageForEditing(packageId, options = {}) {
     row.querySelector('.htlQuad').value = h.quadRate ?? '';
     row.querySelector('.htlChildBed').value = h.childBedCharge ?? '';
   });
-  if (!(data.hotels || []).length) addHotel();
 
   (data.transfers || []).forEach(t => {
     addTransfer();
@@ -1462,7 +1034,6 @@ async function loadPackageForEditing(packageId, options = {}) {
     row.querySelector('.tfChildNoBed').value = t.priceChildNoBed ?? '';
     row.querySelector('.tfInfant').value = t.priceInfant ?? '';
   });
-  if (!(data.transfers || []).length) addTransfer();
 
   (data.visas || []).forEach(v => {
     addVisa();
@@ -1477,7 +1048,6 @@ async function loadPackageForEditing(packageId, options = {}) {
     row.querySelector('.vsChild').value = v.priceChild ?? '';
     row.querySelector('.vsInfant').value = v.priceInfant ?? '';
   });
-  if ((data.type || '') !== 'domestic' && !(data.visas || []).length) addVisa();
 
   if ((data.type || '') === 'international' || (data.type || '') === 'domestic') {
     (data.tours || []).forEach(t => {
@@ -1512,10 +1082,9 @@ async function loadPackageForEditing(packageId, options = {}) {
 
   updateCitySelectors();
   updateTourDaySelectors();
+  updateServiceTabVisibility();
   showNotification(readOnly ? 'Package loaded for viewing' : 'Package loaded for editing', 'success');
 }
-
-function enableReadOnlyMode() {
   isReadOnlyMode = true;
 
   const headerTitle = document.querySelector('.header h1');
@@ -1807,6 +1376,7 @@ function updateSections() {
 
   updatePackageDestinationField(type);
   updateTransferFromToByPackageType(type);
+  updateServiceTabVisibility();
 }
 
 function updatePackageDestinationField(type) {
@@ -1877,6 +1447,7 @@ function addFlight() {
     </div>
   `;
   container.insertAdjacentHTML('beforeend', html);
+  updateServiceTabVisibility();
 }
 
 // HOTELS
@@ -1914,6 +1485,7 @@ function addHotel() {
   `;
   container.insertAdjacentHTML('beforeend', html);
   updateCitySelectors();
+  updateServiceTabVisibility();
 }
 
 // VISAS
@@ -1944,6 +1516,7 @@ function addVisa() {
     </div>
   `;
   container.insertAdjacentHTML('beforeend', html);
+  updateServiceTabVisibility();
 }
 
 // TOURS (International Only)
@@ -1989,6 +1562,7 @@ function addTour() {
   attachTourModeHandlers(row);
   updateCitySelectors();
   updateTourDaySelectors();
+  updateServiceTabVisibility();
 }
 
 // TRANSFERS
@@ -2072,6 +1646,7 @@ function addTransfer() {
     </div>
   `;
   container.insertAdjacentHTML('beforeend', html);
+  updateServiceTabVisibility();
 }
 
 function removeEl(id) {
@@ -2079,6 +1654,7 @@ function removeEl(id) {
   if (el) {
     el.remove();
     updateCitySelectors();
+    updateServiceTabVisibility();
   }
 }
 
@@ -2648,40 +2224,74 @@ async function generatePDF() {
     .toUpperCase();
 
   document.querySelectorAll('#flightsContainer .subsection').forEach(item => {
-    const airline = normalizeAirline(item.querySelector('.flAirline')?.value || 'Airline');
-    const sector = normalizeRoute(item.querySelector('.flSector')?.value || '');
+    const airlineRaw = item.querySelector('.flAirline')?.value || '';
+    const sectorRaw = item.querySelector('.flSector')?.value || '';
+    const vendorRaw = item.querySelector('.flVendor')?.value || '';
+    const adultPriceRaw = item.querySelector('.flAdult')?.value || '';
+    const childPriceRaw = item.querySelector('.flChild')?.value || '';
+    const infantPriceRaw = item.querySelector('.flInfant')?.value || '';
+    if (![airlineRaw, sectorRaw, vendorRaw, adultPriceRaw, childPriceRaw, infantPriceRaw].some(v => String(v).trim())) {
+      return;
+    }
+    const airline = normalizeAirline(airlineRaw);
+    const sector = normalizeRoute(sectorRaw);
     const flightType = item.querySelector('.flType')?.value || 'Flight';
     inclusions.push(`${titleCase(flightType)} Flight${sector ? ` ${sector}` : ''} by ${airline}`);
   });
 
   document.querySelectorAll('#hotelsContainer .subsection').forEach(item => {
-    const hotelName = titleCase(item.querySelector('.htlName')?.value || '');
+    const hotelNameRaw = item.querySelector('.htlName')?.value || '';
+    const cityRaw = item.querySelector('.htlCity')?.value || '';
+    const vendorRaw = item.querySelector('.htlVendor')?.value || '';
+    const nightsRaw = item.querySelector('.htlNights')?.value || '';
+    const rateRaw = item.querySelector('.htlDouble')?.value || '';
+    if (![hotelNameRaw, cityRaw, vendorRaw, nightsRaw, rateRaw].some(v => String(v).trim())) {
+      return;
+    }
+    const hotelName = titleCase(hotelNameRaw);
     const category = normalizeHotelCategory(item.querySelector('.htlCategory')?.value || 'Hotel');
-    const city = titleCase(item.querySelector('.htlCity')?.value || 'Destination City');
+    const city = titleCase(cityRaw || 'Destination City');
     const mealPlan = item.querySelector('.htlMealPlan')?.value || 'Breakfast Included';
-    const nights = item.querySelector('.htlNights')?.value || '';
+    const nights = nightsRaw;
     inclusions.push(`${hotelName ? hotelName + ' ' : ''}${category} hotel in ${city} (${nights ? nights + ' nights, ' : ''}${mealPlan})`);
   });
 
   document.querySelectorAll('#toursContainer .subsection').forEach(item => {
-    const name = titleCase(item.querySelector('.trName')?.value || 'Tour');
-    const city = titleCase(item.querySelector('.trCity')?.value || '');
-    const vehicle = normalizeVehicle(item.querySelector('.trVehicle')?.value || 'vehicle');
+    const nameRaw = item.querySelector('.trName')?.value || '';
+    const cityRaw = item.querySelector('.trCity')?.value || '';
+    const vehicleRaw = item.querySelector('.trVehicle')?.value || '';
+    if (![nameRaw, cityRaw, vehicleRaw].some(v => String(v).trim())) {
+      return;
+    }
+    const name = titleCase(nameRaw || 'Tour');
+    const city = titleCase(cityRaw || '');
+    const vehicle = normalizeVehicle(vehicleRaw || 'vehicle');
     inclusions.push(`${name}${city ? ` in ${city}` : ''} by ${vehicle}`);
   });
 
   document.querySelectorAll('#transfersContainer .subsection').forEach(item => {
-    const from = titleCase(item.querySelector('.tfFrom')?.value || 'Point A');
-    const to = titleCase(item.querySelector('.tfTo')?.value || 'Point B');
-    const vehicle = normalizeVehicle(item.querySelector('.tfVehicle')?.value || 'vehicle');
+    const fromRaw = item.querySelector('.tfFrom')?.value || '';
+    const toRaw = item.querySelector('.tfTo')?.value || '';
+    const vehicleRaw = item.querySelector('.tfVehicle')?.value || '';
+    if (![fromRaw, toRaw, vehicleRaw].some(v => String(v).trim())) {
+      return;
+    }
+    const from = titleCase(fromRaw || 'Point A');
+    const to = titleCase(toRaw || 'Point B');
+    const vehicle = normalizeVehicle(vehicleRaw || 'vehicle');
     const transferType = item.querySelector('.tfType')?.value || '';
     const prefix = transferType === 'One Way' ? 'Transfer' : 'Return transfer';
     inclusions.push(`${prefix} from ${from} to ${to} by ${vehicle}`);
   });
 
   document.querySelectorAll('#visasContainer .subsection').forEach(item => {
-    const country = titleCase(item.querySelector('.vsCountry')?.value || 'Destination');
-    const visaType = item.querySelector('.vsType')?.value || 'Visa';
+    const countryRaw = item.querySelector('.vsCountry')?.value || '';
+    const typeRaw = item.querySelector('.vsType')?.value || '';
+    if (![countryRaw, typeRaw].some(v => String(v).trim())) {
+      return;
+    }
+    const country = titleCase(countryRaw || 'Destination');
+    const visaType = typeRaw || 'Visa';
     inclusions.push(`${visaType} visa processing for ${country}`);
   });
 
