@@ -820,12 +820,18 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function updateServiceTabVisibility() {
+  const type = document.getElementById('packageType')?.value || 'international';
   const serviceTabs = document.querySelectorAll('.service-tab');
   serviceTabs.forEach(tab => {
     const service = tab.dataset.service;
-    const container = document.querySelector(`#${service}sContainer`);
-    const hasRow = container ? !!container.querySelector('.subsection') : false;
-    tab.style.display = hasRow ? '' : 'none';
+    let shouldShow = true;
+    if (service === 'tour') {
+      shouldShow = (type === 'international' || type === 'domestic');
+    }
+    if (service === 'visa') {
+      shouldShow = (type !== 'domestic');
+    }
+    tab.style.display = shouldShow ? '' : 'none';
   });
 
   const activeTab = document.querySelector('.service-tab.active:not([style*="display: none"])');
@@ -1333,6 +1339,10 @@ function createNewPackage() {
   resetDynamicSections();
   updateSections();
   updateServiceTabVisibility();
+  const firstVisibleTab = document.querySelector('.service-tab:not([style*="display: none"])');
+  if (firstVisibleTab) {
+    firstVisibleTab.click();
+  }
   updateCitySelectors();
   updateTourDaySelectors();
   showNotification('Ready for a new package', 'success');
