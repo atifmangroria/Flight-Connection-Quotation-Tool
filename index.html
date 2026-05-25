@@ -5994,14 +5994,17 @@ function buildPackagePricePreviewItems(clientData, packagePerAdult, packagePerCh
           key,
           roomType: room.roomType || 'Room',
           paxCapacity,
-          hotelPerPerson: 0
+          hotelPerPerson: hotelPerPerson,
+          count: 1,
+          totalHotelPerPerson: hotelPerPerson
         };
         groupedRooms.push(group);
       } else {
         group.paxCapacity = Math.max(group.paxCapacity, paxCapacity);
+        group.count = (group.count || 1) + 1;
+        group.totalHotelPerPerson = (group.totalHotelPerPerson || 0) + hotelPerPerson;
+        group.hotelPerPerson = group.totalHotelPerPerson / group.count;  // Average instead of accumulate
       }
-
-      group.hotelPerPerson += hotelPerPerson;
     });
 
     let adultsRemaining = clientData.adults || 0;
