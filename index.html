@@ -5986,22 +5986,24 @@ function buildPackagePricePreviewItems(clientData, packagePerAdult, packagePerCh
     roomEntries.forEach((room) => {
       const key = String(room.roomType || 'Room');
       let group = groupedRooms.find(entry => entry.key === key);
-      const hotelPerPerson = (((room.costNight || 0) + (room.svcNight || 0)) * (room.nights || 0) / Math.max(room.capacity || 1, 1)) * roe;
+      const roomTotal = (((room.costNight || 0) + (room.svcNight || 0)) * (room.nights || 0) * (room.rooms || 0)) * roe;
       const paxCapacity = (room.rooms || 0) * Math.max(room.capacity || 1, 1);
+      const stayKey = [room.city || '', room.idx || '', room.checkIn || '', room.checkOut || '', room.nights || 0].join('|');
 
       if (!group) {
         group = {
           key,
           roomType: room.roomType || 'Room',
-          paxCapacity,
-          hotelPerPerson: 0
+          paxCapacity: 0,
+          stayCapacities: {},
+          totalHotelPKR: 0
         };
         groupedRooms.push(group);
-      } else {
-        group.paxCapacity = Math.max(group.paxCapacity, paxCapacity);
       }
 
-      group.hotelPerPerson += hotelPerPerson;
+      group.stayCapacities[stayKey] = (group.stayCapacities[stayKey] || 0) + paxCapacity;
+      group.paxCapacity = Math.max(group.paxCapacity, group.stayCapacities[stayKey]);
+      group.totalHotelPKR += roomTotal;
     });
 
     let adultsRemaining = clientData.adults || 0;
@@ -6015,12 +6017,14 @@ function buildPackagePricePreviewItems(clientData, packagePerAdult, packagePerCh
 
       const childBedHere = Math.min(childBedRemaining, available);
       childBedRemaining -= childBedHere;
+      const assignedPax = adultsHere + childBedHere;
+      const hotelPerPerson = assignedPax > 0 ? group.totalHotelPKR / assignedPax : 0;
 
       if (adultsHere > 0) {
-        items.push(`<li>Adult x${adultsHere} (${sanitizeInput(group.roomType)} Sharing): <strong>PKR ${fmt(baseAdult + group.hotelPerPerson)}</strong></li>`);
+        items.push(`<li>Adult x${adultsHere} (${sanitizeInput(group.roomType)} Sharing): <strong>PKR ${fmt(baseAdult + hotelPerPerson)}</strong></li>`);
       }
       if (childBedHere > 0) {
-        items.push(`<li>Child (bed) x${childBedHere} (${sanitizeInput(group.roomType)} Sharing): <strong>PKR ${fmt(baseChildBed + group.hotelPerPerson)}</strong></li>`);
+        items.push(`<li>Child (bed) x${childBedHere} (${sanitizeInput(group.roomType)} Sharing): <strong>PKR ${fmt(baseChildBed + hotelPerPerson)}</strong></li>`);
       }
     });
 
