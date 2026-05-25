@@ -5977,82 +5977,51 @@ function buildPackagePricePreviewItems(clientData, packagePerAdult, packagePerCh
   if (isActualMode) {
     const roe = parseFloat(roeInput.value || 0);
     const payingPax = (clientData.adults || 0) + (clientData.childBed || 0);
-    const hotelRoomBreakdown = roomEntries.map((room) => {
-      const roomPax = (room.rooms || 0) * Math.max(room.capacity || 1, 1);
-      const totalRoomCostPKR = (((room.costNight || 0) + (room.svcNight || 0)) * (room.nights || 0) * (room.rooms || 0) * roe);
-      const sharingLabel = room.capacity === 2 ? 'Double' : room.capacity === 3 ? 'Triple' : room.capacity === 4 ? 'Quad' : `${room.capacity || room.roomType || 'Room'}`;
-      return {
-        idx: room.idx,
-        sharingLabel,
-        totalRoomPax: roomPax,
-        totalRoomCostPKR
-      };
-    });
-
-    const totalHotelPKR = hotelRoomBreakdown.reduce((sum, room) => sum + (room.totalRoomCostPKR || 0), 0);
+    const totalHotelPKR = roomEntries.reduce((sum, room) => sum + (((room.costNight || 0) + (room.svcNight || 0)) * (room.nights || 0) * (room.rooms || 0) * roe), 0);
     const averageHotelPerPax = payingPax > 0 ? totalHotelPKR / payingPax : 0;
-    const baseAdult = packagePerAdult - averageHotelPerPax;
-    const baseChildBed = packagePerChildBed - averageHotelPerPax;
+    const baseAdult = Math.max(0, packagePerAdult - averageHotelPerPax);
+    const baseChildBed = Math.max(0, packagePerChildBed - averageHotelPerPax);
 
-    const roomTypeTotals = {};
-    hotelRoomBreakdown.forEach((rb) => {
-      const key = rb.sharingLabel;
-      if (!roomTypeTotals[key]) roomTypeTotals[key] = { label: key, totalRoomPax: 0, totalRoomCostPKR: 0 };
-      roomTypeTotals[key].totalRoomPax += rb.totalRoomPax || 0;
-      roomTypeTotals[key].totalRoomCostPKR += rb.totalRoomCostPKR || 0;
-    });
+    const groupedRooms = [];
+    roomEntries.forEach((room) => {
+      const key = String(room.roomType || 'Room');
+      let group = groupedRooms.find(entry => entry.key === key);
+      const hotelPerPerson = (((room.costNight || 0) + (room.svcNight || 0)) * (room.nights || 0) / Math.max(room.capacity || 1, 1)) * roe;
+      const paxCapacity = (room.rooms || 0) * Math.max(room.capacity || 1, 1);
 
-    const hotelPatterns = {};
-    hotelRoomBreakdown.forEach((rb) => {
-      if (!hotelPatterns[rb.idx]) hotelPatterns[rb.idx] = [];
-      hotelPatterns[rb.idx].push(rb);
-    });
-
-    let basePattern = [];
-    let bestPatternDiff = Number.POSITIVE_INFINITY;
-    Object.values(hotelPatterns).forEach((rooms) => {
-      const patternCapacity = rooms.reduce((sum, room) => sum + (room.totalRoomPax || 0), 0);
-      if (patternCapacity <= 0) return;
-      const diff = Math.abs(patternCapacity - payingPax);
-      if (diff < bestPatternDiff) {
-        bestPatternDiff = diff;
-        basePattern = rooms;
+      if (!group) {
+        group = {
+          key,
+          roomType: room.roomType || 'Room',
+          paxCapacity,
+          hotelPerPerson: 0
+        };
+        groupedRooms.push(group);
+      } else {
+        group.paxCapacity = Math.max(group.paxCapacity, paxCapacity);
       }
-    });
 
-    const baseRoomTypeTotals = {};
-    basePattern.forEach((rb) => {
-      const key = rb.sharingLabel;
-      if (!baseRoomTypeTotals[key]) baseRoomTypeTotals[key] = { label: key, totalRoomPax: 0 };
-      baseRoomTypeTotals[key].totalRoomPax += rb.totalRoomPax || 0;
+      group.hotelPerPerson += hotelPerPerson;
     });
-
-    const sortedRoomTypeTotals = Object.values(baseRoomTypeTotals)
-      .filter((entry) => entry.totalRoomPax > 0)
-      .sort((a, b) => a.totalRoomPax - b.totalRoomPax);
 
     let adultsRemaining = clientData.adults || 0;
     let childBedRemaining = clientData.childBed || 0;
 
-    sortedRoomTypeTotals.forEach((roomType) => {
-      const available = Math.max(adultsRemaining + childBedRemaining, 0);
-      const occupied = Math.min(roomType.totalRoomPax, available);
-      if (occupied <= 0) return;
+    groupedRooms.forEach((group) => {
+      let available = group.paxCapacity || 0;
+      const adultsHere = Math.min(adultsRemaining, available);
+      adultsRemaining -= adultsHere;
+      available -= adultsHere;
 
-      const adultsHere = Math.min(adultsRemaining, occupied);
-      const childBedHere = Math.min(childBedRemaining, Math.max(occupied - adultsHere, 0));
-      const pricingBucket = roomTypeTotals[roomType.label];
-      const hotelPerPerson = pricingBucket ? pricingBucket.totalRoomCostPKR / Math.max(roomType.totalRoomPax, 1) : 0;
+      const childBedHere = Math.min(childBedRemaining, available);
+      childBedRemaining -= childBedHere;
 
       if (adultsHere > 0) {
-        items.push(`<li>Adult x${adultsHere} (${sanitizeInput(roomType.label)} Sharing): <strong>PKR ${fmt(baseAdult + hotelPerPerson)}</strong></li>`);
+        items.push(`<li>Adult x${adultsHere} (${sanitizeInput(group.roomType)} Sharing): <strong>PKR ${fmt(baseAdult + group.hotelPerPerson)}</strong></li>`);
       }
       if (childBedHere > 0) {
-        items.push(`<li>Child (bed) x${childBedHere} (${sanitizeInput(roomType.label)} Sharing): <strong>PKR ${fmt(baseChildBed + hotelPerPerson)}</strong></li>`);
+        items.push(`<li>Child (bed) x${childBedHere} (${sanitizeInput(group.roomType)} Sharing): <strong>PKR ${fmt(baseChildBed + group.hotelPerPerson)}</strong></li>`);
       }
-
-      adultsRemaining -= adultsHere;
-      childBedRemaining -= childBedHere;
     });
 
     if (adultsRemaining > 0) items.push(`<li>Adult x${adultsRemaining}: <strong>PKR ${fmt(packagePerAdult)}</strong></li>`);
