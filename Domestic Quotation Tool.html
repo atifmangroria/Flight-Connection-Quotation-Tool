@@ -1222,6 +1222,9 @@ document.addEventListener('DOMContentLoaded', function() {
   const agent = checkAuthentication();
   if (agent) {
     updateAgentUI();
+    repairLocalDomesticQuotationOwnership(agent);
+    retryPendingDomesticQuotationSync(agent);
+    flushPendingFirebaseWrites();
     loadPackages('domestic');
 
     const packageSearchInput = document.getElementById('packageSearchInput');
@@ -1250,34 +1253,12 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Load quotations from Firebase
-    const agentDocId = getAgentDocId(agent);
-    if (!agentDocId) return;
-
-    window.firebaseDB.getData('domestic_quotations', agentDocId).then(firebaseData => {
-      if (firebaseData && Array.isArray(firebaseData.quotations)) {
-        const localRows = JSON.parse(localStorage.getItem('savedQuotations_domestic')) || [];
-        const remoteRows = firebaseData.quotations.filter(q => q && q.quotationMode === 'domestic');
-
-        const parseTs = (row) => {
-          const ts = new Date(row?.updatedAt || row?.createdAt || 0).getTime();
-          return Number.isFinite(ts) ? ts : 0;
-        };
-        const pickNewer = (a, b) => (parseTs(a) >= parseTs(b) ? a : b);
-
-        const mergedById = new Map();
-        [...remoteRows, ...localRows].forEach((row) => {
-          if (!row || !row.id) return;
-          const existing = mergedById.get(row.id);
-          mergedById.set(row.id, existing ? pickNewer(existing, row) : row);
-        });
-
-        const mergedRows = Array.from(mergedById.values());
-        localStorage.setItem('savedQuotations_domestic', JSON.stringify(mergedRows));
-        savedQuotations = mergedRows;
-      }
-    }).catch(err => console.error('Load error:', err));
+    refreshDomesticQuotationsFromFirebase(getAgentDocIds(agent)).catch(err => console.error('Load error:', err));
   }
 });
+
+window.addEventListener('online', () => retryPendingDomesticQuotationSync(getCurrentAgent()));
+window.addEventListener('online', flushPendingFirebaseWrites);
 
 </script>
 
@@ -1407,9 +1388,291 @@ document.addEventListener('DOMContentLoaded', function() {
     return !!(q && q.quotationMode === 'domestic');
   }
 
+  const DOMESTIC_COLLECTION = 'domestic_quotations';
+  const DOMESTIC_STORAGE_KEY = 'savedQuotations_domestic';
+
   function getAgentDocId(agent) {
-    if (!agent) return '';
-    return agent.id || agent.uid || '';
+    return agent?.id || agent?.uid || '';
+  }
+
+  function getAgentDocIds(agent) {
+    return Array.from(new Set([agent?.id, agent?.uid].filter(Boolean)));
+  }
+
+  function getQuotationOwnerDocId(quotation, fallbackAgent = null) {
+    return quotation?.ownerId ||
+      quotation?.agentId ||
+      quotation?.userId ||
+      quotation?.agentData?.id ||
+      quotation?.agentData?.uid ||
+      quotation?.createdById ||
+      quotation?.createdBy ||
+      getAgentDocId(fallbackAgent);
+  }
+
+  function getQuotationOwnerIds(quotation, fallbackAgent = null) {
+    return Array.from(new Set([
+      quotation?.ownerId,
+      quotation?.agentId,
+      quotation?.userId,
+      quotation?.agentData?.id,
+      quotation?.agentData?.uid,
+      quotation?.createdById,
+      quotation?.createdBy,
+      getAgentDocId(fallbackAgent)
+    ].filter(Boolean)));
+  }
+
+  function normalizeQuotationOwnerFields(quotation, fallbackAgent = null) {
+    if (!quotation || typeof quotation !== 'object') return quotation;
+    const ownerDocId = getQuotationOwnerDocId(quotation, fallbackAgent);
+    if (!ownerDocId) return quotation;
+    const agentData = { ...(quotation.agentData || {}) };
+    if (!agentData.id) agentData.id = ownerDocId;
+    if (!agentData.uid) agentData.uid = ownerDocId;
+    return {
+      ...quotation,
+      ownerId: quotation.ownerId || ownerDocId,
+      agentId: quotation.agentId || ownerDocId,
+      userId: quotation.userId || ownerDocId,
+      agentData
+    };
+  }
+
+  function repairLocalDomesticQuotationOwnership(agent) {
+    const rows = JSON.parse(localStorage.getItem(DOMESTIC_STORAGE_KEY)) || [];
+    const normalized = rows.map(q => normalizeQuotationOwnerFields(q, agent));
+    if (JSON.stringify(rows) !== JSON.stringify(normalized)) {
+      localStorage.setItem(DOMESTIC_STORAGE_KEY, JSON.stringify(normalized));
+      savedQuotations = normalized;
+    }
+    return normalized;
+  }
+
+  function isQuotationOwnedByAgent(quotation, agent) {
+    const agentIds = getAgentDocIds(agent);
+    if (!agentIds.length) return false;
+    return getQuotationOwnerIds(quotation).some(id => agentIds.includes(id));
+  }
+
+  function getQuotationTimestamp(row) {
+    const ts = new Date(row?.updatedAt || row?.createdAt || 0).getTime();
+    return Number.isFinite(ts) ? ts : 0;
+  }
+
+  function mergeQuotationsById(localRows, remoteRows) {
+    const mergedById = new Map();
+    [...(localRows || []), ...(remoteRows || [])].forEach((row) => {
+      if (!row || !row.id || !isDomesticQuotation(row)) return;
+      const existing = mergedById.get(row.id);
+      if (!existing || getQuotationTimestamp(row) >= getQuotationTimestamp(existing)) {
+        mergedById.set(row.id, row);
+      }
+    });
+    return Array.from(mergedById.values());
+  }
+
+  function getOwnerQuotations(rows, ownerDocId) {
+    return (rows || []).filter(q => isDomesticQuotation(q) && getQuotationOwnerIds(q).includes(ownerDocId));
+  }
+
+  function getReadableQuotationMetadata(quotation, quotationType, ownerDocId = '') {
+    const clientData = quotation?.clientData || {};
+    const agentData = quotation?.agentData || {};
+    const quotationNumber = quotation?.id || '';
+    const agentName = agentData.name || agentData.displayName || agentData.email || '';
+    const clientName = clientData.name || '';
+    return {
+      quotationNumber,
+      displayNumber: quotationNumber,
+      quotationType,
+      agentName,
+      agentPhone: agentData.phone || '',
+      clientName,
+      clientPhone: clientData.phone || '',
+      firebaseLabel: [quotationType, quotationNumber, clientName, agentName].filter(Boolean).join(' | '),
+      ownerLabel: agentName || ownerDocId || ''
+    };
+  }
+
+  function enrichQuotationForFirebase(quotation, quotationType = 'domestic', ownerDocId = '') {
+    if (!quotation || typeof quotation !== 'object') return quotation;
+    return {
+      ...quotation,
+      ...getReadableQuotationMetadata(quotation, quotationType, ownerDocId)
+    };
+  }
+
+  function buildQuotationLinkPayload(quotation, quotationType, ownerDocId) {
+    const enrichedQuotation = enrichQuotationForFirebase(quotation, quotationType, ownerDocId);
+    const metadata = getReadableQuotationMetadata(enrichedQuotation, quotationType, ownerDocId);
+    return {
+      quotationId: enrichedQuotation.id,
+      ...metadata,
+      type: quotationType,
+      ownerId: ownerDocId,
+      publicUrl: enrichedQuotation.sharePublicUrl || (enrichedQuotation.shareLinkId ? getQuotationPublicUrl(enrichedQuotation.id, enrichedQuotation.shareLinkId) : ''),
+      shareVersion: enrichedQuotation.shareVersion || 1,
+      shareUpdatedAt: enrichedQuotation.shareUpdatedAt || enrichedQuotation.updatedAt || new Date().toISOString(),
+      quotation: enrichedQuotation
+    };
+  }
+
+  function stripLocalSyncFields(quotation) {
+    const { syncStatus, lastSyncedAt, syncError, ...cloudQuotation } = quotation || {};
+    return enrichQuotationForFirebase(cloudQuotation, 'domestic', getQuotationOwnerDocId(cloudQuotation));
+  }
+
+  function updateLocalDomesticSyncStatus(ownerDocId, status, errorMessage = '') {
+    if (!ownerDocId) return;
+    const rows = JSON.parse(localStorage.getItem(DOMESTIC_STORAGE_KEY)) || [];
+    let changed = false;
+    const updatedRows = rows.map((row) => {
+      if (!getQuotationOwnerIds(row).includes(ownerDocId)) return row;
+      changed = true;
+      const next = {
+        ...row,
+        syncStatus: status,
+        syncError: errorMessage || ''
+      };
+      if (status === 'synced') next.lastSyncedAt = new Date().toISOString();
+      return next;
+    });
+    if (changed) {
+      localStorage.setItem(DOMESTIC_STORAGE_KEY, JSON.stringify(updatedRows));
+      savedQuotations = updatedRows;
+    }
+  }
+
+  function saveDomesticOwnerQuotationsToFirebase(ownerDocId, allQuotations, errorLabel = 'Firebase save error') {
+    if (!ownerDocId) return Promise.resolve(false);
+    updateLocalDomesticSyncStatus(ownerDocId, 'pending');
+    const ownerQuotations = getOwnerQuotations(allQuotations, ownerDocId).map(stripLocalSyncFields);
+    const ownerMetadata = ownerQuotations[0] ? getReadableQuotationMetadata(ownerQuotations[0], 'domestic', ownerDocId) : {};
+    if (!window.firebaseDB) {
+      syncDomesticQuotationLinks(ownerDocId, ownerQuotations);
+      return Promise.resolve(false);
+    }
+    return window.firebaseDB.saveData(DOMESTIC_COLLECTION, ownerDocId, {
+      quotations: ownerQuotations,
+      updatedAt: new Date(),
+      agentId: ownerDocId,
+      userId: ownerDocId,
+      agentName: ownerMetadata.agentName || '',
+      agentPhone: ownerMetadata.agentPhone || '',
+      ownerLabel: ownerMetadata.ownerLabel || ownerDocId
+    }).then((ok) => {
+      if (ok === false) {
+        updateLocalDomesticSyncStatus(ownerDocId, 'pending', 'Cloud sync failed');
+        syncDomesticQuotationLinks(ownerDocId, ownerQuotations);
+        return false;
+      }
+      updateLocalDomesticSyncStatus(ownerDocId, 'synced');
+      syncDomesticQuotationLinks(ownerDocId, ownerQuotations);
+      return true;
+    }).catch(err => {
+      updateLocalDomesticSyncStatus(ownerDocId, 'pending', err?.message || 'Cloud sync failed');
+      syncDomesticQuotationLinks(ownerDocId, ownerQuotations);
+      console.error(`${errorLabel}:`, err);
+      return false;
+    });
+  }
+
+  function syncDomesticQuotationLinks(ownerDocId, ownerQuotations) {
+    if (!ownerDocId || !Array.isArray(ownerQuotations)) return;
+    ownerQuotations.forEach((quotation) => {
+      if (!quotation?.shareLinkId) return;
+      saveFirebaseDataWithRetry('quotation_links', quotation.shareLinkId, buildQuotationLinkPayload(quotation, 'domestic', ownerDocId), 'Firebase share link sync error');
+    });
+  }
+
+  function retryPendingDomesticQuotationSync(agent = getCurrentAgent()) {
+    if (!window.firebaseDB) return;
+    const rows = JSON.parse(localStorage.getItem(DOMESTIC_STORAGE_KEY)) || [];
+    const pendingRows = rows.filter(q => ['pending', 'failed'].includes(String(q?.syncStatus || '').toLowerCase()));
+    const ownerIds = new Set();
+    pendingRows.forEach(q => getQuotationOwnerIds(q, agent).forEach(id => ownerIds.add(id)));
+    ownerIds.forEach(ownerDocId => {
+      saveDomesticOwnerQuotationsToFirebase(ownerDocId, rows, 'Pending Firebase sync error');
+    });
+  }
+
+  const PENDING_FIREBASE_WRITES_KEY = 'pendingFirebaseWrites';
+
+  function getPendingFirebaseWrites() {
+    try {
+      const rows = JSON.parse(localStorage.getItem(PENDING_FIREBASE_WRITES_KEY) || '[]');
+      return Array.isArray(rows) ? rows : [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function queueFirebaseWrite(collectionName, docId, data) {
+    if (!collectionName || !docId) return;
+    const rows = getPendingFirebaseWrites();
+    const key = `${collectionName}/${docId}`;
+    const nextRows = rows.filter(row => row.key !== key);
+    nextRows.push({ key, collectionName, docId, data, queuedAt: new Date().toISOString() });
+    localStorage.setItem(PENDING_FIREBASE_WRITES_KEY, JSON.stringify(nextRows));
+  }
+
+  async function flushPendingFirebaseWrites() {
+    if (!window.firebaseDB) return;
+    const rows = getPendingFirebaseWrites();
+    if (!rows.length) return;
+    const remaining = [];
+    for (const row of rows) {
+      try {
+        const ok = await window.firebaseDB.saveData(row.collectionName, row.docId, row.data);
+        if (ok === false) remaining.push(row);
+      } catch (error) {
+        remaining.push(row);
+      }
+    }
+    localStorage.setItem(PENDING_FIREBASE_WRITES_KEY, JSON.stringify(remaining));
+  }
+
+  async function saveFirebaseDataWithRetry(collectionName, docId, data, errorLabel = 'Firebase save error') {
+    if (!collectionName || !docId) return false;
+    if (!window.firebaseDB) {
+      queueFirebaseWrite(collectionName, docId, data);
+      return false;
+    }
+    try {
+      const ok = await window.firebaseDB.saveData(collectionName, docId, data);
+      if (ok === false) {
+        queueFirebaseWrite(collectionName, docId, data);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      queueFirebaseWrite(collectionName, docId, data);
+      console.error(`${errorLabel}:`, error);
+      return false;
+    }
+  }
+
+  async function refreshDomesticQuotationsFromFirebase(ownerDocIds) {
+    if (!window.firebaseDB) return [];
+    const ids = Array.from(new Set((ownerDocIds || []).filter(Boolean)));
+    if (!ids.length) return [];
+
+    const fallbackAgent = { id: ids[0], uid: ids[0] };
+    let localRows = (JSON.parse(localStorage.getItem(DOMESTIC_STORAGE_KEY)) || []).map(q => normalizeQuotationOwnerFields(q, fallbackAgent));
+    let mergedRows = localRows.filter(isDomesticQuotation);
+
+    for (const ownerDocId of ids) {
+      const firebaseData = await window.firebaseDB.getData(DOMESTIC_COLLECTION, ownerDocId);
+      if (firebaseData && Array.isArray(firebaseData.quotations)) {
+        const remoteRows = firebaseData.quotations.map(q => normalizeQuotationOwnerFields(q, { id: ownerDocId, uid: ownerDocId }));
+        mergedRows = mergeQuotationsById(mergedRows, remoteRows);
+      }
+    }
+
+    localStorage.setItem(DOMESTIC_STORAGE_KEY, JSON.stringify(mergedRows));
+    savedQuotations = mergedRows;
+    return mergedRows;
   }
 
   // Helper function to get current agent
@@ -4104,15 +4367,8 @@ function saveAccountsSuppliersToCurrentQuotation() {
   allQuotations[idx].updatedAt = new Date().toISOString();
   localStorage.setItem('savedQuotations_domestic', JSON.stringify(allQuotations));
   // Also save to Firebase
-  const agent = getCurrentAgent();
-  const agentDocId = agent?.id || agent?.uid || '';
-  if (agentDocId && window.firebaseDB) {
-    window.firebaseDB.saveData('domestic_quotations', agentDocId, {
-      quotations: allQuotations,
-      updatedAt: new Date(),
-      agentId: agentDocId
-    }).catch(err => console.error('Firebase accounts suppliers save error:', err));
-  }
+  const ownerDocId = getQuotationOwnerDocId(allQuotations[idx], getCurrentAgent());
+  saveDomesticOwnerQuotationsToFirebase(ownerDocId, allQuotations, 'Firebase accounts suppliers save error');
 }
 
 function buildAccountsSummaryPdf(rows, supplierMap) {
@@ -5376,7 +5632,7 @@ function openDomesticVoucherEditor() {
     return;
   }
 
-  const ownerId = getAgentDocId(quotation.agentData) || getAgentDocId(getCurrentAgent()) || '';
+  const ownerId = getQuotationOwnerDocId(quotation, getCurrentAgent()) || '';
   localStorage.setItem('selectedQuotationId', currentQuotationId);
   if (ownerId) localStorage.setItem('selectedQuotationOwnerId', ownerId);
   const ownerQuery = ownerId ? `&owner=${encodeURIComponent(ownerId)}` : '';
@@ -5471,7 +5727,7 @@ async function cancelLinkedVoucher(voucherId) {
     }
     if (String(existing.status || '').trim().toLowerCase() === 'cancelled') return true;
     const cancelledDoc = { ...existing, status: 'cancelled', updatedAt: new Date().toISOString() };
-    await window.firebaseDB.saveData('domestic_vouchers', voucherId, cancelledDoc);
+    await saveFirebaseDataWithRetry('domestic_vouchers', voucherId, cancelledDoc, 'Linked voucher cancel sync error');
     return true;
   } catch (e) {
     console.error('Failed to cancel linked voucher:', e);
@@ -5560,15 +5816,8 @@ async function updateQuotationStatus(quotationId, newStatus) {
       localStorage.setItem('savedQuotations_domestic', JSON.stringify(savedQuotations));
       
       // Also save to Firebase
-      const agent = getCurrentAgent();
-      const agentDocId = getAgentDocId(agent);
-      if (agentDocId) {
-        window.firebaseDB.saveData('domestic_quotations', agentDocId, { 
-          quotations: savedQuotations, 
-          updatedAt: new Date(),
-          agentId: agentDocId 
-        }).catch(err => console.error('Firebase update error:', err));
-      }
+      const ownerDocId = getQuotationOwnerDocId(savedQuotations[quotationIndex], getCurrentAgent());
+      saveDomesticOwnerQuotationsToFirebase(ownerDocId, savedQuotations, 'Firebase update error');
       
       // Trigger dashboard refresh
       sessionStorage.setItem('refreshDashboard_domestic', 'true');
@@ -5923,17 +6172,9 @@ function handleGenerateQuotationLink(options = {}) {
   localStorage.setItem('savedQuotations_domestic', JSON.stringify(allQuotations));
   savedQuotations = allQuotations;
 
-  const owner = getCurrentAgent();
-  const ownerDocId = getAgentDocId(owner) || null;
-  if (quotation.shareLinkId && ownerDocId && window.firebaseDB) {
-    window.firebaseDB.saveData('quotation_links', quotation.shareLinkId, {
-      quotationId: quotation.id,
-      type: 'domestic',
-      ownerId: ownerDocId,
-      shareVersion: quotation.shareVersion,
-      shareUpdatedAt: quotation.shareUpdatedAt,
-      quotation
-    }).catch(err => console.error('Firebase share link save error:', err));
+  const ownerDocId = getQuotationOwnerDocId(quotation, getCurrentAgent());
+  if (quotation.shareLinkId && ownerDocId) {
+    saveFirebaseDataWithRetry('quotation_links', quotation.shareLinkId, buildQuotationLinkPayload(quotation, 'domestic', ownerDocId), 'Firebase share link save error');
   }
 
   if (!options.silent) {
@@ -6063,21 +6304,11 @@ function handleApproveCustomer(requireTermsCheck = false) {
   localStorage.setItem('savedQuotations_domestic', JSON.stringify(allQuotations));
   savedQuotations = allQuotations;
 
-  const owner = getCurrentAgent();
-  const ownerDocId = getAgentDocId(owner) || getAgentDocId(quotation.agentData) || null;
+  const ownerDocId = getQuotationOwnerDocId(quotation, getCurrentAgent());
   if (ownerDocId && window.firebaseDB) {
-    const ownerQuotations = allQuotations.filter(q => (getAgentDocId(q?.agentData) === ownerDocId));
-    window.firebaseDB.saveData('domestic_quotations', ownerDocId, { quotations: ownerQuotations, updatedAt: new Date(), agentId: ownerDocId })
-      .catch(err => console.error('Firebase update error:', err));
+    saveDomesticOwnerQuotationsToFirebase(ownerDocId, allQuotations, 'Firebase update error');
     if (quotation.shareLinkId) {
-      window.firebaseDB.saveData('quotation_links', quotation.shareLinkId, {
-        quotationId: quotation.id,
-        type: 'domestic',
-        ownerId: ownerDocId,
-        shareVersion: quotation.shareVersion,
-        shareUpdatedAt: quotation.shareUpdatedAt,
-        quotation
-      }).catch(err => console.error('Firebase share link update error:', err));
+      saveFirebaseDataWithRetry('quotation_links', quotation.shareLinkId, buildQuotationLinkPayload(quotation, 'domestic', ownerDocId), 'Firebase share link update error');
     }
   }
 
@@ -6110,21 +6341,11 @@ function handleSelfBook(requireTermsCheck = false) {
   localStorage.setItem('savedQuotations_domestic', JSON.stringify(allQuotations));
   savedQuotations = allQuotations;
 
-  const owner = getCurrentAgent();
-  const ownerDocId = getAgentDocId(owner) || getAgentDocId(quotation.agentData) || null;
+  const ownerDocId = getQuotationOwnerDocId(quotation, getCurrentAgent());
   if (ownerDocId && window.firebaseDB) {
-    const ownerQuotations = allQuotations.filter(q => (getAgentDocId(q?.agentData) === ownerDocId));
-    window.firebaseDB.saveData('domestic_quotations', ownerDocId, { quotations: ownerQuotations, updatedAt: new Date(), agentId: ownerDocId })
-      .catch(err => console.error('Firebase update error:', err));
+    saveDomesticOwnerQuotationsToFirebase(ownerDocId, allQuotations, 'Firebase update error');
     if (quotation.shareLinkId) {
-      window.firebaseDB.saveData('quotation_links', quotation.shareLinkId, {
-        quotationId: quotation.id,
-        type: 'domestic',
-        ownerId: ownerDocId,
-        shareVersion: quotation.shareVersion,
-        shareUpdatedAt: quotation.shareUpdatedAt,
-        quotation
-      }).catch(err => console.error('Firebase share link update error:', err));
+      saveFirebaseDataWithRetry('quotation_links', quotation.shareLinkId, buildQuotationLinkPayload(quotation, 'domestic', ownerDocId), 'Firebase share link update error');
     }
   }
 
@@ -7676,8 +7897,8 @@ async function upsertCustomerFromQuotation(clientData, quotationMeta) {
       quotationRefs: refs.slice(0, 20)
     };
 
-    await window.firebaseDB.saveData('customers', phoneKey, customerRecord);
-    return { ok: true, existed: !!existing };
+    const cloudOk = await saveFirebaseDataWithRetry('customers', phoneKey, customerRecord, 'Customer sync error');
+    return { ok: cloudOk, pending: !cloudOk, existed: !!existing };
   } catch (error) {
     console.error('Customer upsert failed:', error);
     return { ok: false, error };
@@ -7969,11 +8190,15 @@ const customSectionsData = {
     let allQuotations = JSON.parse(localStorage.getItem('savedQuotations_domestic')) || [];
     const existingQuotation = currentQuotationId ? allQuotations.find(q => q.id === currentQuotationId) : null;
     const ownerAgentData = existingQuotation?.agentData || agent;
+    const ownerDocId = getQuotationOwnerDocId(existingQuotation, ownerAgentData || agent);
 
     // Create a complete quotation object
     const quotationData = {
       id: currentQuotationId || 'DOM-' + Date.now().toString().slice(-6),
       quotationMode: 'domestic',
+      ownerId: ownerDocId,
+      agentId: ownerDocId,
+      userId: ownerDocId,
       clientData: {
         name: savedClientData.name || clientName,
         phone: savedClientData.phone || clientPhone,
@@ -7988,7 +8213,11 @@ const customSectionsData = {
         dateTo: savedClientData.dateTo || dateTo,
         tourDestination: savedClientData.tourDestination || ""
       },
-      agentData: ownerAgentData,
+      agentData: {
+        ...(ownerAgentData || {}),
+        id: ownerAgentData?.id || ownerDocId,
+        uid: ownerAgentData?.uid || ownerDocId
+      },
       createdAt: currentQuotationId ? 
         (savedQuotations.find(q => q.id === currentQuotationId)?.createdAt || new Date().toISOString()) : 
         new Date().toISOString(),
@@ -8082,31 +8311,15 @@ const customSectionsData = {
     allQuotations.push(quotationData);
     currentQuotationId = targetQuotationId;
     
-    const ownerDocId = getAgentDocId(ownerAgentData) || getAgentDocId(agent);
-    
     // Save to localStorage
     localStorage.setItem('savedQuotations_domestic', JSON.stringify(allQuotations));
 
-    if (quotationData.shareLinkId && ownerDocId && window.firebaseDB) {
-      window.firebaseDB.saveData('quotation_links', quotationData.shareLinkId, {
-        quotationId: quotationData.id,
-        type: 'domestic',
-        ownerId: ownerDocId,
-        shareVersion: quotationData.shareVersion,
-        shareUpdatedAt: quotationData.shareUpdatedAt,
-        quotation: quotationData
-      }).catch(err => console.error('Firebase share link update error:', err));
+    if (quotationData.shareLinkId && ownerDocId) {
+      saveFirebaseDataWithRetry('quotation_links', quotationData.shareLinkId, buildQuotationLinkPayload(quotationData, 'domestic', ownerDocId), 'Firebase share link update error');
     }
     
     // Save to Firebase
-    if (ownerDocId) {
-      const ownerQuotations = allQuotations.filter(q => (getAgentDocId(q?.agentData) === ownerDocId));
-      window.firebaseDB.saveData('domestic_quotations', ownerDocId, { 
-        quotations: ownerQuotations, 
-        updatedAt: new Date(),
-        agentId: ownerDocId 
-      }).catch(err => console.error('Firebase save error:', err));
-    }
+    saveDomesticOwnerQuotationsToFirebase(ownerDocId, allQuotations, 'Firebase save error');
     
     // Update the global variable
     savedQuotations = allQuotations;
@@ -8764,7 +8977,7 @@ function loadQuotation(quotationId) {
 }
 
 // Load Quotation functionality
-document.getElementById('btnLoadQuotation').addEventListener('click', () => {
+document.getElementById('btnLoadQuotation').addEventListener('click', async () => {
   // Get current agent
   const currentAgent = getCurrentAgent();
   if (!currentAgent) {
@@ -8772,14 +8985,13 @@ document.getElementById('btnLoadQuotation').addEventListener('click', () => {
     return;
   }
   
+  await refreshDomesticQuotationsFromFirebase(getAgentDocIds(currentAgent));
+
   // Get all quotations
   const allSavedQuotations = JSON.parse(localStorage.getItem('savedQuotations_domestic')) || [];
   
   // Filter quotations for current agent only
-  const userQuotations = allSavedQuotations.filter(q => {
-    if (!q || !q.agentData || q.agentData.id !== currentAgent.id) return false;
-    return isDomesticQuotation(q);
-  });
+  const userQuotations = allSavedQuotations.filter(q => isDomesticQuotation(q) && isQuotationOwnedByAgent(q, currentAgent));
   
   if (userQuotations.length === 0) {
     showAlert("No saved quotations found for your account.");
@@ -8901,28 +9113,9 @@ function handleUrlParameters() {
     
     // Wait for page to fully load
     setTimeout(async () => {
-      if (selectedOwnerId && window.firebaseDB) {
-        const firebaseData = await window.firebaseDB.getData('domestic_quotations', selectedOwnerId);
-        if (firebaseData && Array.isArray(firebaseData.quotations)) {
-          const localRows = JSON.parse(localStorage.getItem('savedQuotations_domestic')) || [];
-          const remoteRows = firebaseData.quotations;
-          const parseTs = (row) => {
-            const ts = new Date(row?.updatedAt || row?.createdAt || 0).getTime();
-            return Number.isFinite(ts) ? ts : 0;
-          };
-          const pickNewer = (a, b) => (parseTs(a) >= parseTs(b) ? a : b);
-          const mergedById = new Map();
-
-          [...remoteRows, ...localRows].forEach((row) => {
-            if (!row || !row.id) return;
-            const existing = mergedById.get(row.id);
-            mergedById.set(row.id, existing ? pickNewer(existing, row) : row);
-          });
-
-          const mergedRows = Array.from(mergedById.values());
-          localStorage.setItem('savedQuotations_domestic', JSON.stringify(mergedRows));
-        }
-      }
+      const currentAgent = getCurrentAgent();
+      const ownerIdsToRefresh = selectedOwnerId ? [selectedOwnerId] : getAgentDocIds(currentAgent);
+      await refreshDomesticQuotationsFromFirebase(ownerIdsToRefresh);
 
       // Load the quotation
       loadQuotation(quotationIdToLoad);

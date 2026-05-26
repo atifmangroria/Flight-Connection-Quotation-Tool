@@ -1462,6 +1462,24 @@ function getOwnerId(agent) {
   return agent?.uid || agent?.id || window.auth?.currentUser?.uid || null;
 }
 
+function getOwnerIds(agent) {
+  return Array.from(new Set([agent?.uid, agent?.id, window.auth?.currentUser?.uid].filter(Boolean)));
+}
+
+function mergeQuotationRowsById(rows) {
+  const byId = new Map();
+  (rows || []).forEach(row => {
+    if (!row?.id) return;
+    const existing = byId.get(row.id);
+    const rowTs = new Date(row.updatedAt || row.createdAt || 0).getTime();
+    const existingTs = new Date(existing?.updatedAt || existing?.createdAt || 0).getTime();
+    if (!existing || (Number.isFinite(rowTs) ? rowTs : 0) >= (Number.isFinite(existingTs) ? existingTs : 0)) {
+      byId.set(row.id, row);
+    }
+  });
+  return Array.from(byId.values());
+}
+
 function isFirebaseAvailableForDashboard() {
   // file:// pages have isolated origins and commonly break auth/session based Firebase access.
   return window.location.protocol !== 'file:' && !!window.auth?.currentUser;
@@ -1604,7 +1622,22 @@ async function deleteQuotationFromOwner(ownerId, quotationId, quotationType, per
   });
 }
 
-async function transferQuotationBetweenAgents(fromAgentId, toAgentId, quotationId, quotationType, performedBy) {
+function buildTransferredAgentData(sourceQuotation, targetUser, toAgentId) {
+  const previousAgentData = sourceQuotation?.agentData || {};
+  const displayName = targetUser?.fullName || targetUser?.name || targetUser?.email || previousAgentData.name || toAgentId;
+
+  return {
+    ...previousAgentData,
+    id: toAgentId,
+    uid: toAgentId,
+    name: displayName,
+    email: targetUser?.email || previousAgentData.email || '',
+    phone: targetUser?.phone || targetUser?.mobile || previousAgentData.phone || '',
+    role: targetUser?.role || previousAgentData.role || 'agent'
+  };
+}
+
+async function transferQuotationBetweenAgents(fromAgentId, toAgentId, quotationId, quotationType, performedBy, targetUser = null) {
   const collectionName = getQuotationCollectionName(quotationType);
   const sourceRef = doc(db, collectionName, fromAgentId);
   const targetRef = doc(db, collectionName, toAgentId);
@@ -1629,12 +1662,18 @@ async function transferQuotationBetweenAgents(fromAgentId, toAgentId, quotationI
       }
 
       const sourceQuotation = sourceList[sourceIndex];
+      const nowIso = new Date().toISOString();
+      const targetAgentData = buildTransferredAgentData(sourceQuotation, targetUser, toAgentId);
       const transferRecord = {
         ...sourceQuotation,
         agentId: toAgentId,
         ownerId: toAgentId,
-        updatedAt: new Date().toISOString(),
-        transferredAt: new Date().toISOString(),
+        userId: toAgentId,
+        agentName: targetAgentData.name,
+        agentData: targetAgentData,
+        transferredFromAgentData: sourceQuotation.agentData || null,
+        updatedAt: nowIso,
+        transferredAt: nowIso,
         transferredBy: performedBy.id,
         transferredByName: performedBy.name || '',
         transferredFrom: fromAgentId,
@@ -1685,6 +1724,22 @@ async function transferQuotationBetweenAgents(fromAgentId, toAgentId, quotationI
         userId: toAgentId,
         transferLog: targetTransferLog
       }, { merge: true });
+
+      if (sourceQuotation.shareLinkId) {
+        const linkRef = doc(db, 'quotation_links', sourceQuotation.shareLinkId);
+        transaction.set(linkRef, {
+          ownerId: toAgentId,
+          agentId: toAgentId,
+          userId: toAgentId,
+          quotationId,
+          quotationType,
+          quotation: transferRecord,
+          updatedAt: new Date(),
+          transferredAt: transferRecord.transferredAt,
+          transferredFrom: fromAgentId,
+          transferredTo: toAgentId
+        }, { merge: true });
+      }
 
       return transferRecord;
     });
@@ -1802,20 +1857,27 @@ async function saveQuotationsToFirebase(agent, umrahQuotations, internationalQuo
 // Helper function to load quotations from Firebase
 async function loadQuotationsFromFirebase(agent, explicitOwnerId = null) {
   try {
-    const ownerId = explicitOwnerId || getOwnerId(agent);
-    if (!ownerId) return getLocalQuotationsSnapshot();
+    const ownerIds = explicitOwnerId ? [explicitOwnerId] : getOwnerIds(agent);
+    if (!ownerIds.length) return getLocalQuotationsSnapshot();
 
     if (!isFirebaseAvailableForDashboard()) {
       return getLocalQuotationsSnapshot();
     }
-    
-    const umrahData = await window.firebaseDB.getData('umrah_quotations', ownerId);
-    const internationalData = await window.firebaseDB.getData('international_quotations', ownerId);
-    const domesticData = await window.firebaseDB.getData('domestic_quotations', ownerId, { silentPermissionDenied: true });
+
+    const loaded = { umrah: [], international: [], domestic: [] };
+    for (const ownerId of ownerIds) {
+      const umrahData = await window.firebaseDB.getData('umrah_quotations', ownerId);
+      const internationalData = await window.firebaseDB.getData('international_quotations', ownerId);
+      const domesticData = await window.firebaseDB.getData('domestic_quotations', ownerId, { silentPermissionDenied: true });
+      loaded.umrah.push(...(umrahData?.quotations || []).map(q => normalizeQuotationOwnerFields(q, ownerId)));
+      loaded.international.push(...(internationalData?.quotations || []).map(q => normalizeQuotationOwnerFields(q, ownerId)));
+      loaded.domestic.push(...(domesticData?.quotations || []).map(q => normalizeQuotationOwnerFields(q, ownerId)));
+    }
+
     const result = {
-      umrah: (umrahData?.quotations || []).map(q => normalizeQuotationOwnerFields(q, ownerId)),
-      international: (internationalData?.quotations || []).map(q => normalizeQuotationOwnerFields(q, ownerId)),
-      domestic: (domesticData?.quotations || []).map(q => normalizeQuotationOwnerFields(q, ownerId))
+      umrah: mergeQuotationRowsById(loaded.umrah),
+      international: mergeQuotationRowsById(loaded.international),
+      domestic: mergeQuotationRowsById(loaded.domestic)
     };
 
     saveLocalQuotationsSnapshot(result.umrah, result.international, result.domestic);
@@ -1836,7 +1898,7 @@ function findQuotationOwnerId(quotationId, quotationType) {
   const ownQuotations = [...allUmrahQuotations, ...allInternationalQuotations, ...allDomesticQuotations];
   const list = allUsersQuotations.concat(ownQuotations);
   const target = list.find(q => q?.id === quotationId && q?.type === quotationType);
-  return target?.agentId || null;
+  return target?.ownerId || target?.agentId || target?.userId || target?.agentData?.uid || target?.agentData?.id || null;
 }
 
 // Show notification function
@@ -2823,7 +2885,14 @@ async function transferQuotation(quotationId, quotationType, fromAgentId) {
       return;
     }
 
-    await transferQuotationBetweenAgents(fromAgentId, targetUser.id, quotationId, quotationType, { id: admin.id, name: admin.name || admin.email || 'admin' });
+    await transferQuotationBetweenAgents(
+      fromAgentId,
+      targetUser.id,
+      quotationId,
+      quotationType,
+      { id: admin.id, name: admin.name || admin.email || 'admin' },
+      targetUser
+    );
     showNotification('Quotation transferred successfully.', 'success');
     await loadAllQuotations();
   } catch (error) {
@@ -3056,10 +3125,11 @@ document.addEventListener('DOMContentLoaded', async function() {
     showPackageList();
   }
   
-  if (sessionStorage.getItem('refreshDashboard') || sessionStorage.getItem('refreshDashboard_umrah') || sessionStorage.getItem('refreshDashboard_international')) {
+  if (sessionStorage.getItem('refreshDashboard') || sessionStorage.getItem('refreshDashboard_umrah') || sessionStorage.getItem('refreshDashboard_international') || sessionStorage.getItem('refreshDashboard_domestic')) {
     sessionStorage.removeItem('refreshDashboard');
     sessionStorage.removeItem('refreshDashboard_umrah');
     sessionStorage.removeItem('refreshDashboard_international');
+    sessionStorage.removeItem('refreshDashboard_domestic');
     await loadAllQuotations();
   }
 

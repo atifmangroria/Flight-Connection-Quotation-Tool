@@ -26,8 +26,50 @@
   window.__authReady = new Promise((resolve) => {
     onAuthStateChanged(auth, () => resolve(), () => resolve());
   });
+  const PENDING_FIREBASE_WRITES_KEY = 'pendingFirebaseWrites';
+  function getPendingFirebaseWrites() {
+    try {
+      const rows = JSON.parse(localStorage.getItem(PENDING_FIREBASE_WRITES_KEY) || '[]');
+      return Array.isArray(rows) ? rows : [];
+    } catch (error) {
+      return [];
+    }
+  }
+  function queueFirebaseWrite(collectionName, docId, data) {
+    if (!collectionName || !docId) return;
+    const rows = getPendingFirebaseWrites();
+    const key = `${collectionName}/${docId}`;
+    const nextRows = rows.filter(row => row.key !== key);
+    nextRows.push({ key, collectionName, docId, data, queuedAt: new Date().toISOString() });
+    localStorage.setItem(PENDING_FIREBASE_WRITES_KEY, JSON.stringify(nextRows));
+  }
+  async function flushPendingFirebaseWrites() {
+    const rows = getPendingFirebaseWrites();
+    if (!rows.length) return;
+    const remaining = [];
+    for (const row of rows) {
+      try {
+        await setDoc(doc(db, row.collectionName, row.docId), row.data, { merge: true });
+      } catch (error) {
+        remaining.push(row);
+      }
+    }
+    localStorage.setItem(PENDING_FIREBASE_WRITES_KEY, JSON.stringify(remaining));
+  }
+  window.addEventListener('online', flushPendingFirebaseWrites);
+  setTimeout(flushPendingFirebaseWrites, 1000);
   window.firebaseDB = {
     async save(col, id, data) { await setDoc(doc(db, col, id), data, { merge: true }); return true; },
+    async saveData(col, id, data) {
+      try {
+        await setDoc(doc(db, col, id), data, { merge: true });
+        return true;
+      } catch (error) {
+        if (error?.code === 'permission-denied') throw error;
+        queueFirebaseWrite(col, id, data);
+        return false;
+      }
+    },
     async get(col, id) { const s = await getDoc(doc(db, col, id)); return s.exists() ? { id: s.id, ...s.data() } : null; },
     async getAll(col) { const s = await getDocs(collection(db, col)); return s.docs.map(d => ({ id: d.id, ...d.data() })); },
     async update(col, id, upd) { await updateDoc(doc(db, col, id), upd); return true; },
@@ -767,8 +809,22 @@ function buildVoucherDoc(data, status) {
   const agent = JSON.parse(localStorage.getItem('loggedInAgent') || 'null') || { name: 'Unknown', id: 'demo' };
   const existing = voucherData || {};
   const version = (existing.version || 0) + 1;
+  const client = quotation?.clientData || {};
+  const voucherNumber = voucherId || '';
+  const quotationNumber = quotationId || '';
+  const agentName = agent.name || agent.displayName || agent.email || '';
+  const clientName = client.name || '';
   return {
     id: voucherId,
+    voucherNumber,
+    quotationNumber,
+    voucherType: 'international',
+    agentName,
+    agentPhone: agent.phone || '',
+    clientName,
+    clientPhone: client.phone || '',
+    displayLabel: ['international voucher', voucherNumber, quotationNumber, clientName].filter(Boolean).join(' | '),
+    firebaseLabel: ['international voucher', voucherNumber, quotationNumber, clientName, agentName].filter(Boolean).join(' | '),
     version,
     status,
     quotationId,

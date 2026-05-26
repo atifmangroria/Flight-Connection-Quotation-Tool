@@ -113,7 +113,26 @@
 
   function getOwnerId(quotation) {
     const agent = getCurrentAgentSafe();
-    return quotation?.agentData?.id || quotation?.agentData?.uid || agent?.id || agent?.uid || null;
+    return quotation?.ownerId ||
+      quotation?.agentId ||
+      quotation?.userId ||
+      quotation?.agentData?.id ||
+      quotation?.agentData?.uid ||
+      quotation?.agentData?.userId ||
+      agent?.id ||
+      agent?.uid ||
+      null;
+  }
+
+  function getOwnerIds(quotation) {
+    return Array.from(new Set([
+      quotation?.ownerId,
+      quotation?.agentId,
+      quotation?.userId,
+      quotation?.agentData?.id,
+      quotation?.agentData?.uid,
+      quotation?.agentData?.userId
+    ].filter(Boolean)));
   }
 
   function getRootId(quotation) {
@@ -214,14 +233,19 @@
   async function saveQuotationLinkSnapshot(quotation) {
     if (!quotation?.shareLinkId || !window.firebaseDB) return;
     const ownerId = getOwnerId(quotation);
-    await window.firebaseDB.saveData("quotation_links", quotation.shareLinkId, {
+    const payload = {
       quotationId: quotation.id,
       type: config.type,
       ownerId,
       quotation,
       shareVersion: quotation.shareVersion || 1,
       shareUpdatedAt: quotation.shareUpdatedAt || quotation.updatedAt || new Date().toISOString()
-    }).catch(err => console.error("Revision share link update error:", err));
+    };
+    if (typeof window.saveFirebaseDataWithRetry === "function") {
+      await window.saveFirebaseDataWithRetry("quotation_links", quotation.shareLinkId, payload, "Revision share link update error");
+      return;
+    }
+    await window.firebaseDB.saveData("quotation_links", quotation.shareLinkId, payload).catch(err => console.error("Revision share link update error:", err));
   }
 
   async function persistRevisionRows(rows, ownerQuotation) {
@@ -229,7 +253,7 @@
     const ownerId = getOwnerId(ownerQuotation);
     if (ownerId && window.firebaseDB) {
       await window.firebaseDB.saveData(config.firebaseCollection, ownerId, {
-        quotations: normalized,
+        quotations: normalized.filter(row => getOwnerIds(row).includes(ownerId)),
         updatedAt: new Date(),
         agentId: ownerId,
         userId: ownerId

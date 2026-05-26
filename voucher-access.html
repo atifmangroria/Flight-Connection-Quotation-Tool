@@ -225,7 +225,7 @@ function getLoggedInAgent() {
 }
 
 function getOwnerIdFromVoucher(v) {
-  return v?.agentData?.uid || v?.agentData?.id || v?.agentData?.userId || '';
+  return v?.ownerId || v?.agentId || v?.userId || v?.agentData?.uid || v?.agentData?.id || v?.agentData?.userId || '';
 }
 
 function formatDate(dt) {

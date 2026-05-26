@@ -796,14 +796,16 @@
   }
 
   async function loadQuotationDocsForUser(userId) {
-    const [umrahDoc, internationalDoc] = await Promise.all([
+    const [umrahDoc, internationalDoc, domesticDoc] = await Promise.all([
       db.collection('umrah_quotations').doc(userId).get(),
-      db.collection('international_quotations').doc(userId).get()
+      db.collection('international_quotations').doc(userId).get(),
+      db.collection('domestic_quotations').doc(userId).get()
     ]);
 
     return {
       umrah: umrahDoc.exists ? umrahDoc.data() : null,
-      international: internationalDoc.exists ? internationalDoc.data() : null
+      international: internationalDoc.exists ? internationalDoc.data() : null,
+      domestic: domesticDoc.exists ? domesticDoc.data() : null
     };
   }
 
@@ -875,7 +877,14 @@
     const adminQuotations = Array.isArray(adminData.quotations) ? adminData.quotations : [];
     const transferredQuotations = sourceQuotations.map(quotation => ({
       ...quotation,
+      ownerId: currentUser.uid,
       agentId: currentUser.uid,
+      userId: currentUser.uid,
+      agentData: {
+        ...(quotation.agentData || {}),
+        id: currentUser.uid,
+        uid: currentUser.uid
+      },
       transferredFromAgentId: sourceUserId,
       transferredFromAgentName: sourceUserName,
       transferredAt: new Date().toISOString()
@@ -886,8 +895,26 @@
     await db.collection(collectionName).doc(currentUser.uid).set({
       quotations: mergedQuotations,
       updatedAt: new Date(),
-      agentId: currentUser.uid
+      agentId: currentUser.uid,
+      userId: currentUser.uid
     }, { merge: true });
+
+    const batch = db.batch();
+    let linkUpdates = 0;
+    transferredQuotations.forEach(quotation => {
+      if (!quotation.shareLinkId) return;
+      const linkRef = db.collection('quotation_links').doc(quotation.shareLinkId);
+      batch.set(linkRef, {
+        ownerId: currentUser.uid,
+        agentId: currentUser.uid,
+        userId: currentUser.uid,
+        quotation
+      }, { merge: true });
+      linkUpdates += 1;
+    });
+    if (linkUpdates > 0) {
+      await batch.commit();
+    }
 
     await db.collection(collectionName).doc(sourceUserId).delete();
 
@@ -1061,8 +1088,9 @@
     const quotationData = await loadQuotationDocsForUser(userId);
     const umrahQuotations = Array.isArray(quotationData.umrah?.quotations) ? quotationData.umrah.quotations : [];
     const internationalQuotations = Array.isArray(quotationData.international?.quotations) ? quotationData.international.quotations : [];
-    const totalQuotations = umrahQuotations.length + internationalQuotations.length;
-    const activeQuotations = [...umrahQuotations, ...internationalQuotations].filter(q => isActiveQuotationStatus(q?.status)).length;
+    const domesticQuotations = Array.isArray(quotationData.domestic?.quotations) ? quotationData.domestic.quotations : [];
+    const totalQuotations = umrahQuotations.length + internationalQuotations.length + domesticQuotations.length;
+    const activeQuotations = [...umrahQuotations, ...internationalQuotations, ...domesticQuotations].filter(q => isActiveQuotationStatus(q?.status)).length;
 
     let transferRequired = false;
     if (activeQuotations > 0) {
@@ -1084,10 +1112,12 @@
       if (transferRequired) {
         await transferQuotationCollection('umrah_quotations', userId, agentName);
         await transferQuotationCollection('international_quotations', userId, agentName);
+        await transferQuotationCollection('domestic_quotations', userId, agentName);
       } else {
         await Promise.all([
           db.collection('umrah_quotations').doc(userId).delete().catch(() => null),
-          db.collection('international_quotations').doc(userId).delete().catch(() => null)
+          db.collection('international_quotations').doc(userId).delete().catch(() => null),
+          db.collection('domestic_quotations').doc(userId).delete().catch(() => null)
         ]);
       }
 
