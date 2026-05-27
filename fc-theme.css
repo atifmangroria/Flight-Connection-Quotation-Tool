@@ -1,0 +1,533 @@
+/* Flight Connection shared UI theme
+ Visual-only overrides. Keep page IDs, handlers, and business logic unchanged. */
+:root {
+ --fc-primary: #005a9c;
+ --fc-primary-dark: #004677;
+ --fc-primary-soft: #f8fbff;
+ --fc-primary-selected: #eaf5ff;
+ --fc-success: #159447;
+ --fc-success-dark: #0f7738;
+ --fc-warning: #fff7e8;
+ --fc-danger: #d93025;
+ --fc-danger-dark: #b3261e;
+ --fc-info: #eef8fb;
+ --fc-bg: #f3f7fb;
+ --fc-surface: #ffffff;
+ --fc-surface-soft: #f8fbff;
+ --fc-border: #dce6f2;
+ --fc-border-strong: #c7d6e7;
+ --fc-text: #152033;
+ --fc-muted: #637083;
+ --fc-shadow: 0 8px 22px rgba(21, 32, 51, 0.06);
+ --fc-shadow-soft: 0 3px 10px rgba(21, 32, 51, 0.045);
+ --accent: var(--fc-primary);
+ --muted: var(--fc-muted);
+}
+
+html {
+ -webkit-font-smoothing: antialiased;
+ text-rendering: optimizeLegibility;
+}
+
+body {
+ background: var(--fc-bg) !important;
+ color: var(--fc-text) !important;
+ font-family: "Segoe UI", Roboto, Arial, Helvetica, sans-serif !important;
+ line-height: 1.42;
+}
+
+.wrap,
+.container,
+.main-container,
+.login-container {
+ background: var(--fc-surface) !important;
+ border: 1px solid rgba(220, 230, 242, 0.75);
+ box-shadow: var(--fc-shadow) !important;
+}
+
+h1, h2, h3, h4, h5 {
+ color: var(--fc-text);
+ letter-spacing: 0;
+}
+
+h1 {
+ font-size: 21px !important;
+ font-weight: 650;
+}
+
+label {
+ color: #2d394b !important;
+ font-weight: 560;
+}
+
+.small,
+small {
+ color: var(--fc-muted) !important;
+}
+
+.section,
+.card,
+.panel,
+.notice,
+.modalBox,
+.header-card,
+.info-bar,
+.service-box,
+.section-entry,
+#loginPanel {
+ background: var(--fc-surface) !important;
+ border: 1px solid var(--fc-border) !important;
+ border-radius: 8px !important;
+ box-shadow: var(--fc-shadow-soft);
+}
+
+.section > h3,
+.section h3,
+.card-header,
+.modal-header,
+.modal-title {
+ color: var(--fc-primary) !important;
+}
+
+input[type="text"],
+input[type="number"],
+input[type="date"],
+input[type="password"],
+input[type="email"],
+input[type="tel"],
+select,
+textarea {
+ background: #fff !important;
+ border: 1px solid var(--fc-border-strong) !important;
+ border-radius: 7px !important;
+ color: var(--fc-text) !important;
+ min-height: 38px;
+ transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+ border-color: var(--fc-primary) !important;
+ box-shadow: 0 0 0 3px rgba(11, 95, 165, 0.14) !important;
+ outline: none !important;
+}
+
+input[readonly],
+input:disabled,
+select:disabled,
+textarea:disabled {
+ background: #f2f6fb !important;
+ color: #5f6d7b !important;
+}
+
+button,
+.btn,
+.btn-primary,
+.btn-action,
+.search-btn,
+.header-btn,
+.add-btn,
+.green-btn,
+.blue-btn,
+.orange-btn,
+.whatsapp-btn,
+.btn-view,
+.btn-edit,
+.btn-transfer,
+.btn-create-agent,
+.btn-create-role,
+.btn-back,
+.btn-logout {
+ border: 1px solid transparent !important;
+ border-radius: 6px !important;
+ box-shadow: 0 2px 6px rgba(21, 32, 51, 0.07);
+ cursor: pointer;
+ font-size: 12px !important;
+ font-weight: 600 !important;
+ letter-spacing: 0;
+ line-height: 1.2;
+ min-height: 28px;
+ padding: 5px 9px !important;
+ transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease !important;
+}
+
+button:where(:not(.ghost):not(.remove-btn):not(.rich-editor-btn):not(.modal-close):not(.btn-delete):not(.btn-danger):not(.btn-reject):not(.btn-logout):not(.service-tab):not(.tab-button):not(.view-mode-btn):not(.tab):not(.tab-btn)),
+.btn-primary,
+.btn-action,
+.search-btn,
+.header-btn,
+.blue-btn,
+.btn-view,
+.btn-transfer {
+ background: var(--fc-primary) !important;
+ border-color: var(--fc-primary) !important;
+ color: #ffffff !important;
+ box-shadow: 0 3px 9px rgba(0, 90, 156, 0.18) !important;
+}
+
+button:hover,
+.btn:hover {
+ box-shadow: 0 4px 10px rgba(21, 32, 51, 0.10);
+ transform: translateY(-1px);
+}
+
+button:where(:not(.ghost):not(.remove-btn):not(.rich-editor-btn):not(.modal-close):not(.btn-delete):not(.btn-danger):not(.btn-reject):not(.btn-logout):not(.service-tab):not(.tab-button):not(.view-mode-btn):not(.tab):not(.tab-btn)):hover,
+.btn-primary:hover,
+.btn-action:hover,
+.search-btn:hover,
+.header-btn:hover,
+.blue-btn:hover,
+.btn-view:hover,
+.btn-transfer:hover {
+ background: var(--fc-primary-dark) !important;
+ border-color: var(--fc-primary-dark) !important;
+}
+
+button.ghost,
+.btn-ghost,
+.btn-secondary {
+ background: var(--fc-primary-soft) !important;
+ border-color: #c8def4 !important;
+ color: var(--fc-primary-dark) !important;
+ box-shadow: none;
+}
+
+button.ghost:hover,
+.btn-ghost:hover,
+.btn-secondary:hover {
+ background: #dbeeff !important;
+}
+
+.add-btn,
+.green-btn,
+.btn-success,
+.btn-green,
+.btn-approve {
+ background: var(--fc-success) !important;
+ border-color: var(--fc-success) !important;
+ color: #ffffff !important;
+ box-shadow: 0 3px 9px rgba(21, 148, 71, 0.16) !important;
+}
+
+.add-btn:hover,
+.green-btn:hover,
+.btn-success:hover,
+.btn-green:hover,
+.btn-approve:hover {
+ background: var(--fc-success-dark) !important;
+}
+
+.orange-btn {
+ background: #f59e0b !important;
+ border-color: #f59e0b !important;
+ color: #ffffff !important;
+}
+
+.remove-btn,
+.btn-delete,
+.btn-danger,
+.btn-reject,
+.btn-logout {
+ background: var(--fc-danger) !important;
+ border-color: var(--fc-danger) !important;
+ color: #ffffff !important;
+ box-shadow: 0 3px 9px rgba(217, 48, 37, 0.16) !important;
+}
+
+.remove-btn:hover,
+.btn-delete:hover,
+.btn-danger:hover,
+.btn-reject:hover,
+.btn-logout:hover {
+ background: var(--fc-danger-dark) !important;
+ border-color: var(--fc-danger-dark) !important;
+}
+
+.whatsapp-btn {
+ background: #25d366 !important;
+ border-color: #25d366 !important;
+ color: #ffffff !important;
+}
+
+.whatsapp-btn:hover {
+ background: #128c7e !important;
+ border-color: #128c7e !important;
+}
+
+.service-tabs,
+.actions,
+.action-buttons,
+.pkg-actions,
+.modal-buttons,
+.modal-btns {
+ gap: 8px !important;
+}
+
+.tab-button,
+.service-tab,
+.view-mode-btn,
+.pagination button,
+.tab,
+.tab-btn {
+ background: var(--fc-primary) !important;
+ color: #ffffff !important;
+ border: 1px solid var(--fc-primary) !important;
+ border-radius: 7px !important;
+ padding: 7px 13px !important;
+ font-weight: 600 !important;
+ cursor: pointer;
+ box-shadow: none !important;
+ min-height: 32px;
+}
+
+.view-mode-btn {
+ min-width: 0 !important;
+}
+
+.pagination button {
+ min-width: 34px !important;
+ padding: 6px 11px !important;
+}
+
+.btn-view,
+.btn-edit,
+.btn-delete,
+.btn-danger,
+.remove-btn,
+.add-btn {
+ min-height: 28px !important;
+ padding: 5px 10px !important;
+ border-radius: 7px !important;
+}
+
+.flight-header .add-btn,
+.hotel-header .add-btn,
+.transfer-header .add-btn,
+.visa-header .add-btn,
+.tour-header .add-btn,
+.tours-header .add-btn,
+.fc-bottom-actions .add-btn {
+ padding: 6px 12px !important;
+ min-height: 30px !important;
+}
+
+.tab-button:hover,
+.service-tab:hover,
+.view-mode-btn:hover,
+.pagination button:hover,
+.tab:hover,
+.tab-btn:hover {
+ background: var(--fc-primary-dark) !important;
+ border-color: var(--fc-primary-dark) !important;
+ color: #ffffff !important;
+}
+
+.tab-button.active,
+.service-tab.active,
+.view-mode-btn.active,
+.pagination button.active,
+.tab.active,
+.tab-btn.active {
+ background: #f8fbff !important;
+ color: #005a9c !important;
+ border-color: #b8d8f5 !important;
+ box-shadow: none !important;
+}
+
+body .pagination button.active.active.active,
+body .pagination button.active.active.active:hover {
+ background: #f8fbff !important;
+ color: #005a9c !important;
+ border-color: #b8d8f5 !important;
+ box-shadow: none !important;
+}
+
+.fc-bottom-actions {
+ display: flex;
+ justify-content: flex-start;
+ gap: 8px;
+ margin-top: 12px;
+ padding-top: 10px;
+ border-top: 1px dashed var(--fc-border);
+}
+
+.fc-bottom-actions .add-btn {
+ background: var(--fc-primary) !important;
+ border-color: var(--fc-primary) !important;
+ color: #ffffff !important;
+ box-shadow: 0 3px 9px rgba(0, 90, 156, 0.16) !important;
+}
+
+.fc-bottom-actions .add-btn:hover {
+ background: var(--fc-primary-dark) !important;
+}
+
+button.fc-disabled,
+button:disabled,
+.btn:disabled {
+ background: #f3f5f8 !important;
+ border-color: #d7dee8 !important;
+ color: #7a8797 !important;
+ box-shadow: none !important;
+ cursor: not-allowed !important;
+ transform: none !important;
+}
+
+.flight-header,
+.hotel-header,
+.transfer-header,
+.visa-header,
+.tour-header,
+.tours-header {
+ align-items: center !important;
+}
+
+.section h4,
+.section-entry h4 {
+ font-weight: 600 !important;
+}
+
+table,
+.quotation-table,
+.pax-table,
+.itinerary-table {
+ background: #fff;
+ border-collapse: separate !important;
+ border-spacing: 0;
+ border: 1px solid var(--fc-border);
+ border-radius: 8px;
+ overflow: hidden;
+}
+
+th {
+ background: #edf5ff !important;
+ color: #17314d !important;
+ font-weight: 600 !important;
+}
+
+th,
+td {
+ border-bottom: 1px solid #eef2f7 !important;
+}
+
+tr:hover td {
+ background: #fbfdff;
+}
+
+.modal-overlay {
+ background: rgba(15, 28, 46, 0.48) !important;
+ backdrop-filter: blur(2px);
+}
+
+.modal-content,
+.modal-box,
+.modal,
+.modalBox {
+ border: 1px solid var(--fc-border);
+ border-radius: 10px !important;
+ box-shadow: 0 22px 60px rgba(15, 28, 46, 0.22) !important;
+}
+
+.toast,
+.temp-notification,
+.notification {
+ border-radius: 9px !important;
+ box-shadow: 0 14px 32px rgba(15, 28, 46, 0.18) !important;
+ font-weight: 700;
+}
+
+.toast.success,
+.temp-notification.success {
+ background: #dff5e9 !important;
+ border-color: #8fd5aa !important;
+ color: #145c36 !important;
+}
+
+.toast.warning,
+.temp-notification.warning {
+ background: #fff3d8 !important;
+ border-color: #f1c36b !important;
+ color: #7a4700 !important;
+}
+
+.toast.error,
+.temp-notification.error {
+ background: #fde3e5 !important;
+ border-color: #ec9aa1 !important;
+ color: #8c1f28 !important;
+}
+
+.toast.info,
+.temp-notification.info {
+ background: #e1f4fb !important;
+ border-color: #8fd2e5 !important;
+ color: #075b79 !important;
+}
+
+.sync-status-badge {
+ border-radius: 999px !important;
+ font-weight: 600 !important;
+}
+
+.input-error {
+ border-color: var(--fc-danger) !important;
+ box-shadow: 0 0 0 3px rgba(200, 50, 59, 0.12) !important;
+}
+
+#calcSummaryTable thead th {
+ background: var(--fc-primary) !important;
+ color: #fff !important;
+}
+
+.package-total-row,
+#calcSummaryTable tfoot tr {
+ background: #eaf4ff !important;
+}
+
+@media (max-width: 960px) {
+ body {
+ margin: 0 !important;
+ }
+
+ .wrap,
+ .container,
+ .main-container {
+ border-left: 0 !important;
+ border-right: 0 !important;
+ border-radius: 0 !important;
+ }
+
+ button,
+ .btn {
+ min-height: 36px;
+ }
+}
+
+@media print {
+ body {
+ background: #fff !important;
+ color: #111 !important;
+ }
+
+ .wrap,
+ .container,
+ .section,
+ .card,
+ .panel,
+ .modalBox {
+ box-shadow: none !important;
+ }
+
+ .section,
+ .card,
+ table {
+ border-color: #d6dbe2 !important;
+ }
+
+ button,
+ .btn,
+ .no-print {
+ display: none !important;
+ }
+}

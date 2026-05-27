@@ -3,83 +3,118 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Create Voucher — Flight Connection</title>
+<title>Create Voucher - Flight Connection</title>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="itinerary-component.js"></script>
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-  import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, query, where } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-  import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
-  const firebaseConfig = {
-    apiKey: "AIzaSyDx3Qxt84vJlz_-mXuxiC0W2flaLadr9Ws",
-    authDomain: "fc-quotation-tool.firebaseapp.com",
-    projectId: "fc-quotation-tool",
-    storageBucket: "fc-quotation-tool.firebasestorage.app",
-    messagingSenderId: "370566945624",
-    appId: "1:370566945624:web:a84b20d5a8f99d20a6e32d"
-  };
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
-  const auth = getAuth(app);
-  window.auth = auth;
-  window.__authReady = new Promise((resolve) => {
-    onAuthStateChanged(auth, () => resolve(), () => resolve());
-  });
-  const PENDING_FIREBASE_WRITES_KEY = 'pendingFirebaseWrites';
-  function getPendingFirebaseWrites() {
-    try {
-      const rows = JSON.parse(localStorage.getItem(PENDING_FIREBASE_WRITES_KEY) || '[]');
-      return Array.isArray(rows) ? rows : [];
-    } catch (error) {
-      return [];
-    }
-  }
-  function queueFirebaseWrite(collectionName, docId, data) {
-    if (!collectionName || !docId) return;
-    const rows = getPendingFirebaseWrites();
-    const key = `${collectionName}/${docId}`;
-    const nextRows = rows.filter(row => row.key !== key);
-    nextRows.push({ key, collectionName, docId, data, queuedAt: new Date().toISOString() });
-    localStorage.setItem(PENDING_FIREBASE_WRITES_KEY, JSON.stringify(nextRows));
-  }
-  async function flushPendingFirebaseWrites() {
-    const rows = getPendingFirebaseWrites();
-    if (!rows.length) return;
-    const remaining = [];
-    for (const row of rows) {
-      try {
-        await setDoc(doc(db, row.collectionName, row.docId), row.data, { merge: true });
-      } catch (error) {
-        remaining.push(row);
-      }
-    }
-    localStorage.setItem(PENDING_FIREBASE_WRITES_KEY, JSON.stringify(remaining));
-  }
-  window.addEventListener('online', flushPendingFirebaseWrites);
-  setTimeout(flushPendingFirebaseWrites, 1000);
-  window.firebaseDB = {
-    async save(col, id, data) { await setDoc(doc(db, col, id), data, { merge: true }); return true; },
-    async saveData(col, id, data) {
-      try {
-        await setDoc(doc(db, col, id), data, { merge: true });
-        return true;
-      } catch (error) {
-        if (error?.code === 'permission-denied') throw error;
-        queueFirebaseWrite(col, id, data);
-        return false;
-      }
-    },
-    async get(col, id) { const s = await getDoc(doc(db, col, id)); return s.exists() ? { id: s.id, ...s.data() } : null; },
-    async getAll(col) { const s = await getDocs(collection(db, col)); return s.docs.map(d => ({ id: d.id, ...d.data() })); },
-    async update(col, id, upd) { await updateDoc(doc(db, col, id), upd); return true; },
-    async findByField(col, field, val) {
-      const q = query(collection(db, col), where(field, '==', val));
-      const s = await getDocs(q);
-      return s.docs.map(d => ({ id: d.id, ...d.data() }));
-    }
-  };
+ import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+ import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, query, where } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+ import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+ const firebaseConfig = {
+ apiKey: "AIzaSyDx3Qxt84vJlz_-mXuxiC0W2flaLadr9Ws",
+ authDomain: "fc-quotation-tool.firebaseapp.com",
+ projectId: "fc-quotation-tool",
+ storageBucket: "fc-quotation-tool.firebasestorage.app",
+ messagingSenderId: "370566945624",
+ appId: "1:370566945624:web:a84b20d5a8f99d20a6e32d"
+ };
+ const app = initializeApp(firebaseConfig);
+ const db = getFirestore(app);
+ const auth = getAuth(app);
+ window.auth = auth;
+ window.__authReady = new Promise((resolve) => {
+ onAuthStateChanged(auth, () => resolve(), () => resolve());
+ });
+ const PENDING_FIREBASE_WRITES_KEY = 'pendingFirebaseWrites';
+ const PENDING_FIREBASE_QUEUE_WARN_BYTES = 3 * 1024 * 1024;
+ const PENDING_FIREBASE_QUEUE_WARN_COUNT = 50;
+ function getPendingFirebaseWrites() {
+ try {
+ const rows = JSON.parse(localStorage.getItem(PENDING_FIREBASE_WRITES_KEY) || '[]');
+ return Array.isArray(rows) ? rows : [];
+ } catch (error) {
+ return [];
+ }
+ }
+ function updateVoucherSyncStatus(state = null, text = '') {
+ const el = document.getElementById('voucherSyncStatus');
+ if (!el) return;
+ const queueInfo = getPendingFirebaseQueueInfo();
+ const queued = queueInfo.count;
+ const queueLarge = queued >= PENDING_FIREBASE_QUEUE_WARN_COUNT || queueInfo.bytes >= PENDING_FIREBASE_QUEUE_WARN_BYTES;
+ const queueSizeText = `${queued} queued, ${Math.round(queueInfo.bytes / 1024)} KB`;
+ if (queueLarge && !state) state = 'failed';
+ const nextState = state || (queued ? (navigator.onLine ? 'syncing' : 'local') : 'synced');
+ const nextText = text || (queueLarge ? 'Sync queue large' : (queued ? (navigator.onLine ? `Syncing (${queued} queued)` : `Saved locally (${queued} queued)`) : 'Synced'));
+ el.className = `sync-status-badge ${nextState}`;
+ el.textContent = nextText;
+ el.title = queued ? `Saved locally. Firebase sync is pending. Queue: ${queueSizeText}.` : 'Voucher data is synced.';
+ }
+ window.updateVoucherSyncStatus = updateVoucherSyncStatus;
+ function getPendingFirebaseQueueInfo(rows = getPendingFirebaseWrites()) {
+ let serialized = '[]';
+ try { serialized = JSON.stringify(rows || []); } catch (error) { serialized = '[]'; }
+ return { count: Array.isArray(rows) ? rows.length : 0, bytes: new Blob([serialized]).size };
+ }
+ function setPendingFirebaseWrites(rows) {
+ try {
+ localStorage.setItem(PENDING_FIREBASE_WRITES_KEY, JSON.stringify(rows || []));
+ return true;
+ } catch (error) {
+ console.error('Pending Firebase queue storage failed:', error);
+ updateVoucherSyncStatus('failed', 'Sync queue full');
+ return false;
+ }
+ }
+ function queueFirebaseWrite(collectionName, docId, data) {
+ if (!collectionName || !docId) return;
+ const rows = getPendingFirebaseWrites();
+ const key = `${collectionName}/${docId}`;
+ const nextRows = rows.filter(row => row.key !== key);
+ nextRows.push({ key, collectionName, docId, data, queuedAt: new Date().toISOString() });
+ setPendingFirebaseWrites(nextRows);
+ updateVoucherSyncStatus('local');
+ }
+ async function flushPendingFirebaseWrites() {
+ const rows = getPendingFirebaseWrites();
+ if (!rows.length) return;
+ const remaining = [];
+ for (const row of rows) {
+ try {
+ await setDoc(doc(db, row.collectionName, row.docId), row.data, { merge: true });
+ } catch (error) {
+ remaining.push(row);
+ }
+ }
+ setPendingFirebaseWrites(remaining);
+ updateVoucherSyncStatus(remaining.length ? 'local' : 'synced');
+ }
+ window.addEventListener('online', () => { updateVoucherSyncStatus('syncing'); flushPendingFirebaseWrites(); });
+ window.addEventListener('offline', () => updateVoucherSyncStatus('local'));
+ setTimeout(flushPendingFirebaseWrites, 1000);
+ window.firebaseDB = {
+ async save(col, id, data) { await setDoc(doc(db, col, id), data, { merge: true }); return true; },
+ async saveData(col, id, data) {
+ try {
+ await setDoc(doc(db, col, id), data, { merge: true });
+ return true;
+ } catch (error) {
+ if (error?.code === 'permission-denied') throw error;
+ queueFirebaseWrite(col, id, data);
+ return false;
+ }
+ },
+ async get(col, id) { const s = await getDoc(doc(db, col, id)); return s.exists() ? { id: s.id, ...s.data() } : null; },
+ async getAll(col) { const s = await getDocs(collection(db, col)); return s.docs.map(d => ({ id: d.id, ...d.data() })); },
+ async update(col, id, upd) { await updateDoc(doc(db, col, id), upd); return true; },
+ async findByField(col, field, val) {
+ const q = query(collection(db, col), where(field, '==', val));
+ const s = await getDocs(q);
+ return s.docs.map(d => ({ id: d.id, ...d.data() }));
+ }
+ };
 </script>
 <style>
 :root{--accent:#0b76d1;--muted:#666;--green:#28a745;--red:#dc3545;--orange:#f39c12}
@@ -116,6 +151,16 @@ button.whatsapp:hover{background:#128C7E}
 .badge-draft{background:#fff3cd;color:#856404}
 .badge-published{background:#d4edda;color:#155724}
 .badge-cancelled{background:#f8d7da;color:#721c24}
+.sync-status-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid #d6dbe2;background:#f7f9fc;color:#445;font-size:12px;font-weight:700;white-space:nowrap}
+.sync-status-badge::before{content:'';width:8px;height:8px;border-radius:50%;background:#8a94a6;display:inline-block}
+.sync-status-badge.local{background:#fff8e6;border-color:#f4c542;color:#7a5200}
+.sync-status-badge.local::before{background:#f4a000}
+.sync-status-badge.syncing{background:#eaf4ff;border-color:#8ec5ff;color:#075a9f}
+.sync-status-badge.syncing::before{background:#0b76d1}
+.sync-status-badge.synced{background:#eaf7ee;border-color:#8bcf9a;color:#166534}
+.sync-status-badge.synced::before{background:#28a745}
+.sync-status-badge.failed{background:#fdecec;border-color:#f0a5a5;color:#9f1d1d}
+.sync-status-badge.failed::before{background:#dc3545}
 .info-bar{display:flex;align-items:center;gap:12px;padding:10px 14px;background:#fff;border:1px solid #e4ebf4;border-radius:8px;margin-bottom:14px;flex-wrap:wrap}
 .info-bar strong{font-size:15px}
 .small{font-size:14px;color:var(--muted)}
@@ -146,23 +191,25 @@ button.whatsapp:hover{background:#128C7E}
 .add-small:hover{background:#45a049}
 @media(max-width:600px){.grid{grid-template-columns:1fr}.grid-3{grid-template-columns:1fr}}
 @media (max-width: 960px) {
-  .wrap { padding: 14px; margin: 0 auto; border-radius: 0; }
-  .grid, .grid-2, .grid-3, .grid-4, .card, .section, .info-bar, .actions, .actions-bar, .service-box, .modal-box, .itinerary-table-wrapper, .search-container, .currency-selector, .addon-panel, .section-entry, .progress-bar { grid-template-columns: 1fr !important; }
-  .card-header, .header-card, .actions-bar, .info-bar, .link-row, .modal-btns, .service-box, .actions, .action-buttons, .section-entry h4, .currency-selector, .progress-bar { flex-direction: column !important; align-items: stretch !important; }
-  .service-tabs { flex-wrap: wrap !important; gap: 8px !important; }
-  .service-tab { flex: 1 1 100% !important; max-width: 100% !important; }
-  button, .btn, input, select, textarea, .search-input, .search-btn, .currency-selector select, .currency-display, .header-btn { width: 100% !important; min-width: 0 !important; }
-  .card, .section, .modal-box, .info-bar, .addon-panel, .section-entry, .header-card { padding: 12px !important; }
-  .itinerary-table, table, .pax-table { width: 100% !important; overflow-x: auto !important; }
-  .itinerary-table { min-width: 650px !important; }
-  .header-card .meta, .qr-area, .qr-area .qr-box { width: 100% !important; display: block; text-align: center; }
-  .inline-input { flex-wrap: wrap !important; align-items: stretch !important; }
-  .inline-input label, .inline-input input { width: 100% !important; min-width: 0 !important; }
-  .inline-input input { width: auto !important; }
-  .modal-content { width: 95% !important; max-width: 100% !important; padding: 20px !important; }
-  .progress-step { flex: 1 1 100% !important; margin-bottom: 8px !important; }
+ .wrap { padding: 14px; margin: 0 auto; border-radius: 0; }
+ .grid, .grid-2, .grid-3, .grid-4, .card, .section, .info-bar, .actions, .actions-bar, .service-box, .modal-box, .itinerary-table-wrapper, .search-container, .currency-selector, .addon-panel, .section-entry, .progress-bar { grid-template-columns: 1fr !important; }
+ .card-header, .header-card, .actions-bar, .info-bar, .link-row, .modal-btns, .service-box, .actions, .action-buttons, .section-entry h4, .currency-selector, .progress-bar { flex-direction: column !important; align-items: stretch !important; }
+ .service-tabs { flex-wrap: wrap !important; gap: 8px !important; }
+ .service-tab { flex: 1 1 100% !important; max-width: 100% !important; }
+ button, .btn, input, select, textarea, .search-input, .search-btn, .currency-selector select, .currency-display, .header-btn { width: 100% !important; min-width: 0 !important; }
+ .card, .section, .modal-box, .info-bar, .addon-panel, .section-entry, .header-card { padding: 12px !important; }
+ .itinerary-table, table, .pax-table { width: 100% !important; overflow-x: auto !important; }
+ .itinerary-table { min-width: 650px !important; }
+ .header-card .meta, .qr-area, .qr-area .qr-box { width: 100% !important; display: block; text-align: center; }
+ .inline-input { flex-wrap: wrap !important; align-items: stretch !important; }
+ .inline-input label, .inline-input input { width: 100% !important; min-width: 0 !important; }
+ .inline-input input { width: auto !important; }
+ .modal-content { width: 95% !important; max-width: 100% !important; padding: 20px !important; }
+ .progress-step { flex: 1 1 100% !important; margin-bottom: 8px !important; }
 }
 </style>
+<link rel="stylesheet" href="fc-theme.css?v=20260527-2">
+<script src="fc-ui.js?v=20260527-2" defer></script>
 </head>
 <body>
 
@@ -171,158 +218,159 @@ button.whatsapp:hover{background:#128C7E}
 
 <!-- Confirm modal -->
 <div id="confirmModal" class="modal-overlay">
-  <div class="modal-box">
-    <h3 id="confirmTitle">Confirm</h3>
-    <p id="confirmMsg"></p>
-    <div class="modal-btns">
-      <button id="confirmNo" class="ghost">No</button>
-      <button id="confirmYes">Yes</button>
-    </div>
-  </div>
+ <div class="modal-box">
+ <h3 id="confirmTitle">Confirm</h3>
+ <p id="confirmMsg"></p>
+ <div class="modal-btns">
+ <button id="confirmNo" class="ghost">No</button>
+ <button id="confirmYes">Yes</button>
+ </div>
+ </div>
 </div>
 
 <div class="wrap">
 
 <!-- Header -->
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
-  <div>
-    <h2 style="color:var(--accent);margin:0">🎫 Create Voucher</h2>
-    <div class="small" id="pageSubtitle">Loading quotation...</div>
-  </div>
-  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-    <button class="ghost" onclick="goBackToQuotationTool('index.html')">← Back</button>
-    <button id="btnSaveDraft" class="orange">💾 Save Draft</button>
-    <button id="btnPublish" class="green">📤 Publish Voucher</button>
-    <button id="btnCancelVoucher" class="red" style="display:none">🚫 Cancel Voucher</button>
-  </div>
+ <div>
+ <h2 style="color:var(--accent);margin:0">Create Voucher</h2>
+ <div class="small" id="pageSubtitle">Loading quotation...</div>
+ </div>
+ <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+ <div id="voucherSyncStatus" class="sync-status-badge local" title="No voucher sync activity yet">Ready to sync</div>
+ <button class="ghost" onclick="goBackToQuotationTool('index.html')"> Back</button>
+ <button id="btnSaveDraft" class="orange"> Save Draft</button>
+ <button id="btnPublish" class="green"> Publish Voucher</button>
+ <button id="btnCancelVoucher" class="red" style="display:none"> Cancel Voucher</button>
+ </div>
 </div>
 
 <!-- Status bar (shown after save) -->
 <div id="statusBar" class="info-bar" style="display:none">
-  <div>
-    <strong id="sbVoucherId">—</strong>
-    <span id="sbBadge" class="badge badge-draft" style="margin-left:8px">Draft</span>
-  </div>
-  <div class="small" id="sbVersion"></div>
-  <div class="small" id="sbViewCount"></div>
-  <div class="small" id="sbLastViewed"></div>
-  <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
-    <div id="voucherLinkArea" style="display:none">
-      <div class="link-row">
-        <input type="text" id="voucherLinkInput" readonly>
-        <button id="btnCopyLink" class="ghost">📋 Copy</button>
-        <button id="btnWhatsApp" class="whatsapp">📱 WhatsApp</button>
-        <button id="btnDownloadPDF">🖨️ PDF</button>
-      </div>
-    </div>
-  </div>
+ <div>
+ <strong id="sbVoucherId"></strong>
+ <span id="sbBadge" class="badge badge-draft" style="margin-left:8px">Draft</span>
+ </div>
+ <div class="small" id="sbVersion"></div>
+ <div class="small" id="sbViewCount"></div>
+ <div class="small" id="sbLastViewed"></div>
+ <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+ <div id="voucherLinkArea" style="display:none">
+ <div class="link-row">
+ <input type="text" id="voucherLinkInput" readonly>
+ <button id="btnCopyLink" class="ghost"> Copy</button>
+ <button id="btnWhatsApp" class="whatsapp"> WhatsApp</button>
+ <button id="btnDownloadPDF"> PDF</button>
+ </div>
+ </div>
+ </div>
 </div>
 
 <!-- QR Code (hidden, used for PDF) -->
 <div id="qrArea" style="display:none;margin-bottom:14px">
-  <div class="section">
-    <h3>QR Code</h3>
-    <div id="qrcode" style="display:inline-block;padding:6px;background:#fff;border:1px solid #ddd;border-radius:6px"></div>
-    <div class="small" style="margin-top:6px">Scan to open customer voucher page</div>
-  </div>
+ <div class="section">
+ <h3>QR Code</h3>
+ <div id="qrcode" style="display:inline-block;padding:6px;background:#fff;border:1px solid #ddd;border-radius:6px"></div>
+ <div class="small" style="margin-top:6px">Scan to open customer voucher page</div>
+ </div>
 </div>
 
 <!-- Overview (read-only) -->
 <div class="section" id="overviewSection" style="display:none">
-  <h3>Quotation Overview</h3>
-  <div id="overviewContent" class="grid"></div>
+ <h3>Quotation Overview</h3>
+ <div id="overviewContent" class="grid"></div>
 </div>
 
 <!-- Passenger Details -->
 <div class="section">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-    <h3 style="margin:0">Passenger Details</h3>
-    <button type="button" class="ghost" style="font-size:14px;padding:5px 12px" onclick="syncAllPassengerData()">↺ Sync Details</button>
-  </div>
-  <div id="passengerList"></div>
-  <button class="add-small" id="btnAddPassenger">+ Add Passenger</button>
+ <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+ <h3 style="margin:0">Passenger Details</h3>
+ <button type="button" class="ghost" style="font-size:14px;padding:5px 12px" onclick="syncAllPassengerData()"> Sync Details</button>
+ </div>
+ <div id="passengerList"></div>
+ <button class="add-small" id="btnAddPassenger">+ Add Passenger</button>
 </div>
 
 <!-- Emergency Contact -->
 <div class="section">
-  <h3>Emergency Contact <span style="font-size:13px;font-weight:400;color:var(--muted)">(optional)</span></h3>
-  <div class="grid grid-3">
-    <div>
-      <label>Contact Name</label>
-      <input type="text" id="emergName" placeholder="Full name">
-    </div>
-    <div>
-      <label>Relation</label>
-      <input type="text" id="emergRelation" placeholder="e.g. Father, Spouse">
-    </div>
-    <div>
-      <label>Phone</label>
-      <input type="text" id="emergPhone" placeholder="03xx-xxxxxxx">
-    </div>
-  </div>
+ <h3>Emergency Contact <span style="font-size:13px;font-weight:400;color:var(--muted)">(optional)</span></h3>
+ <div class="grid grid-3">
+ <div>
+ <label>Contact Name</label>
+ <input type="text" id="emergName" placeholder="Full name">
+ </div>
+ <div>
+ <label>Relation</label>
+ <input type="text" id="emergRelation" placeholder="e.g. Father, Spouse">
+ </div>
+ <div>
+ <label>Phone</label>
+ <input type="text" id="emergPhone" placeholder="03xx-xxxxxxx">
+ </div>
+ </div>
 </div>
 
 <!-- Flight Operational Details -->
 <div class="section" id="flightsSection" style="display:none">
-  <h3>Flight Details</h3>
-  <div id="flightOpsList"></div>
+ <h3>Flight Details</h3>
+ <div id="flightOpsList"></div>
 </div>
 
 <!-- Hotel Makkah Operational Details -->
 <div class="section" id="hotelMSection" style="display:none">
-  <h3>Makkah Hotel Details</h3>
-  <div id="hotelMOpsList"></div>
+ <h3>Makkah Hotel Details</h3>
+ <div id="hotelMOpsList"></div>
 </div>
 
 <!-- Hotel Madina Operational Details -->
 <div class="section" id="hotelASection" style="display:none">
-  <h3>Madina Hotel Details</h3>
-  <div id="hotelAOpsList"></div>
+ <h3>Madina Hotel Details</h3>
+ <div id="hotelAOpsList"></div>
 </div>
 
 <!-- Transfer Operational Details -->
 <div class="section" id="transfersSection" style="display:none">
-  <h3>Transfer Details</h3>
-  <div id="transferOpsList"></div>
+ <h3>Transfer Details</h3>
+ <div id="transferOpsList"></div>
 </div>
 
 <!-- Ziyarah Operational Details -->
 <div class="section" id="ziyarahSection" style="display:none">
-  <h3>Ziyarah Details</h3>
-  <div id="ziyarahOpsList"></div>
+ <h3>Ziyarah Details</h3>
+ <div id="ziyarahOpsList"></div>
 </div>
 
 <!-- Visa Operational Details -->
 <div class="section" id="visaSection" style="display:none">
-  <h3>Visa Details</h3>
-  <div id="visaOpsList"></div>
+ <h3>Visa Details</h3>
+ <div id="visaOpsList"></div>
 </div>
 
 <div class="section" id="itinerarySection" style="display:none">
-  <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-    <h3 style="margin:0">Day Wise Itinerary</h3>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button type="button" id="toggleVoucherItineraryBtn" class="ghost" style="font-size:14px;padding:5px 12px">Show Itinerary</button>
-      <button type="button" id="saveVoucherItineraryBtn" class="green" style="font-size:14px;padding:5px 12px;display:none">Save Itinerary</button>
-    </div>
-  </div>
-  <div id="voucherItineraryContainer" style="display:none;margin-top:10px"></div>
+ <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+ <h3 style="margin:0">Day Wise Itinerary</h3>
+ <div style="display:flex;gap:8px;flex-wrap:wrap">
+ <button type="button" id="toggleVoucherItineraryBtn" class="ghost" style="font-size:14px;padding:5px 12px">Show Itinerary</button>
+ <button type="button" id="saveVoucherItineraryBtn" class="green" style="font-size:14px;padding:5px 12px;display:none">Save Itinerary</button>
+ </div>
+ </div>
+ <div id="voucherItineraryContainer" style="display:none;margin-top:10px"></div>
 </div>
 
 <!-- Agent Note -->
 <div class="section">
-  <h3>Agent Note to Customer</h3>
-  <div>
-    <label>Message (shown prominently on customer voucher)</label>
-    <textarea id="agentNote" placeholder="e.g. Please carry all documents. Hotel check-in is at 3pm. Contact us for any queries."></textarea>
-  </div>
+ <h3>Agent Note to Customer</h3>
+ <div>
+ <label>Message (shown prominently on customer voucher)</label>
+ <textarea id="agentNote" placeholder="e.g. Please carry all documents. Hotel check-in is at 3pm. Contact us for any queries."></textarea>
+ </div>
 </div>
 
 <!-- Bottom actions -->
 <div class="actions" style="margin-bottom:20px">
-  <button id="btnSaveDraft2" class="orange">💾 Save Draft</button>
-  <button id="btnPublish2" class="green">📤 Publish Voucher</button>
-  <button id="btnCancelVoucher2" class="red" style="display:none">🚫 Cancel Voucher</button>
+ <button id="btnSaveDraft2" class="orange"> Save Draft</button>
+ <button id="btnPublish2" class="green"> Publish Voucher</button>
+ <button id="btnCancelVoucher2" class="red" style="display:none"> Cancel Voucher</button>
 </div>
 
 </div><!-- /.wrap -->
@@ -344,919 +392,922 @@ let voucherItineraryFlightSegments = {};
 
 // ===== Helpers =====
 function showNotif(msg, type = 'info', dur = 3500) {
-  const el = document.getElementById('notif');
-  el.textContent = msg;
-  el.className = 'notif show ' + type;
-  clearTimeout(el._t);
-  el._t = setTimeout(() => { el.classList.remove('show'); }, dur);
+ const el = document.getElementById('notif');
+ el.textContent = msg;
+ el.className = 'notif show ' + type;
+ clearTimeout(el._t);
+ el._t = setTimeout(() => { el.classList.remove('show'); }, dur);
 }
 
 function goBackToQuotationTool(fallbackUrl) {
-  if (document.referrer && document.referrer !== window.location.href) {
-    window.location.href = document.referrer;
-    return;
-  }
-  if (window.history.length > 1) {
-    window.history.back();
-    return;
-  }
-  window.location.href = fallbackUrl;
+ if (document.referrer && document.referrer !== window.location.href) {
+ window.location.href = document.referrer;
+ return;
+ }
+ if (window.history.length > 1) {
+ window.history.back();
+ return;
+ }
+ window.location.href = fallbackUrl;
 }
 
 function confirm(msg, title = 'Confirm') {
-  return new Promise(res => {
-    const modal = document.getElementById('confirmModal');
-    document.getElementById('confirmTitle').textContent = title;
-    document.getElementById('confirmMsg').textContent = msg;
-    modal.classList.add('visible');
-    const yes = document.getElementById('confirmYes');
-    const no = document.getElementById('confirmNo');
-    const cleanup = (val) => { modal.classList.remove('visible'); yes.onclick = null; no.onclick = null; res(val); };
-    yes.onclick = () => cleanup(true);
-    no.onclick = () => cleanup(false);
-  });
+ return new Promise(res => {
+ const modal = document.getElementById('confirmModal');
+ document.getElementById('confirmTitle').textContent = title;
+ document.getElementById('confirmMsg').textContent = msg;
+ modal.classList.add('visible');
+ const yes = document.getElementById('confirmYes');
+ const no = document.getElementById('confirmNo');
+ const cleanup = (val) => { modal.classList.remove('visible'); yes.onclick = null; no.onclick = null; res(val); };
+ yes.onclick = () => cleanup(true);
+ no.onclick = () => cleanup(false);
+ });
 }
 
 function sanitize(s) {
-  const d = document.createElement('div');
-  d.textContent = String(s || '');
-  return d.innerHTML;
+ const d = document.createElement('div');
+ d.textContent = String(s || '');
+ return d.innerHTML;
 }
 
 function fmt(n) { return Number(n || 0).toLocaleString('en-PK', { maximumFractionDigits: 0 }); }
 
 function fmtDate(ds) {
-  if (!ds) return '';
-  const d = new Date(ds);
-  if (isNaN(d.getTime())) return ds;
-  return d.toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric' });
+ if (!ds) return '';
+ const d = new Date(ds);
+ if (isNaN(d.getTime())) return ds;
+ return d.toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 function getHotelMealType(hotel) {
-  const raw = hotel?.mealType ?? hotel?.mealPlan ?? hotel?.meal ?? hotel?.boardType ?? hotel?.board ?? hotel?.mealOption ?? hotel?.mealBasis ?? hotel?.meals;
-  const meal = String(raw || '').trim();
-  if (!meal) return '';
-  const key = meal.toLowerCase();
-  if (key === 'bb' || key === 'bed & breakfast' || key === 'bed and breakfast') return 'Breakfast';
-  if (key === 'hb' || key === 'half-board' || key === 'half board') return 'Half Board';
-  if (key === 'fb' || key === 'full-board' || key === 'full board') return 'Full Board';
-  if (key === 'ro' || key === 'room only' || key === 'no breakfast') return 'Without Breakfast';
-  return meal;
+ const raw = hotel?.mealType ?? hotel?.mealPlan ?? hotel?.meal ?? hotel?.boardType ?? hotel?.board ?? hotel?.mealOption ?? hotel?.mealBasis ?? hotel?.meals;
+ const meal = String(raw || '').trim();
+ if (!meal) return '';
+ const key = meal.toLowerCase();
+ if (key === 'bb' || key === 'bed & breakfast' || key === 'bed and breakfast') return 'Breakfast';
+ if (key === 'hb' || key === 'half-board' || key === 'half board') return 'Half Board';
+ if (key === 'fb' || key === 'full-board' || key === 'full board') return 'Full Board';
+ if (key === 'ro' || key === 'room only' || key === 'no breakfast') return 'Without Breakfast';
+ return meal;
 }
 
 function getVal(id) { return (document.getElementById(id)?.value || '').trim(); }
 function setVal(id, v) { const e = document.getElementById(id); if (e) e.value = v || ''; }
 
 function generateVoucherId() {
-  return 'VCHR-' + Math.random().toString(36).substr(2, 6).toUpperCase();
+ return 'VCHR-' + Math.random().toString(36).substr(2, 6).toUpperCase();
 }
 
 function getDeterministicVoucherId(qId) {
-  return 'VCHR-' + String(qId || '').replace(/[^A-Za-z0-9_-]/g, '').toUpperCase();
+ return 'VCHR-' + String(qId || '').replace(/[^A-Za-z0-9_-]/g, '').toUpperCase();
 }
 
 function loadVoucherIdMap() {
-  try {
-    return JSON.parse(localStorage.getItem('voucherIdByQuotation') || '{}') || {};
-  } catch (e) {
-    return {};
-  }
+ try {
+ return JSON.parse(localStorage.getItem('voucherIdByQuotation') || '{}') || {};
+ } catch (e) {
+ return {};
+ }
 }
 
 function saveVoucherIdMap(map) {
-  localStorage.setItem('voucherIdByQuotation', JSON.stringify(map || {}));
+ localStorage.setItem('voucherIdByQuotation', JSON.stringify(map || {}));
 }
 
 function linkVoucherToQuotation(qId, vId) {
-  if (!qId || !vId) return;
-  const map = loadVoucherIdMap();
-  map[qId] = vId;
-  saveVoucherIdMap(map);
+ if (!qId || !vId) return;
+ const map = loadVoucherIdMap();
+ map[qId] = vId;
+ saveVoucherIdMap(map);
 }
 
 function updateLinkedQuotationStatus(newStatus) {
-  if (!quotationId) return;
-  try {
-    const all = JSON.parse(localStorage.getItem('savedQuotations') || '[]') || [];
-    const index = all.findIndex(q => q.id === quotationId);
-    if (index === -1) return;
-    const currentStatus = String(all[index].status || '').trim().toLowerCase();
-    const targetStatus = String(newStatus || '').trim().toLowerCase();
-    if (targetStatus === 'vouchered' && currentStatus !== 'vouchered') {
-      all[index].status = targetStatus;
-    } else if (targetStatus === 'booked' && currentStatus === 'vouchered') {
-      all[index].status = targetStatus;
-    } else {
-      return;
-    }
-    all[index].updatedAt = new Date().toISOString();
-    localStorage.setItem('savedQuotations', JSON.stringify(all));
-    if (quotation) quotation.status = targetStatus;
-    sessionStorage.setItem('refreshDashboard_umrah', 'true');
-  } catch (e) {
-    console.warn('Failed to update quotation status in localStorage:', e);
-  }
+ if (!quotationId) return;
+ try {
+ const all = JSON.parse(localStorage.getItem('savedQuotations') || '[]') || [];
+ const index = all.findIndex(q => q.id === quotationId);
+ if (index === -1) return;
+ const currentStatus = String(all[index].status || '').trim().toLowerCase();
+ const targetStatus = String(newStatus || '').trim().toLowerCase();
+ if (targetStatus === 'vouchered' && currentStatus !== 'vouchered') {
+ all[index].status = targetStatus;
+ } else if (targetStatus === 'booked' && currentStatus === 'vouchered') {
+ all[index].status = targetStatus;
+ } else {
+ return;
+ }
+ all[index].updatedAt = new Date().toISOString();
+ localStorage.setItem('savedQuotations', JSON.stringify(all));
+ if (quotation) quotation.status = targetStatus;
+ sessionStorage.setItem('refreshDashboard_umrah', 'true');
+ } catch (e) {
+ console.warn('Failed to update quotation status in localStorage:', e);
+ }
 }
 
 async function ensureSignedInForWrite() {
-  try {
-    if (window.__authReady) await window.__authReady;
-  } catch (e) {
-    // Ignore and continue with current auth state.
-  }
-  if (!window.auth || !window.auth.currentUser) {
-    showNotif('You are not signed in. Please login again from Umrah tool, then retry.', 'error', 5000);
-    return false;
-  }
-  return true;
+ try {
+ if (window.__authReady) await window.__authReady;
+ } catch (e) {
+ // Ignore and continue with current auth state.
+ }
+ if (!window.auth || !window.auth.currentUser) {
+ showNotif('You are not signed in. Please login again from Umrah tool, then retry.', 'error', 5000);
+ return false;
+ }
+ return true;
 }
 
 function getVoucherUrl(id) {
-  return 'https://atifmangroria.github.io/Flight-Connection-Quotation-Tool/voucher-view.html?id=' + encodeURIComponent(id);
+ return 'https://atifmangroria.github.io/Flight-Connection-Quotation-Tool/voucher-view.html?id=' + encodeURIComponent(id);
 }
 
 // ===== Parse URL =====
 function getUrlParam(name) {
-  return new URLSearchParams(window.location.search).get(name);
+ return new URLSearchParams(window.location.search).get(name);
 }
 
 // ===== Get live passenger list from form =====
 function getLivePassengers() {
-  const list = [];
-  document.querySelectorAll('[id^="pax_"]').forEach(card => {
-    const idx = card.id.split('_')[1];
-    if (!idx) return;
-    const given = (document.getElementById('paxGiven_' + idx)?.value || '').trim();
-    const sur = (document.getElementById('paxSurname_' + idx)?.value || '').trim();
-    const name = [given, sur].filter(Boolean).join(' ');
-    if (!name) return;
-    list.push({ idx, name, givenName: given, surname: sur });
-  });
-  return list;
+ const list = [];
+ document.querySelectorAll('[id^="pax_"]').forEach(card => {
+ const idx = card.id.split('_')[1];
+ if (!idx) return;
+ const given = (document.getElementById('paxGiven_' + idx)?.value || '').trim();
+ const sur = (document.getElementById('paxSurname_' + idx)?.value || '').trim();
+ const name = [given, sur].filter(Boolean).join(' ');
+ if (!name) return;
+ list.push({ idx, name, givenName: given, surname: sur });
+ });
+ return list;
 }
 
 // ===== Build passenger slots from quotation pax data =====
 function addPassengerSlot(data = {}) {
-  passengerCount++;
-  const idx = passengerCount;
-  // Support old saved docs that stored combined name
-  const givenName = data.givenName || (data.name ? data.name.split(' ').slice(0, -1).join(' ') || data.name : '');
-  const surname = data.surname || (data.name ? data.name.split(' ').slice(-1)[0] || '' : '');
-  const div = document.createElement('div');
-  div.className = 'card';
-  div.id = 'pax_' + idx;
-  div.innerHTML = `
-    <div class="card-header">
-      <h4>Passenger ${idx}</h4>
-      ${idx > 1 ? `<button class="remove-btn" onclick="removePax(${idx})">Remove</button>` : ''}
-    </div>
-    <div class="grid grid-3">
-      <div><label>Given Name (as on passport)</label><input type="text" id="paxGiven_${idx}" value="${sanitize(givenName)}" placeholder="e.g. Ahmed"></div>
-      <div><label>Surname (as on passport)</label><input type="text" id="paxSurname_${idx}" value="${sanitize(surname)}" placeholder="e.g. Khan"></div>
-      <div><label>Passport No</label><input type="text" id="paxPassport_${idx}" value="${sanitize(data.passport || '')}" placeholder="AB1234567"></div>
-      <div><label>Nationality</label><input type="text" id="paxNationality_${idx}" value="${sanitize(data.nationality || 'Pakistani')}" placeholder="Pakistani"></div>
-      <div><label>Date of Birth</label><input type="date" id="paxDob_${idx}" value="${sanitize(data.dob || '')}"></div>
-      <div><label>Passport Expiry</label><input type="date" id="paxExpiry_${idx}" value="${sanitize(data.expiry || '')}"></div>
-    </div>
-  `;
-  document.getElementById('passengerList').appendChild(div);
+ passengerCount++;
+ const idx = passengerCount;
+ // Support old saved docs that stored combined name
+ const givenName = data.givenName || (data.name ? data.name.split(' ').slice(0, -1).join(' ') || data.name : '');
+ const surname = data.surname || (data.name ? data.name.split(' ').slice(-1)[0] || '' : '');
+ const div = document.createElement('div');
+ div.className = 'card';
+ div.id = 'pax_' + idx;
+ div.innerHTML = `
+ <div class="card-header">
+ <h4>Passenger ${idx}</h4>
+ ${idx > 1 ? `<button class="remove-btn" onclick="removePax(${idx})">Remove</button>` : ''}
+ </div>
+ <div class="grid grid-3">
+ <div><label>Given Name (as on passport)</label><input type="text" id="paxGiven_${idx}" value="${sanitize(givenName)}" placeholder="e.g. Ahmed"></div>
+ <div><label>Surname (as on passport)</label><input type="text" id="paxSurname_${idx}" value="${sanitize(surname)}" placeholder="e.g. Khan"></div>
+ <div><label>Passport No</label><input type="text" id="paxPassport_${idx}" value="${sanitize(data.passport || '')}" placeholder="AB1234567"></div>
+ <div><label>Nationality</label><input type="text" id="paxNationality_${idx}" value="${sanitize(data.nationality || 'Pakistani')}" placeholder="Pakistani"></div>
+ <div><label>Date of Birth</label><input type="date" id="paxDob_${idx}" value="${sanitize(data.dob || '')}"></div>
+ <div><label>Passport Expiry</label><input type="date" id="paxExpiry_${idx}" value="${sanitize(data.expiry || '')}"></div>
+ </div>
+ `;
+ document.getElementById('passengerList').appendChild(div);
 }
 
 function removePax(idx) {
-  const el = document.getElementById('pax_' + idx);
-  if (el) el.remove();
+ const el = document.getElementById('pax_' + idx);
+ if (el) el.remove();
 }
 
 document.getElementById('btnAddPassenger').addEventListener('click', () => addPassengerSlot());
 
 // ===== Sync ALL passenger-dependent fields across flights, hotels, visa =====
 function syncAllPassengerData() {
-  // 1. Sync each flight's pax rows
-  for (let i = 1; i <= flightOpsCount; i++) syncFlightPax(i);
-  // 2. Sync visa rows
-  renderVisaRows(collectCurrentVisaNumbers());
-  // 3. Sync hotel lead-guest dropdowns
-  syncHotelLeadDropdowns();
-  showNotif('Passenger details synced across flights, hotels and visa.', 'success', 3000);
+ // 1. Sync each flight's pax rows
+ for (let i = 1; i <= flightOpsCount; i++) syncFlightPax(i);
+ // 2. Sync visa rows
+ renderVisaRows(collectCurrentVisaNumbers());
+ // 3. Sync hotel lead-guest dropdowns
+ syncHotelLeadDropdowns();
+ showNotif('Passenger details synced across flights, hotels and visa.', 'success', 3000);
 }
 
 function collectCurrentVisaNumbers() {
-  const nos = {};
-  getLivePassengers().forEach(p => {
-    const el = document.getElementById('visaNo_' + p.idx);
-    if (el && el.value.trim()) nos[p.name] = el.value.trim();
-  });
-  return nos;
+ const nos = {};
+ getLivePassengers().forEach(p => {
+ const el = document.getElementById('visaNo_' + p.idx);
+ if (el && el.value.trim()) nos[p.name] = el.value.trim();
+ });
+ return nos;
 }
 
 function syncHotelLeadDropdowns() {
-  const pax = getLivePassengers();
-  ['hotelMOpsList', 'hotelAOpsList'].forEach(listId => {
-    let i = 0;
-    while (document.getElementById(listId + 'Lead_' + i) !== null) {
-      const sel = document.getElementById(listId + 'Lead_' + i);
-      if (sel && sel.tagName === 'SELECT') {
-        const cur = sel.value;
-        sel.innerHTML = '<option value="">-- Select passenger --</option>' +
-          pax.map(p => `<option value="${sanitize(p.name)}" ${cur === p.name ? 'selected' : ''}>${sanitize(p.name)}</option>`).join('');
-      }
-      i++;
-    }
-  });
+ const pax = getLivePassengers();
+ ['hotelMOpsList', 'hotelAOpsList'].forEach(listId => {
+ let i = 0;
+ while (document.getElementById(listId + 'Lead_' + i) !== null) {
+ const sel = document.getElementById(listId + 'Lead_' + i);
+ if (sel && sel.tagName === 'SELECT') {
+ const cur = sel.value;
+ sel.innerHTML = '<option value="">-- Select passenger --</option>' +
+ pax.map(p => `<option value="${sanitize(p.name)}" ${cur === p.name ? 'selected' : ''}>${sanitize(p.name)}</option>`).join('');
+ }
+ i++;
+ }
+ });
 }
 
 // ===== Build per-passenger ticket+seat rows inside a flight box =====
 function buildFlightPaxRows(flightIdx, savedTickets, savedSeats) {
-  const pax = getLivePassengers();
-  if (!pax.length) return '<p class="small" style="color:#999;margin-top:6px">No passengers added yet — add passengers above then click ↺ Sync.</p>';
-  return pax.map(p => {
-    const tVal = sanitize((savedTickets && savedTickets[p.name]) || '');
-    const sVal = sanitize((savedSeats && savedSeats[p.name]) || '');
-    return `
-      <div style="display:grid;grid-template-columns:2fr 2fr 2fr;gap:8px;align-items:end;margin-bottom:8px">
-        <div><label style="font-weight:700">${sanitize(p.name)}</label></div>
-        <div><label>Ticket No (optional)</label><input type="text" id="fTicket_${flightIdx}_${p.idx}" value="${tVal}" placeholder="e.g. 083-1234567890"></div>
-        <div><label>Seat No (optional)</label><input type="text" id="fSeat_${flightIdx}_${p.idx}" value="${sVal}" placeholder="e.g. 24A"></div>
-      </div>`;
-  }).join('');
+ const pax = getLivePassengers();
+ if (!pax.length) return '<p class="small" style="color:#999;margin-top:6px">No passengers added yet - add passengers above then click Sync.</p>';
+ return pax.map(p => {
+ const tVal = sanitize((savedTickets && savedTickets[p.name]) || '');
+ const sVal = sanitize((savedSeats && savedSeats[p.name]) || '');
+ return `
+ <div style="display:grid;grid-template-columns:2fr 2fr 2fr;gap:8px;align-items:end;margin-bottom:8px">
+ <div><label style="font-weight:700">${sanitize(p.name)}</label></div>
+ <div><label>Ticket No (optional)</label><input type="text" id="fTicket_${flightIdx}_${p.idx}" value="${tVal}" placeholder="e.g. 083-1234567890"></div>
+ <div><label>Seat No (optional)</label><input type="text" id="fSeat_${flightIdx}_${p.idx}" value="${sVal}" placeholder="e.g. 24A"></div>
+ </div>`;
+ }).join('');
 }
 
 // ===== Build flight ops fields =====
 function buildFlightOps(flights, savedFlights) {
-  const section = document.getElementById('flightsSection');
-  const list = document.getElementById('flightOpsList');
-  if (!flights || !flights.length) return;
-  section.style.display = 'block';
-  list.innerHTML = '';
+ const section = document.getElementById('flightsSection');
+ const list = document.getElementById('flightOpsList');
+ if (!flights || !flights.length) return;
+ section.style.display = 'block';
+ list.innerHTML = '';
 
-  flights.forEach((f, i) => {
-    const saved = (savedFlights && savedFlights[i]) || {};
-    flightOpsCount++;
-    const idx = flightOpsCount;
-    const div = document.createElement('div');
-    div.className = 'service-box';
-    div.id = 'flightBox_' + idx;
-    const savedTickets = saved.ticketNumbers || {};
-    const savedSeats = saved.seatNumbers || {};
-    div.innerHTML = `
-      <h5>Flight ${idx}: ${sanitize(f.airline || 'Unknown')} — ${sanitize(f.itinerary || '').substring(0, 60)}</h5>
-      <div class="grid">
-        <div><label>PNR / Booking Reference *</label><input type="text" id="fPnr_${idx}" value="${sanitize(saved.pnr || '')}" placeholder="e.g. ABCDEF"></div>
-        <div><label>Meal Included?</label>
-          <select id="fMealIncl_${idx}">
-            <option value="no" ${saved.meal?.included === false || !saved.meal ? 'selected' : ''}>No</option>
-            <option value="yes" ${saved.meal?.included === true ? 'selected' : ''}>Yes</option>
-          </select>
-        </div>
-        <div><label>Meal Type (if included)</label><input type="text" id="fMealType_${idx}" value="${sanitize(saved.meal?.type || '')}" placeholder="e.g. Veg, Halal"></div>
-      </div>
-      <div style="margin-top:10px">
-        <label style="margin-bottom:6px;display:block">Ticket &amp; Seat Numbers (per passenger)</label>
-        <div id="fPaxRows_${idx}">${buildFlightPaxRows(idx, savedTickets, savedSeats)}</div>
-      </div>
-    `;
-    list.appendChild(div);
-  });
+ flights.forEach((f, i) => {
+ const saved = (savedFlights && savedFlights[i]) || {};
+ flightOpsCount++;
+ const idx = flightOpsCount;
+ const div = document.createElement('div');
+ div.className = 'service-box';
+ div.id = 'flightBox_' + idx;
+ const savedTickets = saved.ticketNumbers || {};
+ const savedSeats = saved.seatNumbers || {};
+ div.innerHTML = `
+ <h5>Flight ${idx}: ${sanitize(f.airline || 'Unknown')} ${sanitize(f.itinerary || '').substring(0, 60)}</h5>
+ <div class="grid">
+ <div><label>PNR / Booking Reference *</label><input type="text" id="fPnr_${idx}" value="${sanitize(saved.pnr || '')}" placeholder="e.g. ABCDEF"></div>
+ <div><label>Meal Included?</label>
+ <select id="fMealIncl_${idx}">
+ <option value="no" ${saved.meal?.included === false || !saved.meal ? 'selected' : ''}>No</option>
+ <option value="yes" ${saved.meal?.included === true ? 'selected' : ''}>Yes</option>
+ </select>
+ </div>
+ <div><label>Meal Type (if included)</label><input type="text" id="fMealType_${idx}" value="${sanitize(saved.meal?.type || '')}" placeholder="e.g. Veg, Halal"></div>
+ </div>
+ <div style="margin-top:10px">
+ <label style="margin-bottom:6px;display:block">Ticket &amp; Seat Numbers (per passenger)</label>
+ <div id="fPaxRows_${idx}">${buildFlightPaxRows(idx, savedTickets, savedSeats)}</div>
+ </div>
+ `;
+ list.appendChild(div);
+ });
 }
 
 // ===== Sync passenger rows inside a flight card =====
 function syncFlightPax(flightIdx) {
-  const pax = getLivePassengers();
-  const tickets = {};
-  const seats = {};
-  pax.forEach(p => {
-    const t = document.getElementById('fTicket_' + flightIdx + '_' + p.idx);
-    const s = document.getElementById('fSeat_' + flightIdx + '_' + p.idx);
-    if (t) tickets[p.name] = t.value;
-    if (s) seats[p.name] = s.value;
-  });
-  const container = document.getElementById('fPaxRows_' + flightIdx);
-  if (container) container.innerHTML = buildFlightPaxRows(flightIdx, tickets, seats);
+ const pax = getLivePassengers();
+ const tickets = {};
+ const seats = {};
+ pax.forEach(p => {
+ const t = document.getElementById('fTicket_' + flightIdx + '_' + p.idx);
+ const s = document.getElementById('fSeat_' + flightIdx + '_' + p.idx);
+ if (t) tickets[p.name] = t.value;
+ if (s) seats[p.name] = s.value;
+ });
+ const container = document.getElementById('fPaxRows_' + flightIdx);
+ if (container) container.innerHTML = buildFlightPaxRows(flightIdx, tickets, seats);
 }
 
 // ===== Build hotel ops fields =====
 function buildHotelOps(hotels, savedHotels, city, listId, sectionId) {
-  const section = document.getElementById(sectionId);
-  const list = document.getElementById(listId);
-  if (!hotels || !hotels.length) return;
-  section.style.display = 'block';
-  list.innerHTML = '';
+ const section = document.getElementById(sectionId);
+ const list = document.getElementById(listId);
+ if (!hotels || !hotels.length) return;
+ section.style.display = 'block';
+ list.innerHTML = '';
 
-  hotels.forEach((h, i) => {
-    const saved = (savedHotels && savedHotels[i]) || {};
-    const div = document.createElement('div');
-    div.className = 'service-box';
-    const paxOptions = getLivePassengers();
-    const leadOptions = '<option value="">-- Select passenger --</option>' +
-      paxOptions.map(p => `<option value="${sanitize(p.name)}" ${saved.leadGuest === p.name ? 'selected' : ''}>${sanitize(p.name)}</option>`).join('');
-    div.innerHTML = `
-      <h5>Hotel ${i + 1}: ${sanitize(h.name || 'Unknown')} (${city})</h5>
-      <div class="grid">
-        <div><label>Confirmation Number</label><input type="text" id="${listId}Conf_${i}" value="${sanitize(saved.confirmationNo || '')}" placeholder="TBA if not yet confirmed"></div>
-        <div><label>Lead Guest Name</label><select id="${listId}Lead_${i}">${leadOptions}</select></div>
-        <div><label>Hotel Phone (optional)</label><input type="text" id="${listId}Phone_${i}" value="${sanitize(saved.phone || '')}" placeholder="+966..."></div>
-        <div class="full"><label>Hotel Address (optional — shown on voucher)</label><input type="text" id="${listId}Addr_${i}" value="${sanitize(saved.address || '')}" placeholder="e.g. Ibrahim Al Khalil Rd, Makkah"></div>
-        <div class="full"><label>Google Maps Link (optional — paste full URL)</label><input type="url" id="${listId}MapUrl_${i}" value="${sanitize(saved.mapUrl || '')}" placeholder="https://maps.app.goo.gl/..."></div>
-      </div>
-    `;
-    list.appendChild(div);
-  });
+ hotels.forEach((h, i) => {
+ const saved = (savedHotels && savedHotels[i]) || {};
+ const div = document.createElement('div');
+ div.className = 'service-box';
+ const paxOptions = getLivePassengers();
+ const leadOptions = '<option value="">-- Select passenger --</option>' +
+ paxOptions.map(p => `<option value="${sanitize(p.name)}" ${saved.leadGuest === p.name ? 'selected' : ''}>${sanitize(p.name)}</option>`).join('');
+ div.innerHTML = `
+ <h5>Hotel ${i + 1}: ${sanitize(h.name || 'Unknown')} (${city})</h5>
+ <div class="grid">
+ <div><label>Confirmation Number</label><input type="text" id="${listId}Conf_${i}" value="${sanitize(saved.confirmationNo || '')}" placeholder="TBA if not yet confirmed"></div>
+ <div><label>Lead Guest Name</label><select id="${listId}Lead_${i}">${leadOptions}</select></div>
+ <div><label>Hotel Phone (optional)</label><input type="text" id="${listId}Phone_${i}" value="${sanitize(saved.phone || '')}" placeholder="+966..."></div>
+ <div class="full"><label>Hotel Address (optional shown on voucher)</label><input type="text" id="${listId}Addr_${i}" value="${sanitize(saved.address || '')}" placeholder="e.g. Ibrahim Al Khalil Rd, Makkah"></div>
+ <div class="full"><label>Google Maps Link (optional paste full URL)</label><input type="url" id="${listId}MapUrl_${i}" value="${sanitize(saved.mapUrl || '')}" placeholder="https://maps.app.goo.gl/..."></div>
+ </div>
+ `;
+ list.appendChild(div);
+ });
 }
 
 // ===== Build transfer ops fields =====
 function buildTransferOps(transfers, savedTransfers) {
-  const section = document.getElementById('transfersSection');
-  const list = document.getElementById('transferOpsList');
-  if (!transfers || !transfers.length) return;
-  section.style.display = 'block';
-  list.innerHTML = '';
+ const section = document.getElementById('transfersSection');
+ const list = document.getElementById('transferOpsList');
+ if (!transfers || !transfers.length) return;
+ section.style.display = 'block';
+ list.innerHTML = '';
 
-  transfers.forEach((t, i) => {
-    const saved = (savedTransfers && savedTransfers[i]) || {};
-    const div = document.createElement('div');
-    div.className = 'service-box';
-    div.innerHTML = `
-      <h5>Transfer ${i + 1}: ${sanitize(t.from || '')} → ${sanitize(t.to || '')} (${sanitize(t.vehicle || '')})</h5>
-      <div class="grid">
-        <div><label>Driver Name</label><input type="text" id="trDriver_${i}" value="${sanitize(saved.driverName || '')}" placeholder="TBA if not yet assigned"></div>
-        <div><label>Driver Phone</label><input type="text" id="trPhone_${i}" value="${sanitize(saved.driverPhone || '')}" placeholder="TBA if not yet assigned"></div>
-        <div><label>Vehicle Number</label><input type="text" id="trVehicle_${i}" value="${sanitize(saved.vehicleNo || '')}" placeholder="e.g. ABC-123"></div>
-        <div><label>Pickup Time (optional)</label><input type="text" id="trPickupTime_${i}" value="${sanitize(saved.pickupTime || '')}" placeholder="e.g. 14:30 or As per flight arrival"></div>
-        <div class="full"><label>Pickup Notes (optional)</label><input type="text" id="trNotes_${i}" value="${sanitize(saved.pickupNotes || '')}" placeholder="e.g. Meet at Gate 5, carry sign with name"></div>
-      </div>
-    `;
-    list.appendChild(div);
-  });
+ transfers.forEach((t, i) => {
+ const saved = (savedTransfers && savedTransfers[i]) || {};
+ const div = document.createElement('div');
+ div.className = 'service-box';
+ div.innerHTML = `
+ <h5>Transfer ${i + 1}: ${sanitize(t.from || '')} ${sanitize(t.to || '')} (${sanitize(t.vehicle || '')})</h5>
+ <div class="grid">
+ <div><label>Driver Name</label><input type="text" id="trDriver_${i}" value="${sanitize(saved.driverName || '')}" placeholder="TBA if not yet assigned"></div>
+ <div><label>Driver Phone</label><input type="text" id="trPhone_${i}" value="${sanitize(saved.driverPhone || '')}" placeholder="TBA if not yet assigned"></div>
+ <div><label>Vehicle Number</label><input type="text" id="trVehicle_${i}" value="${sanitize(saved.vehicleNo || '')}" placeholder="e.g. ABC-123"></div>
+ <div><label>Pickup Time (optional)</label><input type="text" id="trPickupTime_${i}" value="${sanitize(saved.pickupTime || '')}" placeholder="e.g. 14:30 or As per flight arrival"></div>
+ <div class="full"><label>Pickup Notes (optional)</label><input type="text" id="trNotes_${i}" value="${sanitize(saved.pickupNotes || '')}" placeholder="e.g. Meet at Gate 5, carry sign with name"></div>
+ </div>
+ `;
+ list.appendChild(div);
+ });
 }
 
 // ===== Build ziyarah ops fields =====
 function buildZiyarahOps(ziyarahs, savedZiyarahs) {
-  const section = document.getElementById('ziyarahSection');
-  const list = document.getElementById('ziyarahOpsList');
-  if (!ziyarahs || !ziyarahs.length) return;
-  section.style.display = 'block';
-  list.innerHTML = '';
+ const section = document.getElementById('ziyarahSection');
+ const list = document.getElementById('ziyarahOpsList');
+ if (!ziyarahs || !ziyarahs.length) return;
+ section.style.display = 'block';
+ list.innerHTML = '';
 
-  ziyarahs.forEach((z, i) => {
-    const saved = (savedZiyarahs && savedZiyarahs[i]) || {};
-    const div = document.createElement('div');
-    div.className = 'service-box';
-    div.innerHTML = `
-      <h5>Ziyarah ${i + 1}: ${sanitize(z.city || '')} (${sanitize(z.vehicle || '')})</h5>
-      <div class="grid">
-        <div><label>Driver Phone</label><input type="text" id="zyPhone_${i}" value="${sanitize(saved.driverPhone || '')}" placeholder="TBA"></div>
-        <div><label>Guide Name (optional)</label><input type="text" id="zyGuide_${i}" value="${sanitize(saved.guideName || '')}" placeholder="Guide name"></div>
-        <div class="full"><label>Notes (optional)</label><input type="text" id="zyNotes_${i}" value="${sanitize(saved.notes || '')}" placeholder="Additional notes for customer"></div>
-      </div>
-    `;
-    list.appendChild(div);
-  });
+ ziyarahs.forEach((z, i) => {
+ const saved = (savedZiyarahs && savedZiyarahs[i]) || {};
+ const div = document.createElement('div');
+ div.className = 'service-box';
+ div.innerHTML = `
+ <h5>Ziyarah ${i + 1}: ${sanitize(z.city || '')} (${sanitize(z.vehicle || '')})</h5>
+ <div class="grid">
+ <div><label>Driver Phone</label><input type="text" id="zyPhone_${i}" value="${sanitize(saved.driverPhone || '')}" placeholder="TBA"></div>
+ <div><label>Guide Name (optional)</label><input type="text" id="zyGuide_${i}" value="${sanitize(saved.guideName || '')}" placeholder="Guide name"></div>
+ <div class="full"><label>Notes (optional)</label><input type="text" id="zyNotes_${i}" value="${sanitize(saved.notes || '')}" placeholder="Additional notes for customer"></div>
+ </div>
+ `;
+ list.appendChild(div);
+ });
 }
 
 // ===== Build visa ops fields =====
 function buildVisaOps(visa, savedVisa) {
-  const section = document.getElementById('visaSection');
-  const list = document.getElementById('visaOpsList');
-  if (!visa) return;
-  section.style.display = 'block';
-  list.innerHTML = '';
+ const section = document.getElementById('visaSection');
+ const list = document.getElementById('visaOpsList');
+ if (!visa) return;
+ section.style.display = 'block';
+ list.innerHTML = '';
 
-  const savedNos = savedVisa?.visaNumbers || {};
-  const div = document.createElement('div');
-  div.className = 'service-box';
-  div.innerHTML = `
-    <h5>Visa Numbers</h5>
-    <p class="small" style="margin-bottom:8px">Passenger names are auto-filled from Passenger Details above. Enter visa number as available.</p>
-    <div id="visaNumbersList"></div>
-  `;
-  list.appendChild(div);
+ const savedNos = savedVisa?.visaNumbers || {};
+ const div = document.createElement('div');
+ div.className = 'service-box';
+ div.innerHTML = `
+ <h5>Visa Numbers</h5>
+ <p class="small" style="margin-bottom:8px">Passenger names are auto-filled from Passenger Details above. Enter visa number as available.</p>
+ <div id="visaNumbersList"></div>
+ `;
+ list.appendChild(div);
 
-  renderVisaRows(savedNos);
+ renderVisaRows(savedNos);
 }
 
 function renderVisaRows(savedNos) {
-  const vList = document.getElementById('visaNumbersList');
-  if (!vList) return;
-  vList.innerHTML = '';
-  const pax = getLivePassengers();
-  if (!pax.length) {
-    vList.innerHTML = '<p class="small" style="color:#999">No passengers added yet — add passengers above.</p>';
-    return;
-  }
-  pax.forEach((p, i) => {
-    const row = document.createElement('div');
-    row.style.cssText = 'display:grid;grid-template-columns:2fr 2fr;gap:8px;align-items:end;margin-bottom:8px';
-    row.innerHTML = `
-      <div><label>Passenger</label><input type="text" value="${sanitize(p.name)}" readonly style="background:#f0f4fa;color:#444;cursor:default"></div>
-      <div><label>Visa Number (optional)</label><input type="text" id="visaNo_${p.idx}" value="${sanitize(savedNos[p.name] || '')}" placeholder="Visa number"></div>
-    `;
-    vList.appendChild(row);
-  });
+ const vList = document.getElementById('visaNumbersList');
+ if (!vList) return;
+ vList.innerHTML = '';
+ const pax = getLivePassengers();
+ if (!pax.length) {
+ vList.innerHTML = '<p class="small" style="color:#999">No passengers added yet - add passengers above.</p>';
+ return;
+ }
+ pax.forEach((p, i) => {
+ const row = document.createElement('div');
+ row.style.cssText = 'display:grid;grid-template-columns:2fr 2fr;gap:8px;align-items:end;margin-bottom:8px';
+ row.innerHTML = `
+ <div><label>Passenger</label><input type="text" value="${sanitize(p.name)}" readonly style="background:#f0f4fa;color:#444;cursor:default"></div>
+ <div><label>Visa Number (optional)</label><input type="text" id="visaNo_${p.idx}" value="${sanitize(savedNos[p.name] || '')}" placeholder="Visa number"></div>
+ `;
+ vList.appendChild(row);
+ });
 }
 
 // ===== Render overview =====
 function renderOverview() {
-  if (!quotation) return;
-  const cd = quotation.clientData || {};
-  const section = document.getElementById('overviewSection');
-  section.style.display = 'block';
-  document.getElementById('overviewContent').innerHTML = `
-    <div><label>Client Name</label><div style="font-weight:700">${sanitize(cd.name || '—')}</div></div>
-    <div><label>Phone</label><div>${sanitize(cd.phone || '—')}</div></div>
-    <div><label>Quotation ID</label><div>${sanitize(quotationId || '—')}</div></div>
-    <div><label>Travel Dates</label><div>${fmtDate(cd.dateFrom)} — ${fmtDate(cd.dateTo)}</div></div>
-    <div><label>Departure City</label><div>${sanitize(cd.depCity || '—')}</div></div>
-    <div><label>Nights (Makkah / Madina)</label><div>${cd.nightsMakkah || 0} / ${cd.nightsMadina || 0}</div></div>
-  `;
+ if (!quotation) return;
+ const cd = quotation.clientData || {};
+ const section = document.getElementById('overviewSection');
+ section.style.display = 'block';
+ document.getElementById('overviewContent').innerHTML = `
+ <div><label>Client Name</label><div style="font-weight:700">${sanitize(cd.name || '')}</div></div>
+ <div><label>Phone</label><div>${sanitize(cd.phone || '')}</div></div>
+ <div><label>Quotation ID</label><div>${sanitize(quotationId || '')}</div></div>
+ <div><label>Travel Dates</label><div>${fmtDate(cd.dateFrom)} - ${fmtDate(cd.dateTo)}</div></div>
+ <div><label>Departure City</label><div>${sanitize(cd.depCity || '')}</div></div>
+ <div><label>Nights (Makkah / Madina)</label><div>${cd.nightsMakkah || 0} / ${cd.nightsMadina || 0}</div></div>
+ `;
 }
 
 function mapHotelsForVoucherItinerary(hotelsMakkah, hotelsMadina) {
-  const mapped = [];
-  (hotelsMakkah || []).forEach((h) => mapped.push({ ...h, city: h.city || 'Makkah' }));
-  (hotelsMadina || []).forEach((h) => mapped.push({ ...h, city: h.city || 'Madina' }));
-  return mapped;
+ const mapped = [];
+ (hotelsMakkah || []).forEach((h) => mapped.push({ ...h, city: h.city || 'Makkah' }));
+ (hotelsMadina || []).forEach((h) => mapped.push({ ...h, city: h.city || 'Madina' }));
+ return mapped;
 }
 
 async function initializeVoucherItinerary(q, existing) {
-  if (!window.ItineraryComponent || !q) return;
+ if (!window.ItineraryComponent || !q) return;
 
-  const section = document.getElementById('itinerarySection');
-  const container = document.getElementById('voucherItineraryContainer');
-  const toggleBtn = document.getElementById('toggleVoucherItineraryBtn');
-  const saveBtn = document.getElementById('saveVoucherItineraryBtn');
-  if (!section || !container || !toggleBtn || !saveBtn) return;
+ const section = document.getElementById('itinerarySection');
+ const container = document.getElementById('voucherItineraryContainer');
+ const toggleBtn = document.getElementById('toggleVoucherItineraryBtn');
+ const saveBtn = document.getElementById('saveVoucherItineraryBtn');
+ if (!section || !container || !toggleBtn || !saveBtn) return;
 
-  section.style.display = 'block';
+ section.style.display = 'block';
 
-  const existingVoucherRows = Array.isArray(existing?.itinerary) ? existing.itinerary : [];
-  const quotationRows = Array.isArray(q?.itineraryData?.rows) ? q.itineraryData.rows : [];
-  const sourceRows = existingVoucherRows.length ? existingVoucherRows : quotationRows;
+ const existingVoucherRows = Array.isArray(existing?.itinerary) ? existing.itinerary : [];
+ const quotationRows = Array.isArray(q?.itineraryData?.rows) ? q.itineraryData.rows : [];
+ const sourceRows = existingVoucherRows.length ? existingVoucherRows : quotationRows;
 
-  if (sourceRows.length) {
-    voucherItineraryRows = sourceRows;
-    voucherItineraryFlightSegments = existing?.itineraryFlightSegments || q?.itineraryData?.flightSegments || {};
-  } else {
-    const generated = await window.ItineraryComponent.generateItinerary({
-      clientData: q.clientData || {},
-      flights: q.flights || [],
-      hotels: mapHotelsForVoucherItinerary(q.hotelsMakkah, q.hotelsMadina),
-      tours: q.addons?.ziyarah || [],
-      transfers: q.transfers || [],
-      existingRows: [],
-      existingFlightSegments: {},
-      promptForMissingFlightOnCityChange: false
-    });
-    voucherItineraryRows = generated.rows || [];
-    voucherItineraryFlightSegments = generated.flightSegments || {};
-  }
+ if (sourceRows.length) {
+ voucherItineraryRows = sourceRows;
+ voucherItineraryFlightSegments = existing?.itineraryFlightSegments || q?.itineraryData?.flightSegments || {};
+ } else {
+ const generated = await window.ItineraryComponent.generateItinerary({
+ clientData: q.clientData || {},
+ flights: q.flights || [],
+ hotels: mapHotelsForVoucherItinerary(q.hotelsMakkah, q.hotelsMadina),
+ tours: q.addons?.ziyarah || [],
+ transfers: q.transfers || [],
+ existingRows: [],
+ existingFlightSegments: {},
+ promptForMissingFlightOnCityChange: false
+ });
+ voucherItineraryRows = generated.rows || [];
+ voucherItineraryFlightSegments = generated.flightSegments || {};
+ }
 
-  container.innerHTML = window.ItineraryComponent.renderItineraryTable(voucherItineraryRows, { editable: true });
-  window.ItineraryComponent.initEditableItinerary(container);
+ container.innerHTML = window.ItineraryComponent.renderItineraryTable(voucherItineraryRows, { editable: true });
+ window.ItineraryComponent.initEditableItinerary(container);
 
-  toggleBtn.onclick = function() {
-    const isHidden = container.style.display === 'none';
-    container.style.display = isHidden ? 'block' : 'none';
-    saveBtn.style.display = isHidden ? 'inline-block' : 'none';
-    toggleBtn.textContent = isHidden ? 'Hide Itinerary' : 'Show Itinerary';
-  };
+ toggleBtn.onclick = function() {
+ const isHidden = container.style.display === 'none';
+ container.style.display = isHidden ? 'block' : 'none';
+ saveBtn.style.display = isHidden ? 'inline-block' : 'none';
+ toggleBtn.textContent = isHidden ? 'Hide Itinerary' : 'Show Itinerary';
+ };
 
-  saveBtn.onclick = function() {
-    voucherItineraryRows = window.ItineraryComponent.readEditableRows(container);
-    showNotif('Itinerary saved in voucher.', 'success');
-  };
+ saveBtn.onclick = function() {
+ voucherItineraryRows = window.ItineraryComponent.readEditableRows(container);
+ showNotif('Itinerary saved in voucher.', 'success');
+ };
 }
 
 function getVoucherItineraryRows() {
-  const container = document.getElementById('voucherItineraryContainer');
-  if (window.ItineraryComponent && container && container.style.display !== 'none') {
-    return window.ItineraryComponent.readEditableRows(container);
-  }
-  return Array.isArray(voucherItineraryRows) ? voucherItineraryRows : [];
+ const container = document.getElementById('voucherItineraryContainer');
+ if (window.ItineraryComponent && container && container.style.display !== 'none') {
+ return window.ItineraryComponent.readEditableRows(container);
+ }
+ return Array.isArray(voucherItineraryRows) ? voucherItineraryRows : [];
 }
 
 // ===== Collect form data =====
 function collectFormData() {
-  // Passengers
-  const passengers = [];
-  document.querySelectorAll('[id^="pax_"]').forEach(card => {
-    const idx = card.id.split('_')[1];
-    if (!idx) return;
-    const given = (document.getElementById('paxGiven_' + idx)?.value || '').trim();
-    const sur = (document.getElementById('paxSurname_' + idx)?.value || '').trim();
-    const name = [given, sur].filter(Boolean).join(' ');
-    if (!name) return;
-    passengers.push({
-      name,
-      givenName: given,
-      surname: sur,
-      passport: getVal('paxPassport_' + idx),
-      nationality: getVal('paxNationality_' + idx),
-      dob: getVal('paxDob_' + idx),
-      expiry: getVal('paxExpiry_' + idx)
-    });
-  });
+ // Passengers
+ const passengers = [];
+ document.querySelectorAll('[id^="pax_"]').forEach(card => {
+ const idx = card.id.split('_')[1];
+ if (!idx) return;
+ const given = (document.getElementById('paxGiven_' + idx)?.value || '').trim();
+ const sur = (document.getElementById('paxSurname_' + idx)?.value || '').trim();
+ const name = [given, sur].filter(Boolean).join(' ');
+ if (!name) return;
+ passengers.push({
+ name,
+ givenName: given,
+ surname: sur,
+ passport: getVal('paxPassport_' + idx),
+ nationality: getVal('paxNationality_' + idx),
+ dob: getVal('paxDob_' + idx),
+ expiry: getVal('paxExpiry_' + idx)
+ });
+ });
 
-  // Emergency contact
-  const emergencyContact = {
-    name: getVal('emergName'),
-    relation: getVal('emergRelation'),
-    phone: getVal('emergPhone')
-  };
+ // Emergency contact
+ const emergencyContact = {
+ name: getVal('emergName'),
+ relation: getVal('emergRelation'),
+ phone: getVal('emergPhone')
+ };
 
-  // Flights — collect per-passenger ticket & seat numbers
-  const paxLive = getLivePassengers();
-  const flights = (quotation.flights || []).map((f, i) => {
-    const idx = i + 1;
-    const ticketNumbers = {};
-    const seatNumbers = {};
-    paxLive.forEach(p => {
-      const t = (document.getElementById('fTicket_' + idx + '_' + p.idx)?.value || '').trim();
-      const s = (document.getElementById('fSeat_' + idx + '_' + p.idx)?.value || '').trim();
-      if (t) ticketNumbers[p.name] = t;
-      if (s) seatNumbers[p.name] = s;
-    });
-    return {
-      ...f,
-      pnr: getVal('fPnr_' + idx),
-      meal: {
-        included: getVal('fMealIncl_' + idx) === 'yes',
-        type: getVal('fMealType_' + idx)
-      },
-      ticketNumbers,
-      seatNumbers
-    };
-  });
+ // Flights collect per-passenger ticket & seat numbers
+ const paxLive = getLivePassengers();
+ const flights = (quotation.flights || []).map((f, i) => {
+ const idx = i + 1;
+ const ticketNumbers = {};
+ const seatNumbers = {};
+ paxLive.forEach(p => {
+ const t = (document.getElementById('fTicket_' + idx + '_' + p.idx)?.value || '').trim();
+ const s = (document.getElementById('fSeat_' + idx + '_' + p.idx)?.value || '').trim();
+ if (t) ticketNumbers[p.name] = t;
+ if (s) seatNumbers[p.name] = s;
+ });
+ return {
+ ...f,
+ pnr: getVal('fPnr_' + idx),
+ meal: {
+ included: getVal('fMealIncl_' + idx) === 'yes',
+ type: getVal('fMealType_' + idx)
+ },
+ ticketNumbers,
+ seatNumbers
+ };
+ });
 
-  // Hotels Makkah
-  const hotelsMakkah = (quotation.hotelsMakkah || []).map((h, i) => ({
-    ...h,
-    confirmationNo: getVal('hotelMOpsListConf_' + i),
-    leadGuest: getVal('hotelMOpsListLead_' + i),
-    phone: getVal('hotelMOpsListPhone_' + i),
-    address: getVal('hotelMOpsListAddr_' + i),
-    mapUrl: getVal('hotelMOpsListMapUrl_' + i)
-  }));
+ // Hotels Makkah
+ const hotelsMakkah = (quotation.hotelsMakkah || []).map((h, i) => ({
+ ...h,
+ confirmationNo: getVal('hotelMOpsListConf_' + i),
+ leadGuest: getVal('hotelMOpsListLead_' + i),
+ phone: getVal('hotelMOpsListPhone_' + i),
+ address: getVal('hotelMOpsListAddr_' + i),
+ mapUrl: getVal('hotelMOpsListMapUrl_' + i)
+ }));
 
-  // Hotels Madina
-  const hotelsMadina = (quotation.hotelsMadina || []).map((h, i) => ({
-    ...h,
-    confirmationNo: getVal('hotelAOpsListConf_' + i),
-    leadGuest: getVal('hotelAOpsListLead_' + i),
-    phone: getVal('hotelAOpsListPhone_' + i),
-    address: getVal('hotelAOpsListAddr_' + i),
-    mapUrl: getVal('hotelAOpsListMapUrl_' + i)
-  }));
+ // Hotels Madina
+ const hotelsMadina = (quotation.hotelsMadina || []).map((h, i) => ({
+ ...h,
+ confirmationNo: getVal('hotelAOpsListConf_' + i),
+ leadGuest: getVal('hotelAOpsListLead_' + i),
+ phone: getVal('hotelAOpsListPhone_' + i),
+ address: getVal('hotelAOpsListAddr_' + i),
+ mapUrl: getVal('hotelAOpsListMapUrl_' + i)
+ }));
 
-  // Transfers
-  const transfers = (quotation.transfers || []).map((t, i) => ({
-    ...t,
-    driverName: getVal('trDriver_' + i),
-    driverPhone: getVal('trPhone_' + i),
-    vehicleNo: getVal('trVehicle_' + i),
-    pickupTime: getVal('trPickupTime_' + i),
-    pickupNotes: getVal('trNotes_' + i)
-  }));
+ // Transfers
+ const transfers = (quotation.transfers || []).map((t, i) => ({
+ ...t,
+ driverName: getVal('trDriver_' + i),
+ driverPhone: getVal('trPhone_' + i),
+ vehicleNo: getVal('trVehicle_' + i),
+ pickupTime: getVal('trPickupTime_' + i),
+ pickupNotes: getVal('trNotes_' + i)
+ }));
 
-  // Ziyarah
-  const ziyarah = ((quotation.addons && quotation.addons.ziyarah) || []).map((z, i) => ({
-    ...z,
-    driverPhone: getVal('zyPhone_' + i),
-    guideName: getVal('zyGuide_' + i),
-    notes: getVal('zyNotes_' + i)
-  }));
+ // Ziyarah
+ const ziyarah = ((quotation.addons && quotation.addons.ziyarah) || []).map((z, i) => ({
+ ...z,
+ driverPhone: getVal('zyPhone_' + i),
+ guideName: getVal('zyGuide_' + i),
+ notes: getVal('zyNotes_' + i)
+ }));
 
-  // Visa — keyed by passenger name from live passenger list
-  let visa = quotation.visa ? { ...quotation.visa } : null;
-  if (visa) {
-    const visaNumbers = {};
-    paxLive.forEach(p => {
-      const no = (document.getElementById('visaNo_' + p.idx)?.value || '').trim();
-      if (no) visaNumbers[p.name] = no;
-    });
-    visa.visaNumbers = visaNumbers;
-  }
+ // Visa keyed by passenger name from live passenger list
+ let visa = quotation.visa ? { ...quotation.visa } : null;
+ if (visa) {
+ const visaNumbers = {};
+ paxLive.forEach(p => {
+ const no = (document.getElementById('visaNo_' + p.idx)?.value || '').trim();
+ if (no) visaNumbers[p.name] = no;
+ });
+ visa.visaNumbers = visaNumbers;
+ }
 
-  return {
-    passengers,
-    emergencyContact,
-    flights,
-    hotelsMakkah,
-    hotelsMadina,
-    transfers,
-    ziyarah,
-    visa,
-    itinerary: getVoucherItineraryRows(),
-    itineraryFlightSegments: voucherItineraryFlightSegments || {}
-  };
+ return {
+ passengers,
+ emergencyContact,
+ flights,
+ hotelsMakkah,
+ hotelsMadina,
+ transfers,
+ ziyarah,
+ visa,
+ itinerary: getVoucherItineraryRows(),
+ itineraryFlightSegments: voucherItineraryFlightSegments || {}
+ };
 }
 
 // ===== Validate for publish =====
 function validateForPublish(data) {
-  const errs = [];
-  if (!data.passengers.length) errs.push('Add at least one passenger (Name is required).');
-  const firstPax = data.passengers[0];
-  if (firstPax && (!firstPax.passport || !firstPax.nationality)) errs.push('Passport and Nationality are required for at least the first passenger.');
-  (data.flights || []).forEach((f, i) => { if (!f.pnr) errs.push(`Flight ${i + 1}: PNR is required.`); });
-  // Emergency contact is optional — no validation required
-  return errs;
+ const errs = [];
+ if (!data.passengers.length) errs.push('Add at least one passenger (Name is required).');
+ const firstPax = data.passengers[0];
+ if (firstPax && (!firstPax.passport || !firstPax.nationality)) errs.push('Passport and Nationality are required for at least the first passenger.');
+ (data.flights || []).forEach((f, i) => { if (!f.pnr) errs.push(`Flight ${i + 1}: PNR is required.`); });
+ // Emergency contact is optional no validation required
+ return errs;
 }
 
 // ===== Build voucher document =====
 function buildVoucherDoc(data, status) {
-  const now = new Date().toISOString();
-  const agent = JSON.parse(localStorage.getItem('loggedInAgent') || 'null') || { name: 'Unknown', id: 'demo' };
-  const existing = voucherData || {};
-  const version = (existing.version || 0) + 1;
-  const client = quotation?.clientData || {};
-  const voucherNumber = voucherId || '';
-  const quotationNumber = quotationId || '';
-  const agentName = agent.name || agent.displayName || agent.email || '';
-  const clientName = client.name || '';
+ const now = new Date().toISOString();
+ const agent = JSON.parse(localStorage.getItem('loggedInAgent') || 'null') || { name: 'Unknown', id: 'demo' };
+ const existing = voucherData || {};
+ const version = (existing.version || 0) + 1;
+ const client = quotation?.clientData || {};
+ const voucherNumber = voucherId || '';
+ const quotationNumber = quotationId || '';
+ const agentName = agent.name || agent.displayName || agent.email || '';
+ const clientName = client.name || '';
 
-  return {
-    id: voucherId,
-    voucherNumber,
-    quotationNumber,
-    voucherType: 'umrah',
-    agentName,
-    agentPhone: agent.phone || '',
-    clientName,
-    clientPhone: client.phone || '',
-    displayLabel: ['umrah voucher', voucherNumber, quotationNumber, clientName].filter(Boolean).join(' | '),
-    firebaseLabel: ['umrah voucher', voucherNumber, quotationNumber, clientName, agentName].filter(Boolean).join(' | '),
-    version,
-    status,
-    quotationId,
-    quotationType: 'umrah',
-    agentData: agent,
-    clientData: quotation.clientData || {},
-    flights: data.flights,
-    hotelsMakkah: data.hotelsMakkah,
-    hotelsMadina: data.hotelsMadina,
-    transfers: data.transfers,
-    ziyarah: data.ziyarah,
-    visa: data.visa,
-    itinerary: Array.isArray(data.itinerary) && data.itinerary.length
-      ? data.itinerary
-      : (Array.isArray(quotation?.itineraryData?.rows) ? quotation.itineraryData.rows : []),
-    itineraryFlightSegments: data.itineraryFlightSegments || quotation?.itineraryData?.flightSegments || {},
-    passengers: data.passengers,
-    emergencyContact: data.emergencyContact,
-    agentNote: getVal('agentNote'),
-    createdAt: existing.createdAt || now,
-    publishedAt: (status === 'published') ? now : (existing.publishedAt || ''),
-    updatedAt: now,
-    viewedAt: existing.viewedAt || '',
-    viewCount: existing.viewCount || 0
-  };
+ return {
+ id: voucherId,
+ voucherNumber,
+ quotationNumber,
+ voucherType: 'umrah',
+ agentName,
+ agentPhone: agent.phone || '',
+ clientName,
+ clientPhone: client.phone || '',
+ displayLabel: ['umrah voucher', voucherNumber, quotationNumber, clientName].filter(Boolean).join(' | '),
+ firebaseLabel: ['umrah voucher', voucherNumber, quotationNumber, clientName, agentName].filter(Boolean).join(' | '),
+ version,
+ status,
+ quotationId,
+ quotationType: 'umrah',
+ agentData: agent,
+ clientData: quotation.clientData || {},
+ flights: data.flights,
+ hotelsMakkah: data.hotelsMakkah,
+ hotelsMadina: data.hotelsMadina,
+ transfers: data.transfers,
+ ziyarah: data.ziyarah,
+ visa: data.visa,
+ itinerary: Array.isArray(data.itinerary) && data.itinerary.length
+ ? data.itinerary
+ : (Array.isArray(quotation?.itineraryData?.rows) ? quotation.itineraryData.rows : []),
+ itineraryFlightSegments: data.itineraryFlightSegments || quotation?.itineraryData?.flightSegments || {},
+ passengers: data.passengers,
+ emergencyContact: data.emergencyContact,
+ agentNote: getVal('agentNote'),
+ createdAt: existing.createdAt || now,
+ publishedAt: (status === 'published') ? now : (existing.publishedAt || ''),
+ updatedAt: now,
+ viewedAt: existing.viewedAt || '',
+ viewCount: existing.viewCount || 0
+ };
 }
 
 // ===== Update status bar =====
 function updateStatusBar() {
-  if (!voucherData) return;
-  const bar = document.getElementById('statusBar');
-  bar.style.display = 'flex';
-  document.getElementById('sbVoucherId').textContent = voucherId || '';
-  const badge = document.getElementById('sbBadge');
-  badge.textContent = voucherData.status || 'draft';
-  badge.className = 'badge badge-' + (voucherData.status || 'draft');
-  document.getElementById('sbVersion').textContent = 'v' + (voucherData.version || 1);
-  document.getElementById('sbViewCount').textContent = '👁 Views: ' + (voucherData.viewCount || 0);
-  if (voucherData.viewedAt) {
-    document.getElementById('sbLastViewed').textContent = 'Last viewed: ' + fmtDate(voucherData.viewedAt);
-  }
-  if (voucherData.status === 'published') {
-    document.getElementById('voucherLinkArea').style.display = 'block';
-    document.getElementById('qrArea').style.display = 'block';
-    const url = getVoucherUrl(voucherId);
-    document.getElementById('voucherLinkInput').value = url;
-    generateQR(url);
-  }
-  // Show/hide cancel button
-  const showCancel = voucherData.status !== 'cancelled';
-  document.getElementById('btnCancelVoucher').style.display = showCancel ? 'inline-block' : 'none';
-  document.getElementById('btnCancelVoucher2').style.display = showCancel ? 'inline-block' : 'none';
+ if (!voucherData) return;
+ const bar = document.getElementById('statusBar');
+ bar.style.display = 'flex';
+ document.getElementById('sbVoucherId').textContent = voucherId || '';
+ const badge = document.getElementById('sbBadge');
+ badge.textContent = voucherData.status || 'draft';
+ badge.className = 'badge badge-' + (voucherData.status || 'draft');
+ document.getElementById('sbVersion').textContent = 'v' + (voucherData.version || 1);
+ document.getElementById('sbViewCount').textContent = ' Views: ' + (voucherData.viewCount || 0);
+ if (voucherData.viewedAt) {
+ document.getElementById('sbLastViewed').textContent = 'Last viewed: ' + fmtDate(voucherData.viewedAt);
+ }
+ if (voucherData.status === 'published') {
+ document.getElementById('voucherLinkArea').style.display = 'block';
+ document.getElementById('qrArea').style.display = 'block';
+ const url = getVoucherUrl(voucherId);
+ document.getElementById('voucherLinkInput').value = url;
+ generateQR(url);
+ }
+ // Show/hide cancel button
+ const showCancel = voucherData.status !== 'cancelled';
+ document.getElementById('btnCancelVoucher').style.display = showCancel ? 'inline-block' : 'none';
+ document.getElementById('btnCancelVoucher2').style.display = showCancel ? 'inline-block' : 'none';
 }
 
 // ===== QR Code =====
 function generateQR(url) {
-  const qrEl = document.getElementById('qrcode');
-  qrEl.innerHTML = '';
-  new QRCode(qrEl, { text: url, width: 128, height: 128, correctLevel: QRCode.CorrectLevel.M });
+ const qrEl = document.getElementById('qrcode');
+ qrEl.innerHTML = '';
+ new QRCode(qrEl, { text: url, width: 128, height: 128, correctLevel: QRCode.CorrectLevel.M });
 }
 
 // ===== Save draft =====
 async function saveDraft() {
-  if (!(await ensureSignedInForWrite())) return;
-  // Auto-sync all passenger-dependent fields before saving
-  syncAllPassengerData();
-  const data = collectFormData();
-  const doc = buildVoucherDoc(data, voucherData?.status === 'published' ? 'published' : 'draft');
-  try {
-    await window.firebaseDB.saveData('vouchers', voucherId, doc);
-    voucherData = doc;
-    linkVoucherToQuotation(quotationId, voucherId);
-    updateStatusBar();
-    showNotif('✅ Draft saved!', 'success');
-  } catch (e) {
-    console.error(e);
-    showNotif('❌ Failed to save: ' + e.message, 'error');
-  }
+ if (!(await ensureSignedInForWrite())) return;
+ // Auto-sync all passenger-dependent fields before saving
+ syncAllPassengerData();
+ const data = collectFormData();
+ const doc = buildVoucherDoc(data, voucherData?.status === 'published' ? 'published' : 'draft');
+ try {
+ const syncOk = await window.firebaseDB.saveData('vouchers', voucherId, doc);
+ if (window.updateVoucherSyncStatus) window.updateVoucherSyncStatus(syncOk === false ? 'local' : 'synced');
+ voucherData = doc;
+ linkVoucherToQuotation(quotationId, voucherId);
+ updateStatusBar();
+ showNotif('Draft saved!', 'success');
+ } catch (e) {
+ console.error(e);
+ showNotif('Failed to save: ' + e.message, 'error');
+ }
 }
 
 // ===== Publish =====
 async function publishVoucher() {
-  if (!(await ensureSignedInForWrite())) return;
-  // Auto-sync all passenger-dependent fields before publishing
-  syncAllPassengerData();
-  const data = collectFormData();
-  const errs = validateForPublish(data);
-  if (errs.length) {
-    alert('Please fix the following:\n\n' + errs.join('\n'));
-    return;
-  }
-  const ok = await confirm('Publish this voucher? The customer link will become active.', 'Publish Voucher');
-  if (!ok) return;
-  const doc = buildVoucherDoc(data, 'published');
-  try {
-    await window.firebaseDB.saveData('vouchers', voucherId, doc);
-    voucherData = doc;
-    linkVoucherToQuotation(quotationId, voucherId);
-    updateLinkedQuotationStatus('vouchered');
-    updateStatusBar();
-    showNotif('🎉 Voucher published! Share the link with the customer.', 'success', 5000);
-  } catch (e) {
-    console.error(e);
-    showNotif('❌ Failed to publish: ' + e.message, 'error');
-  }
+ if (!(await ensureSignedInForWrite())) return;
+ // Auto-sync all passenger-dependent fields before publishing
+ syncAllPassengerData();
+ const data = collectFormData();
+ const errs = validateForPublish(data);
+ if (errs.length) {
+ alert('Please fix the following:\n\n' + errs.join('\n'));
+ return;
+ }
+ const ok = await confirm('Publish this voucher? The customer link will become active.', 'Publish Voucher');
+ if (!ok) return;
+ const doc = buildVoucherDoc(data, 'published');
+ try {
+ const syncOk = await window.firebaseDB.saveData('vouchers', voucherId, doc);
+ if (window.updateVoucherSyncStatus) window.updateVoucherSyncStatus(syncOk === false ? 'local' : 'synced');
+ voucherData = doc;
+ linkVoucherToQuotation(quotationId, voucherId);
+ updateLinkedQuotationStatus('vouchered');
+ updateStatusBar();
+ showNotif('Voucher published! Share the link with the customer.', 'success', 5000);
+ } catch (e) {
+ console.error(e);
+ showNotif('Failed to publish: ' + e.message, 'error');
+ }
 }
 
 // ===== Cancel voucher =====
 async function cancelVoucher() {
-  if (!(await ensureSignedInForWrite())) return;
-  const ok = await confirm('Cancel this voucher? The customer will see a cancellation message.', 'Cancel Voucher');
-  if (!ok) return;
-  const data = collectFormData();
-  const doc = buildVoucherDoc(data, 'cancelled');
-  try {
-    await window.firebaseDB.saveData('vouchers', voucherId, doc);
-    voucherData = doc;
-    linkVoucherToQuotation(quotationId, voucherId);
-    updateLinkedQuotationStatus('booked');
-    updateStatusBar();
-    showNotif('Voucher cancelled.', 'info');
-  } catch (e) {
-    showNotif('❌ Failed: ' + e.message, 'error');
-  }
+ if (!(await ensureSignedInForWrite())) return;
+ const ok = await confirm('Cancel this voucher? The customer will see a cancellation message.', 'Cancel Voucher');
+ if (!ok) return;
+ const data = collectFormData();
+ const doc = buildVoucherDoc(data, 'cancelled');
+ try {
+ const syncOk = await window.firebaseDB.saveData('vouchers', voucherId, doc);
+ if (window.updateVoucherSyncStatus) window.updateVoucherSyncStatus(syncOk === false ? 'local' : 'synced');
+ voucherData = doc;
+ linkVoucherToQuotation(quotationId, voucherId);
+ updateLinkedQuotationStatus('booked');
+ updateStatusBar();
+ showNotif('Voucher cancelled.', 'info');
+ } catch (e) {
+ showNotif('Failed: ' + e.message, 'error');
+ }
 }
 
 // ===== PDF Download =====
 async function downloadPDF() {
-  showNotif('Generating PDF...', 'info', 60000);
-  try {
-    const url = getVoucherUrl(voucherId);
-    const win = window.open(url + '&pdf=1', '_blank');
-    if (!win) showNotif('Please allow popups to open the voucher for printing.', 'error');
-    else showNotif('Voucher opened. Use browser print to save as PDF.', 'success');
-  } catch (e) {
-    showNotif('Failed to open PDF: ' + e.message, 'error');
-  }
+ showNotif('Generating PDF...', 'info', 60000);
+ try {
+ const url = getVoucherUrl(voucherId);
+ const win = window.open(url + '&pdf=1', '_blank');
+ if (!win) showNotif('Please allow popups to open the voucher for printing.', 'error');
+ else showNotif('Voucher opened. Use browser print to save as PDF.', 'success');
+ } catch (e) {
+ showNotif('Failed to open PDF: ' + e.message, 'error');
+ }
 }
 
 // ===== WhatsApp Share =====
 function shareWhatsApp() {
-  if (!voucherData || voucherData.status !== 'published') {
-    showNotif('Please publish the voucher first.', 'error');
-    return;
-  }
-  const phone = (quotation.clientData?.phone || '').replace(/\D/g, '').replace(/^0/, '');
-  const url = getVoucherUrl(voucherId);
-  const msg = `Dear ${quotation.clientData?.name || 'Customer'},\n\nYour Umrah travel voucher is ready. Please view it here:\n${url}\n\nRegards,\nFlight Connection Travel`;
-  const waUrl = 'https://wa.me/92' + phone + '?text=' + encodeURIComponent(msg);
-  window.open(waUrl, '_blank');
+ if (!voucherData || voucherData.status !== 'published') {
+ showNotif('Please publish the voucher first.', 'error');
+ return;
+ }
+ const phone = (quotation.clientData?.phone || '').replace(/\D/g, '').replace(/^0/, '');
+ const url = getVoucherUrl(voucherId);
+ const msg = `Dear ${quotation.clientData?.name || 'Customer'},\n\nYour Umrah travel voucher is ready. Please view it here:\n${url}\n\nRegards,\nFlight Connection Travel`;
+ const waUrl = 'https://wa.me/92' + phone + '?text=' + encodeURIComponent(msg);
+ window.open(waUrl, '_blank');
 }
 
 // ===== Load existing voucher into form =====
 function loadVoucherIntoForm(vc) {
-  setVal('agentNote', vc.agentNote || '');
-  setVal('emergName', vc.emergencyContact?.name || '');
-  setVal('emergRelation', vc.emergencyContact?.relation || '');
-  setVal('emergPhone', vc.emergencyContact?.phone || '');
+ setVal('agentNote', vc.agentNote || '');
+ setVal('emergName', vc.emergencyContact?.name || '');
+ setVal('emergRelation', vc.emergencyContact?.relation || '');
+ setVal('emergPhone', vc.emergencyContact?.phone || '');
 }
 
 // ===== Populate form slots from quotation =====
 function populateFromQuotation(q, existing) {
-  const cd = q.clientData || {};
-  const totalPax = (cd.adults || 0) + (cd.childBed || 0) + (cd.childNoBed || 0) + (cd.infants || 0);
+ const cd = q.clientData || {};
+ const totalPax = (cd.adults || 0) + (cd.childBed || 0) + (cd.childNoBed || 0) + (cd.infants || 0);
 
-  // Passengers — use existing if available, else create empty slots
-  const savedPax = (existing && existing.passengers) || [];
-  const slots = Math.max(totalPax || 1, savedPax.length || 0, 1);
-  for (let i = 0; i < slots; i++) {
-    addPassengerSlot(savedPax[i] || {});
-  }
+ // Passengers use existing if available, else create empty slots
+ const savedPax = (existing && existing.passengers) || [];
+ const slots = Math.max(totalPax || 1, savedPax.length || 0, 1);
+ for (let i = 0; i < slots; i++) {
+ addPassengerSlot(savedPax[i] || {});
+ }
 
-  // Services
-  buildFlightOps(q.flights, existing?.flights);
-  buildHotelOps(q.hotelsMakkah, existing?.hotelsMakkah, 'Makkah', 'hotelMOpsList', 'hotelMSection');
-  buildHotelOps(q.hotelsMadina, existing?.hotelsMadina, 'Madina', 'hotelAOpsList', 'hotelASection');
-  buildTransferOps(q.transfers, existing?.transfers);
-  buildZiyarahOps((q.addons && q.addons.ziyarah) || [], existing?.ziyarah);
+ // Services
+ buildFlightOps(q.flights, existing?.flights);
+ buildHotelOps(q.hotelsMakkah, existing?.hotelsMakkah, 'Makkah', 'hotelMOpsList', 'hotelMSection');
+ buildHotelOps(q.hotelsMadina, existing?.hotelsMadina, 'Madina', 'hotelAOpsList', 'hotelASection');
+ buildTransferOps(q.transfers, existing?.transfers);
+ buildZiyarahOps((q.addons && q.addons.ziyarah) || [], existing?.ziyarah);
 
-  // Visa — no need to pass passengers; buildVisaOps now reads live passenger DOM
-  buildVisaOps(q.visa, existing?.visa);
+ // Visa no need to pass passengers; buildVisaOps now reads live passenger DOM
+ buildVisaOps(q.visa, existing?.visa);
 
-  initializeVoucherItinerary(q, existing).catch((err) => {
-    console.error('Failed to initialize itinerary in voucher editor:', err);
-  });
+ initializeVoucherItinerary(q, existing).catch((err) => {
+ console.error('Failed to initialize itinerary in voucher editor:', err);
+ });
 
-  // Load existing form values
-  if (existing) loadVoucherIntoForm(existing);
+ // Load existing form values
+ if (existing) loadVoucherIntoForm(existing);
 }
 
 // ===== INIT =====
 async function init() {
-  quotationId = getUrlParam('quotationId');
-  if (!quotationId) {
-    document.getElementById('pageSubtitle').textContent = 'Error: No quotation ID in URL';
-    return;
-  }
+ quotationId = getUrlParam('quotationId');
+ if (!quotationId) {
+ document.getElementById('pageSubtitle').textContent = 'Error: No quotation ID in URL';
+ return;
+ }
 
-  // Load quotation from localStorage
-  const all = JSON.parse(localStorage.getItem('savedQuotations') || '[]');
-  quotation = all.find(q => q.id === quotationId);
+ // Load quotation from localStorage
+ const all = JSON.parse(localStorage.getItem('savedQuotations') || '[]');
+ quotation = all.find(q => q.id === quotationId);
 
-  if (!quotation) {
-    document.getElementById('pageSubtitle').textContent = 'Error: Quotation not found in localStorage. Please open from the Umrah Tool.';
-    return;
-  }
+ if (!quotation) {
+ document.getElementById('pageSubtitle').textContent = 'Error: Quotation not found in localStorage. Please open from the Umrah Tool.';
+ return;
+ }
 
-  document.getElementById('pageSubtitle').textContent = quotation.clientData?.name + ' · ' + quotationId;
-  document.title = 'Voucher — ' + quotation.clientData?.name;
+ document.getElementById('pageSubtitle').textContent = quotation.clientData?.name + ' ' + quotationId;
+ document.title = 'Voucher ' + quotation.clientData?.name;
 
-  // Ensure auth state is restored before Firestore calls (needed for auth-based rules).
-  if (window.__authReady) {
-    try { await window.__authReady; } catch (e) {}
-  }
+ // Ensure auth state is restored before Firestore calls (needed for auth-based rules).
+ if (window.firebaseDB && window.__authReady) {
+ try { await window.__authReady; } catch (e) {}
+ }
 
-  // Check if voucher already exists for this quotation.
-  // Prefer direct doc reads to avoid list/query permission issues with strict rules.
-  let existing = null;
-  const idMap = loadVoucherIdMap();
-  const mappedId = idMap[quotationId] || '';
-  const deterministicId = getDeterministicVoucherId(quotationId);
+ // Check if voucher already exists for this quotation.
+ // Prefer direct doc reads to avoid list/query permission issues with strict rules.
+ let existing = null;
+ const idMap = loadVoucherIdMap();
+ const mappedId = idMap[quotationId] || '';
+ const deterministicId = getDeterministicVoucherId(quotationId);
 
-  if (mappedId) {
-    try {
-      existing = await window.firebaseDB.getData('vouchers', mappedId);
-      if (existing) {
-        voucherId = mappedId;
-        voucherData = existing;
-      }
-    } catch (e) {
-      console.warn('Mapped voucher lookup failed:', e);
-    }
-  }
+ if (window.firebaseDB && mappedId) {
+ try {
+ existing = await window.firebaseDB.getData('vouchers', mappedId);
+ if (existing) {
+ voucherId = mappedId;
+ voucherData = existing;
+ }
+ } catch (e) {
+ console.warn('Mapped voucher lookup failed:', e);
+ }
+ }
 
-  if (!existing) {
-    try {
-      existing = await window.firebaseDB.getData('vouchers', deterministicId);
-      if (existing) {
-        voucherId = deterministicId;
-        voucherData = existing;
-      }
-    } catch (e) {
-      console.warn('Deterministic voucher lookup failed:', e);
-    }
-  }
+ if (window.firebaseDB && !existing) {
+ try {
+ existing = await window.firebaseDB.getData('vouchers', deterministicId);
+ if (existing) {
+ voucherId = deterministicId;
+ voucherData = existing;
+ }
+ } catch (e) {
+ console.warn('Deterministic voucher lookup failed:', e);
+ }
+ }
 
-  // Backward compatibility for legacy random IDs (requires query/list permission).
-  try {
-    if (!existing) {
-      const results = await window.firebaseDB.findByField('vouchers', 'quotationId', quotationId);
-      if (results && results.length) {
-        existing = results[0];
-        voucherId = existing.id;
-        voucherData = existing;
-      }
-    }
-  } catch (e) {
-    console.warn('Legacy voucher query lookup skipped (likely rules):', e);
-  }
+ // Backward compatibility for legacy random IDs (requires query/list permission).
+ try {
+ if (window.firebaseDB && !existing) {
+ const results = await window.firebaseDB.findByField('vouchers', 'quotationId', quotationId);
+ if (results && results.length) {
+ existing = results[0];
+ voucherId = existing.id;
+ voucherData = existing;
+ }
+ }
+ } catch (e) {
+ console.warn('Legacy voucher query lookup skipped (likely rules):', e);
+ }
 
-  if (!voucherId) {
-    voucherId = deterministicId || generateVoucherId();
-  }
+ if (!voucherId) {
+ voucherId = deterministicId || generateVoucherId();
+ }
 
-  if (voucherId) {
-    linkVoucherToQuotation(quotationId, voucherId);
-  }
+ if (voucherId) {
+ linkVoucherToQuotation(quotationId, voucherId);
+ }
 
-  renderOverview();
-  populateFromQuotation(quotation, existing);
-  if (existing) updateStatusBar();
+ renderOverview();
+ populateFromQuotation(quotation, existing);
+ if (existing) updateStatusBar();
 
-  showNotif('Quotation loaded: ' + quotationId, 'info', 2500);
+ showNotif('Quotation loaded: ' + quotationId, 'info', 2500);
 }
 
 // ===== Event listeners =====
@@ -1267,21 +1318,16 @@ document.getElementById('btnPublish2').addEventListener('click', publishVoucher)
 document.getElementById('btnCancelVoucher').addEventListener('click', cancelVoucher);
 document.getElementById('btnCancelVoucher2').addEventListener('click', cancelVoucher);
 document.getElementById('btnCopyLink').addEventListener('click', () => {
-  const input = document.getElementById('voucherLinkInput');
-  input.select();
-  document.execCommand('copy');
-  showNotif('Link copied!', 'success', 2000);
+ const input = document.getElementById('voucherLinkInput');
+ input.select();
+ document.execCommand('copy');
+ showNotif('Link copied!', 'success', 2000);
 });
 document.getElementById('btnWhatsApp').addEventListener('click', shareWhatsApp);
 document.getElementById('btnDownloadPDF').addEventListener('click', downloadPDF);
 
-// Wait for Firebase to be ready, then init
-window.addEventListener('load', () => {
-  const wait = setInterval(() => {
-    if (window.firebaseDB) { clearInterval(wait); init(); }
-  }, 100);
-  setTimeout(() => clearInterval(wait), 5000);
-});
+// Initialize immediately from localStorage; Firebase voucher lookups run only if available.
+window.addEventListener('load', init);
 </script>
 </body>
 </html>

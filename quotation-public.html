@@ -5,116 +5,118 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Quotation Preview - Flight Connection</title>
 <style>
-  :root{--accent:#0b76d1;--muted:#555;--bg:#f3f6fb;--card:#fff;--border:#dce3ef;--success:#28a745;--danger:#e74c3c}
-  body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:#111}
-  .wrap{max-width:980px;margin:24px auto;padding:20px;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,0.05)}
-  h1{margin-top:0;color:var(--accent)}
-  .small{color:var(--muted);font-size:14px}
-  .button-group{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
-  button{border:none;border-radius:8px;padding:10px 16px;font-size:14px;cursor:pointer}
-  button.primary{background:var(--accent);color:#fff}
-  button.secondary{background:#f3f6fb;color:#111;border:1px solid #c8d4e3}
-  .blue-btn{background:#3498db;color:#fff;border:none}
-  .blue-btn:hover{background:#2980b9}
-  .quote-info{margin-top:20px;border:1px solid var(--border);border-radius:10px;padding:18px;background:#fff}
-  .quote-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
-  .quote-row label{font-weight:700;color:#333}
-  .quote-row div{color:#444}
-  .message{padding:12px;border-radius:8px;margin-bottom:14px}
-  .message.info{background:#e7f1ff;color:#0b76d1}
-  .message.success{background:#e6f7ea;color:#1f8b47}
-  .message.warning{background:#fff4df;color:#8a5900}
-  .message.error{background:#fde8e8;color:#a82222}
-  .link-box{display:flex;gap:10px;align-items:center;margin-top:10px}
-  .link-box input{flex:1;padding:10px 12px;border:1px solid #ccc;border-radius:8px;background:#f8f8f8;outline:none}
-  .modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.45);display:none;align-items:center;justify-content:center;z-index:1000;padding:20px;overflow:auto}
-  .modal-overlay.active{display:flex}
-  .modal{width:100%;max-width:520px;background:#fff;border-radius:14px;padding:22px;box-shadow:0 18px 40px rgba(0,0,0,0.18);max-height:calc(100vh - 40px);overflow-y:auto}
-  .modal h2{margin-top:0}
-  .modal label{display:block;margin:12px 0 4px;font-weight:700}
-  .modal input[type=text], .modal input[type=tel]{width:100%;padding:10px 12px;border:1px solid #ccc;border-radius:8px}
-  .modal textarea{width:100%;height:180px;padding:10px 12px;border:1px solid #ccc;border-radius:8px;resize:vertical;font-family:inherit}
-  .modal-footer{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px;justify-content:flex-end}
-  .modal-footer button{min-width:120px}
-  .checkbox-row{display:flex;align-items:flex-start;gap:10px;margin-top:12px}
-  .checkbox-row input{width:18px;height:18px;margin-top:4px}
-  .checkbox-row label{display:inline;margin:0;font-weight:600;line-height:1.5}
-  .acceptance-summary{margin-top:14px;padding:14px;border:1px solid #d1e7ff;background:#f4f9ff;border-radius:10px;font-size:13px;line-height:1.6;color:#22334a}
-  .acceptance-summary ul{margin:8px 0 0 18px;padding-left:0}
-  .acceptance-summary li{margin-bottom:6px}
-  .acceptance-summary p{margin:8px 0}
-  .collapsible-section{border:1px solid #e5e9f2;border-radius:10px;margin-bottom:16px;background:#fff}
-  .collapsible-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid #eef2f8;cursor:pointer}
-  .collapsible-header span{font-weight:700;color:#0b76d1}
-  .toggle-section{border:none;background:transparent;color:var(--accent);font-weight:700;cursor:pointer;padding:0 8px;white-space:nowrap}
-  .collapsible-content{display:none;padding:16px;color:#444}
-  .collapsible-content.active{display:block}
-  .toggle-section[aria-expanded="true"]::after{content:" ▲"}
-  .toggle-section[aria-expanded="false"]::after{content:" ▼"}
-  .quote-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
-  .button-group{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
-  .link-box{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:10px}
-  .link-box input{flex:1;min-width:0;padding:10px 12px;border:1px solid #ccc;border-radius:8px;background:#f8f8f8;outline:none}
-  @media (max-width: 768px) {
-    .wrap{margin:12px auto;padding:16px;border-radius:0}
-    .quote-row{grid-template-columns:1fr}
-    .button-group{flex-direction:column}
-    button{width:100%;max-width:none}
-    .modal{max-width:100%;padding:18px}
-    .modal-footer{flex-direction:column;align-items:stretch}
-    .modal-footer button{width:100%;}
-    .collapsible-header{flex-direction:column;align-items:flex-start}
-  }
-  .hide-price .price-breakdown, .hide-price .toggle-price-breakdown{display:none}
+ :root{--accent:#0b76d1;--muted:#555;--bg:#f3f6fb;--card:#fff;--border:#dce3ef;--success:#28a745;--danger:#e74c3c}
+ body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:#111}
+ .wrap{max-width:980px;margin:24px auto;padding:20px;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,0.05)}
+ h1{margin-top:0;color:var(--accent)}
+ .small{color:var(--muted);font-size:14px}
+ .button-group{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+ button{border:none;border-radius:8px;padding:10px 16px;font-size:14px;cursor:pointer}
+ button.primary{background:var(--accent);color:#fff}
+ button.secondary{background:#f3f6fb;color:#111;border:1px solid #c8d4e3}
+ .blue-btn{background:#3498db;color:#fff;border:none}
+ .blue-btn:hover{background:#2980b9}
+ .quote-info{margin-top:20px;border:1px solid var(--border);border-radius:10px;padding:18px;background:#fff}
+ .quote-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+ .quote-row label{font-weight:700;color:#333}
+ .quote-row div{color:#444}
+ .message{padding:12px;border-radius:8px;margin-bottom:14px}
+ .message.info{background:#e7f1ff;color:#0b76d1}
+ .message.success{background:#e6f7ea;color:#1f8b47}
+ .message.warning{background:#fff4df;color:#8a5900}
+ .message.error{background:#fde8e8;color:#a82222}
+ .link-box{display:flex;gap:10px;align-items:center;margin-top:10px}
+ .link-box input{flex:1;padding:10px 12px;border:1px solid #ccc;border-radius:8px;background:#f8f8f8;outline:none}
+ .modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.45);display:none;align-items:center;justify-content:center;z-index:1000;padding:20px;overflow:auto}
+ .modal-overlay.active{display:flex}
+ .modal{width:100%;max-width:520px;background:#fff;border-radius:14px;padding:22px;box-shadow:0 18px 40px rgba(0,0,0,0.18);max-height:calc(100vh - 40px);overflow-y:auto}
+ .modal h2{margin-top:0}
+ .modal label{display:block;margin:12px 0 4px;font-weight:700}
+ .modal input[type=text], .modal input[type=tel]{width:100%;padding:10px 12px;border:1px solid #ccc;border-radius:8px}
+ .modal textarea{width:100%;height:180px;padding:10px 12px;border:1px solid #ccc;border-radius:8px;resize:vertical;font-family:inherit}
+ .modal-footer{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px;justify-content:flex-end}
+ .modal-footer button{min-width:120px}
+ .checkbox-row{display:flex;align-items:flex-start;gap:10px;margin-top:12px}
+ .checkbox-row input{width:18px;height:18px;margin-top:4px}
+ .checkbox-row label{display:inline;margin:0;font-weight:600;line-height:1.5}
+ .acceptance-summary{margin-top:14px;padding:14px;border:1px solid #d1e7ff;background:#f4f9ff;border-radius:10px;font-size:13px;line-height:1.6;color:#22334a}
+ .acceptance-summary ul{margin:8px 0 0 18px;padding-left:0}
+ .acceptance-summary li{margin-bottom:6px}
+ .acceptance-summary p{margin:8px 0}
+ .collapsible-section{border:1px solid #e5e9f2;border-radius:10px;margin-bottom:16px;background:#fff}
+ .collapsible-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid #eef2f8;cursor:pointer}
+ .collapsible-header span{font-weight:700;color:#0b76d1}
+ .toggle-section{border:none;background:transparent;color:var(--accent);font-weight:700;cursor:pointer;padding:0 8px;white-space:nowrap}
+ .collapsible-content{display:none;padding:16px;color:#444}
+ .collapsible-content.active{display:block}
+ .toggle-section[aria-expanded="true"]::after{content:" "}
+ .toggle-section[aria-expanded="false"]::after{content:" "}
+ .quote-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+ .button-group{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+ .link-box{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:10px}
+ .link-box input{flex:1;min-width:0;padding:10px 12px;border:1px solid #ccc;border-radius:8px;background:#f8f8f8;outline:none}
+ @media (max-width: 768px) {
+ .wrap{margin:12px auto;padding:16px;border-radius:0}
+ .quote-row{grid-template-columns:1fr}
+ .button-group{flex-direction:column}
+ button{width:100%;max-width:none}
+ .modal{max-width:100%;padding:18px}
+ .modal-footer{flex-direction:column;align-items:stretch}
+ .modal-footer button{width:100%;}
+ .collapsible-header{flex-direction:column;align-items:flex-start}
+ }
+ .hide-price .price-breakdown, .hide-price .toggle-price-breakdown{display:none}
 </style>
+<link rel="stylesheet" href="fc-theme.css?v=20260527-2">
+<script src="fc-ui.js?v=20260527-2" defer></script>
 </head>
 <body>
 <div class="wrap">
-  <h1>Quotation Preview</h1>
-  <div id="pageInfo" class="small">Loading quotation link...</div>
-  <div id="quoteMessage" class="message info" style="display:none"></div>
-  <div id="quotationContent" class="quote-info"></div>
-  <div class="button-group">
-    <button id="btnAcceptQuotation" class="primary" type="button" style="display:none">Accept Quotation</button>
-    <button id="btnOpenTerms" class="secondary" type="button" style="display:none">View Terms & Conditions</button>
-  </div>
+ <h1>Quotation Preview</h1>
+ <div id="pageInfo" class="small">Loading quotation link...</div>
+ <div id="quoteMessage" class="message info" style="display:none"></div>
+ <div id="quotationContent" class="quote-info"></div>
+ <div class="button-group">
+ <button id="btnAcceptQuotation" class="primary" type="button" style="display:none">Accept Quotation</button>
+ <button id="btnOpenTerms" class="secondary" type="button" style="display:none">View Terms & Conditions</button>
+ </div>
 </div>
 
 <div id="acceptModal" class="modal-overlay">
-  <div class="modal">
-    <h2>Accept Quotation</h2>
-    <p>Please enter your name and phone number, then review and accept the terms & conditions.</p>
-    <label for="customerName">Name</label>
-    <input type="text" id="customerName" placeholder="Customer name" />
-    <label for="customerPhone">Phone</label>
-    <input type="tel" id="customerPhone" placeholder="Phone number" />
-    <textarea id="customerTerms" readonly style="display:none;"></textarea>
-    <div class="acceptance-summary">
-      <p>By accepting this quotation, I confirm that I have:</p>
-      <ul>
-        <li>Read and understood the quotation details</li>
-        <li>Checked all inclusions and exclusions</li>
-        <li>Verified the total amount</li>
-        <li>Confirmed travel dates and all provided information</li>
-        <li>Confirmed the number of passengers</li>
-      </ul>
-      <p><strong>Important:</strong> Accepting this quotation does not mean booking is confirmed with Flight Connection Travel & Tours. Our agent will check availability and contact you.</p>
-      <p><strong>Booking will only be confirmed after:</strong></p>
-      <ul>
-        <li>Availability is verified</li>
-        <li>Full payment is received</li>
-      </ul>
-      <p>This action will be treated as my consent and agreement with Flight Connection Travel & Tours.</p>
-    </div>
-    <div class="checkbox-row">
-      <input type="checkbox" id="customerAcceptCheck" />
-      <label for="customerAcceptCheck">I accept the terms and conditions</label>
-    </div>
-    <div class="modal-footer">
-      <button id="btnCancelAccept" class="secondary" type="button">Cancel</button>
-      <button id="btnSubmitAccept" class="primary" type="button">Submit Acceptance</button>
-    </div>
-  </div>
+ <div class="modal">
+ <h2>Accept Quotation</h2>
+ <p>Please enter your name and phone number, then review and accept the terms & conditions.</p>
+ <label for="customerName">Name</label>
+ <input type="text" id="customerName" placeholder="Customer name" />
+ <label for="customerPhone">Phone</label>
+ <input type="tel" id="customerPhone" placeholder="Phone number" />
+ <textarea id="customerTerms" readonly style="display:none;"></textarea>
+ <div class="acceptance-summary">
+ <p>By accepting this quotation, I confirm that I have:</p>
+ <ul>
+ <li>Read and understood the quotation details</li>
+ <li>Checked all inclusions and exclusions</li>
+ <li>Verified the total amount</li>
+ <li>Confirmed travel dates and all provided information</li>
+ <li>Confirmed the number of passengers</li>
+ </ul>
+ <p><strong>Important:</strong> Accepting this quotation does not mean booking is confirmed with Flight Connection Travel & Tours. Our agent will check availability and contact you.</p>
+ <p><strong>Booking will only be confirmed after:</strong></p>
+ <ul>
+ <li>Availability is verified</li>
+ <li>Full payment is received</li>
+ </ul>
+ <p>This action will be treated as my consent and agreement with Flight Connection Travel & Tours.</p>
+ </div>
+ <div class="checkbox-row">
+ <input type="checkbox" id="customerAcceptCheck" />
+ <label for="customerAcceptCheck">I accept the terms and conditions</label>
+ </div>
+ <div class="modal-footer">
+ <button id="btnCancelAccept" class="secondary" type="button">Cancel</button>
+ <button id="btnSubmitAccept" class="primary" type="button">Submit Acceptance</button>
+ </div>
+ </div>
 </div>
 
 <script src="itinerary-component.js"></script>
