@@ -6619,10 +6619,10 @@ async function printQuotation() {
  const safeBreakPoints = Array.from(renderHost.querySelectorAll('.compact-quotation > div, #itinerarySectionWrapper, table, tr, li, p'))
  .flatMap((el) => {
  const rect = el.getBoundingClientRect();
- return [
- Math.round((rect.top - hostRect.top) * canvasScale),
- Math.round((rect.bottom - hostRect.top) * canvasScale)
- ];
+ const top = Math.round((rect.top - hostRect.top) * canvasScale);
+ const bottom = Math.round((rect.bottom - hostRect.top) * canvasScale);
+ const tagName = String(el.tagName || '').toLowerCase();
+ return tagName === 'tr' ? [bottom] : [top, bottom];
  })
  .filter((value) => Number.isFinite(value) && value > 0 && value < canvas.height)
  .sort((a, b) => a - b);
@@ -6642,17 +6642,11 @@ async function printQuotation() {
  const findSafeSliceHeight = (startY, maxHeight) => {
  const remaining = canvas.height - startY;
  if (remaining <= maxHeight) return remaining;
- const minHeight = Math.floor(maxHeight * 0.35);
+ const minHeight = Math.floor(maxHeight * 0.68);
  const maxSafe = maxHeight - Math.floor(18 * pxPerMm);
  for (let i = safeBreakPoints.length - 1; i >= 0; i -= 1) {
  const relativeBreak = safeBreakPoints[i] - startY;
  if (relativeBreak >= minHeight && relativeBreak <= maxSafe) {
- return relativeBreak;
- }
- }
- for (let i = safeBreakPoints.length - 1; i >= 0; i -= 1) {
- const relativeBreak = safeBreakPoints[i] - startY;
- if (relativeBreak >= Math.floor(45 * pxPerMm) && relativeBreak <= maxSafe) {
  return relativeBreak;
  }
  }

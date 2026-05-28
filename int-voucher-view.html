@@ -756,10 +756,9 @@ async function downloadPDF() {
 
  for (let y = 0; y < cH;) {
  const naturalEnd = Math.min(y + pageH, cH);
- const minBreak = y + Math.max(180, Math.round(pageH * 0.35));
+ const minBreak = y + Math.max(180, Math.round(pageH * 0.68));
  const maxBreak = naturalEnd - Math.round(18 * pxPerMm);
- const breakPoint = breakPoints.filter((point) => point >= minBreak && point <= maxBreak).pop()
- || breakPoints.filter((point) => point >= y + Math.round(45 * pxPerMm) && point <= maxBreak).pop();
+ const breakPoint = breakPoints.filter((point) => point >= minBreak && point <= maxBreak).pop();
  const h = Math.max(1, Math.min((breakPoint || naturalEnd) - y, cH - y));
  const pg = document.createElement("canvas");
  pg.width = cW;
