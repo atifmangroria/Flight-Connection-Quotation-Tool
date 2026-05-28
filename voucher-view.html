@@ -582,7 +582,7 @@ async function renderItinerarySection(vc) {
  tours: vc.ziyarah || [],
  transfers: vc.transfers || [],
  existingRows: [],
- existingFlightSegments: vc.itineraryFlightSegments || vc.itineraryData?.flightSegments || {},
+ flightSegments: vc.itineraryFlightSegments || vc.itineraryData?.flightSegments || {},
  promptForMissingFlightOnCityChange: false
  });
  rows = generated.rows || [];

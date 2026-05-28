@@ -205,11 +205,10 @@ function getDaywiseItineraryRows(quotation) {
 
 function buildDaywiseItinerarySection(quotation) {
  const rows = getDaywiseItineraryRows(quotation);
- if (!rows.length) return '';
 
  const tableHtml = (window.ItineraryComponent && typeof window.ItineraryComponent.renderItineraryTable === 'function')
- ? window.ItineraryComponent.renderItineraryTable(rows, { editable: false })
- : `<div style="color:#444;line-height:1.7;">Day wise itinerary details are available.</div>`;
+ ? (rows.length ? window.ItineraryComponent.renderItineraryTable(rows, { editable: false }) : '')
+ : (rows.length ? `<div style="color:#444;line-height:1.7;">Day wise itinerary details are available.</div>` : '');
 
  return `
  <div id="itinerarySectionWrapper" style="margin-bottom:12px;border:1px solid #eee;padding:10px 12px;border-radius:6px;background:#fff;">
@@ -383,9 +382,15 @@ function sanitize(value) {
 async function getGeneratedDaywiseRows(quotation) {
  if (!window.ItineraryComponent || typeof window.ItineraryComponent.generateItinerary !== 'function') return [];
  try {
+ const hotels = Array.isArray(quotation?.hotels) && quotation.hotels.length
+ ? quotation.hotels
+ : [
+ ...((Array.isArray(quotation?.hotelsMakkah) ? quotation.hotelsMakkah : []).map((hotel) => ({ ...hotel, city: hotel.city || 'Makkah' }))),
+ ...((Array.isArray(quotation?.hotelsMadina) ? quotation.hotelsMadina : []).map((hotel) => ({ ...hotel, city: hotel.city || 'Madina' })))
+ ];
  const generated = await window.ItineraryComponent.generateItinerary({
  clientData: quotation?.clientData || quotation?.customer || {},
- hotels: Array.isArray(quotation?.hotels) ? quotation.hotels : [],
+ hotels,
  transfers: Array.isArray(quotation?.transfers) ? quotation.transfers : [],
  tours: Array.isArray(quotation?.tours) ? quotation.tours : [],
  flightSegments: quotation?.itineraryFlightSegments || quotation?.itineraryData?.flightSegments || {}

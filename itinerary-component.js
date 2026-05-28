@@ -648,7 +648,7 @@
  if (editing) finishEdit(true);
  var field = cell.getAttribute('data-it-field');
  if (field !== 'activity' && field !== 'meals') return;
- var value = cell.textContent.replace(//g,'').trim();
+ var value = cell.textContent.replace(/\s+/g, ' ').trim();
  cell.setAttribute('data-prev-value', value);
  var input = '';
  if (field === 'activity') input = '<textarea style="width:98%;min-height:48px;padding:4px;border:1px solid #ccd;">'+value+'</textarea>';
@@ -690,9 +690,9 @@
  rowElements.forEach(function (tr, idx) {
  var cells = tr.querySelectorAll('td');
  if (cells.length < 4) return;
- var dateText = cells[1].getAttribute('data-it-date') || cells[1].textContent.replace(//g, '').trim();
- var activityText = cells[2].textContent.replace(//g, '').trim();
- var mealsText = cells[3].textContent.replace(//g, '').trim();
+ var dateText = cells[1].getAttribute('data-it-date') || cells[1].textContent.replace(/\s+/g, ' ').trim();
+ var activityText = cells[2].textContent.replace(/\s+/g, ' ').trim();
+ var mealsText = cells[3].textContent.replace(/\s+/g, ' ').trim();
  rows.push({
  day: idx + 1,
  date: toIsoDate(dateText),

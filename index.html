@@ -5219,6 +5219,15 @@ function getPreviewItinerarySourceData() {
  };
 }
 
+function getPreviewItinerarySourceSignature(sourceData) {
+ return JSON.stringify({
+ clientData: sourceData?.clientData || {},
+ hotels: sourceData?.hotels || [],
+ transfers: sourceData?.transfers || [],
+ tours: sourceData?.tours || []
+ });
+}
+
 async function askItineraryFlightDetails(segment) {
  const routeText = `${segment.fromCity} and ${segment.toCity}`;
  const hasFlight = window.confirm(`Is there a flight between ${routeText}?`);
@@ -6613,14 +6622,32 @@ async function printQuotation() {
  const pageHeight = pdf.internal.pageSize.getHeight();
  const margin = 6;
  const usableWidth = pageWidth - (margin * 2);
- const footerReserve = 9;
+ const footerReserve = 14;
  const usableHeight = pageHeight - (margin * 2) - footerReserve;
  const pxPerMm = canvas.width / usableWidth;
  const pageHeightPx = Math.floor(usableHeight * pxPerMm);
+ const findSafeSliceHeight = (startY, maxHeight) => {
+ const remaining = canvas.height - startY;
+ if (remaining <= maxHeight) return remaining;
+ const ctx = canvas.getContext('2d');
+ const searchStart = Math.max(80, maxHeight - 140);
+ const searchEnd = Math.max(searchStart, maxHeight - 20);
+ for (let h = searchEnd; h >= searchStart; h -= 4) {
+ const y = startY + h;
+ const sample = ctx.getImageData(0, y, canvas.width, 1).data;
+ let darkPixels = 0;
+ for (let i = 0; i < sample.length; i += 16) {
+ if (sample[i] < 245 || sample[i + 1] < 245 || sample[i + 2] < 245) darkPixels += 1;
+ if (darkPixels > canvas.width / 24) break;
+ }
+ if (darkPixels <= canvas.width / 24) return h;
+ }
+ return maxHeight;
+ };
 
  let pageIndex = 0;
- for (let offsetY = 0; offsetY < canvas.height; offsetY += pageHeightPx) {
- const sliceHeight = Math.min(pageHeightPx, canvas.height - offsetY);
+ for (let offsetY = 0; offsetY < canvas.height;) {
+ const sliceHeight = findSafeSliceHeight(offsetY, pageHeightPx);
  const pageCanvas = document.createElement('canvas');
  pageCanvas.width = canvas.width;
  pageCanvas.height = sliceHeight;
@@ -6637,6 +6664,7 @@ async function printQuotation() {
  const imgHeightMm = sliceHeight / pxPerMm;
  pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.95), 'JPEG', margin, margin, usableWidth, imgHeightMm, undefined, 'FAST');
  pageIndex += 1;
+ offsetY += sliceHeight;
  }
 
  const totalPages = pdf.getNumberOfPages();
@@ -7558,9 +7586,10 @@ setTimeout(async () => {
 
  if (window.ItineraryComponent && itineraryContainer && toggleBtn && saveBtn) {
  const sourceData = getPreviewItinerarySourceData();
+ const sourceSignature = getPreviewItinerarySourceSignature(sourceData);
  const hasSavedRows = Array.isArray(itineraryEditorState.rows) && itineraryEditorState.rows.length > 0;
 
- if (!hasSavedRows) {
+ if (!hasSavedRows || itineraryEditorState.sourceSignature !== sourceSignature) {
  const generated = await window.ItineraryComponent.generateItinerary({
  clientData: sourceData.clientData,
  flights: [],
@@ -7568,13 +7597,14 @@ setTimeout(async () => {
  tours: sourceData.tours,
  transfers: sourceData.transfers,
  existingRows: getSavedItineraryRows(),
- existingFlightSegments: itineraryEditorState.flightSegments || {},
+ flightSegments: itineraryEditorState.flightSegments || {},
  askFlightDetails: askItineraryFlightDetails,
  promptForMissingFlightOnCityChange: true
  });
  itineraryEditorState.rows = generated.rows;
  itineraryEditorState.flightSegments = generated.flightSegments || {};
  itineraryEditorState.source = 'auto';
+ itineraryEditorState.sourceSignature = sourceSignature;
  itineraryEditorState.updatedAt = new Date().toISOString();
  }
 
@@ -7593,6 +7623,7 @@ setTimeout(async () => {
  const updatedRows = window.ItineraryComponent.readEditableRows(itineraryContainer);
  itineraryEditorState.rows = updatedRows;
  itineraryEditorState.source = 'manual';
+ itineraryEditorState.sourceSignature = getPreviewItinerarySourceSignature(getPreviewItinerarySourceData());
  itineraryEditorState.updatedAt = new Date().toISOString();
  showNotification('Itinerary saved in quotation preview.', 'success');
  };
