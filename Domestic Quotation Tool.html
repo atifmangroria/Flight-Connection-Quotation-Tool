@@ -2354,12 +2354,17 @@ window.addEventListener('offline', () => updateSyncStatusDisplay());
  isValid = false;
  }
 
- if (!dateFrom.value || !dateTo.value) {
- dateFrom.classList.add('input-error');
- dateTo.classList.add('input-error');
- errorMessage += "Travel Dates are required.\n";
- isValid = false;
- }
+if (!dateFrom.value || !dateTo.value) {
+dateFrom.classList.add('input-error');
+dateTo.classList.add('input-error');
+errorMessage += "Travel Dates are required.\n";
+isValid = false;
+} else if (dateTo.value <= dateFrom.value) {
+dateFrom.classList.add('input-error');
+dateTo.classList.add('input-error');
+errorMessage += "Travel end date must be after start date.\n";
+isValid = false;
+}
 
  if (!tourDestination.value.trim()) {
  tourDestination.classList.add('input-error');

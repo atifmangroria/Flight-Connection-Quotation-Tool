@@ -12,10 +12,16 @@ service cloud.firestore {
       // Users can read their own document
       allow read: if request.auth.uid == userId;
       
-      // Users can create their own document during signup
+      // Users can create their own pending document during signup.
+      // Admin role/status must only be granted later by an existing admin.
       allow create: if request.auth.uid == userId 
         && request.resource.data.uid == userId
-        && (request.resource.data.status == 'pending' || request.resource.data.status == 'approved');
+        && request.resource.data.status == 'pending'
+        && !request.resource.data.keys().hasAny(['approvedAt', 'approvedBy'])
+        && (
+          !request.resource.data.keys().hasAny(['role'])
+          || request.resource.data.role == 'agent'
+        );
       
       // Users can update only their own document (except status/role which only admin updates)
       allow update: if request.auth.uid == userId 
@@ -51,8 +57,8 @@ service cloud.firestore {
     // ==================== AGENTS COLLECTION ====================
     // Agents Collection - User agents management
     match /agents/{agentId} {
-      // Users can read agents they own
-      allow read: if request.auth.uid == resource.data.ownerId;
+      // Users can read agents they own; admins can manage all agents.
+      allow read: if isAdmin() || request.auth.uid == resource.data.ownerId;
       
       // Approved users can create agents
       allow create: if request.auth != null 
@@ -60,10 +66,10 @@ service cloud.firestore {
         && request.resource.data.ownerId == request.auth.uid;
       
       // Users can update agents they own
-      allow update: if request.auth.uid == resource.data.ownerId;
+      allow update: if isAdmin() || request.auth.uid == resource.data.ownerId;
       
       // Users can delete agents they own
-      allow delete: if request.auth.uid == resource.data.ownerId;
+      allow delete: if isAdmin() || request.auth.uid == resource.data.ownerId;
       
       match /data/{dataId} {
         allow read, create, update, delete: if request.auth.uid == agentId || isAdmin();
@@ -113,8 +119,14 @@ service cloud.firestore {
     // Public quotation share links
     match /quotation_links/{linkId} {
       allow get: if true;
-      allow create: if request.auth != null && request.resource.data.ownerId == request.auth.uid;
-      allow update: if request.auth != null && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow create: if request.auth != null && (request.resource.data.ownerId == request.auth.uid || isAdmin());
+      allow update: if request.auth != null && (
+        isAdmin()
+        || (
+          resource.data.ownerId == request.auth.uid
+          && request.resource.data.ownerId == resource.data.ownerId
+        )
+      );
       allow delete: if request.auth != null && (resource.data.ownerId == request.auth.uid || isAdmin());
     }
 

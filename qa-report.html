@@ -1,0 +1,444 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Flight Connection Full System QA Report</title>
+  <style>
+    body { font-family: Arial, sans-serif; color: #172033; margin: 32px; }
+    h1 { font-size: 24px; margin-bottom: 4px; }
+    .meta { color: #5b667a; margin-bottom: 24px; }
+    .summary { display: flex; gap: 12px; margin-bottom: 22px; }
+    .box { border: 1px solid #d9e0ea; padding: 12px 16px; border-radius: 6px; min-width: 120px; }
+    .box strong { display: block; font-size: 22px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { border: 1px solid #d9e0ea; padding: 8px; vertical-align: top; }
+    th { background: #eef3f8; text-align: left; }
+    tr.pass td:first-child { color: #0f7a34; font-weight: 700; }
+    tr.fail td:first-child { color: #b00020; font-weight: 700; }
+    .section { margin-top: 24px; }
+    ul { margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>Flight Connection Full System QA Report</h1>
+  <div class="meta">Generated 5/28/2026, 6:56:56 AM from local browser automation at http://127.0.0.1:4173</div>
+  <div class="summary">
+    <div class="box"><strong>30</strong>Total scenarios</div>
+    <div class="box"><strong>30</strong>Passed</div>
+    <div class="box"><strong>0</strong>Failed</div>
+  </div>
+  <div class="section">
+    <h2>Scenario Results</h2>
+    <table>
+      <thead><tr><th>Status</th><th>Scenario</th><th>Tool</th><th>Pax</th><th>Calculation Pax Prices</th><th>Preview Pax Prices</th><th>Calculation Total</th><th>Preview Total</th><th>Saved Total</th><th>Notes</th></tr></thead>
+      <tbody>
+    <tr class="pass">
+      <td>PASS</td>
+      <td>International - USD currency conversion</td>
+      <td>international</td>
+      <td>A:2, CWB:1, CNB:1, INF:1</td>
+      <td>Adult x2: PKR 9,093,333<br>Child (bed) x1: PKR 8,240,833<br>Child (no bed) x1: PKR 4,262,500<br>Infant x1: PKR 2,061,500</td>
+      <td>Adult x2: PKR 9,093,333<br>Child (bed) x1: PKR 8,240,833<br>Child (no bed) x1: PKR 4,262,500<br>Infant x1: PKR 2,061,500</td>
+      <td>PKR 32,751,500</td>
+      <td>PKR 32,751,500</td>
+      <td>PKR 32,751,500</td>
+      <td>OK</td>
+    </tr>
+  
+    <tr class="pass">
+      <td>PASS</td>
+      <td>International - PKR currency direct pricing</td>
+      <td>international</td>
+      <td>A:2, CWB:1, CNB:1, INF:1</td>
+      <td>Adult x2: PKR 29,333<br>Child (bed) x1: PKR 26,583<br>Child (no bed) x1: PKR 13,750<br>Infant x1: PKR 6,650</td>
+      <td>Adult x2: PKR 29,333<br>Child (bed) x1: PKR 26,583<br>Child (no bed) x1: PKR 13,750<br>Infant x1: PKR 6,650</td>
+      <td>PKR 105,650</td>
+      <td>PKR 105,650</td>
+      <td>PKR 105,650</td>
+      <td>OK</td>
+    </tr>
+  
+    <tr class="pass">
+      <td>PASS</td>
+      <td>International - mixed service currencies</td>
+      <td>international</td>
+      <td>A:2, CWB:1, CNB:1, INF:1</td>
+      <td>Adult x2: PKR 3,994,833<br>Child (bed) x1: PKR 3,992,083<br>Child (no bed) x1: PKR 13,750<br>Infant x1: PKR 6,650</td>
+      <td>Adult x2: PKR 3,994,833<br>Child (bed) x1: PKR 3,992,083<br>Child (no bed) x1: PKR 13,750<br>Infant x1: PKR 6,650</td>
+      <td>PKR 12,002,150</td>
+      <td>PKR 12,002,150</td>
+      <td>PKR 12,002,150</td>
+      <td>OK</td>
+    </tr>
+  
+    <tr class="pass">
+      <td>PASS</td>
+      <td>International - private transfer and private tour</td>
+      <td>international</td>
+      <td>A:2, CWB:1, CNB:1, INF:1</td>
+      <td>Adult x2: PKR 38,683<br>Child (bed) x1: PKR 24,933<br>Child (no bed) x1: PKR 12,100<br>Infant x1: PKR 6,100</td>
+      <td>Adult x2: PKR 38,683<br>Child (bed) x1: PKR 24,933<br>Child (no bed) x1: PKR 12,100<br>Infant x1: PKR 6,100</td>
+      <td>PKR 120,500</td>
+      <td>PKR 120,500</td>
+      <td>PKR 120,500</td>
+      <td>OK</td>
+    </tr>
+  
+    <tr class="pass">
+      <td>PASS</td>
+      <td>International - per-person agent service charge</td>
+      <td>international</td>
+      <td>A:2, CWB:1, CNB:1, INF:1</td>
+      <td>Adult x2: PKR 27,833<br>Child (bed) x1: PKR 25,433<br>Child (no bed) x1: PKR 12,600<br>Infant x1: PKR 6,300</td>
+      <td>Adult x2: PKR 27,833<br>Child (bed) x1: PKR 25,433<br>Child (no bed) x1: PKR 12,600<br>Infant x1: PKR 6,300</td>
+      <td>PKR 100,000</td>
+      <td>PKR 100,000</td>
+      <td>PKR 100,000</td>
+      <td>OK</td>
+    </tr>
+  
+    <tr class="pass">
+      <td>PASS</td>
+      <td>International - add-ons extras</td>
+      <td>international</td>
+      <td>A:2, CWB:1, CNB:1, INF:1</td>
+      <td>Adult x2: PKR 27,133<br>Child (bed) x1: PKR 24,933<br>Child (no bed) x1: PKR 12,100<br>Infant x1: PKR 6,100</td>
+      <td>Adult x2: PKR 27,133<br>Child (bed) x1: PKR 24,933<br>Child (no bed) x1: PKR 12,100<br>Infant x1: PKR 6,100</td>
+      <td>PKR 15,772,400</td>
+      <td>PKR 15,772,400</td>
+      <td>PKR 15,772,400</td>
+      <td>OK</td>
+    </tr>
+  
+    <tr class="pass">
+      <td>PASS</td>
+      <td>International - multiple hotels</td>
+      <td>international</td>
+      <td>A:3, CWB:1, CNB:0, INF:1</td>
+      <td>Adult x3: PKR 19,250<br>Child (bed) x1: PKR 17,050<br>Infant x1: PKR 6,100</td>
+      <td>Adult x3: PKR 19,250<br>Child (bed) x1: PKR 17,050<br>Infant x1: PKR 6,100</td>
+      <td>PKR 119,400</td>
+      <td>PKR 119,400</td>
+      <td>PKR 119,400</td>
+      <td>OK</td>
+    </tr>
+  
+    <tr class="pass">
+      <td>PASS</td>
+      <td>International - multiple rooms same type with transfer and tour</td>
+      <td>international</td>
+      <td>A:4, CWB:0, CNB:0, INF:0</td>
+      <td>Adult x4: PKR 11,082,500</td>
+      <td>Adult x4: PKR 11,082,500</td>
+      <td>PKR 44,330,000</td>
+      <td>PKR 44,330,000</td>
+      <td>PKR 44,330,000</td>
+      <td>OK</td>
+    </tr>
+  
+    <tr class="pass">
+      <td>PASS</td>
+      <td>International - multiple rooms different type with transfer and tour</td>
+      <td>international</td>
+      <td>A:5, CWB:1, CNB:0, INF:0</td>
+      <td>Adult x2: PKR 11,082,500<br>Adult x3: PKR 8,993,875<br>Child (bed) x1: PKR 8,141,375</td>
+      <td>Adult x2: PKR 11,082,500<br>Adult x3: PKR 8,993,875<br>Child (bed) x1: PKR 8,141,375</td>
+      <td>PKR 57,288,000</td>
+      <td>PKR 57,288,000</td>
+      <td>PKR 57,288,000</td>
+      <td>OK</td>
+    </tr>
+  
+    <tr class="pass">
+      <td>PASS</td>
+      <td>International - mixed pax without transfer and tour</td>
+      <td>international</td>
+      <td>A:2, CWB:1, CNB:1, INF:1</td>
+      <td>Adult x2: PKR 8,411,333<br>Child (bed) x1: PKR 7,729,333<br>Child (no bed) x1: PKR 3,751,000<br>Infant x1: PKR 1,891,000</td>
+      <td>Adult x2: PKR 8,411,333<br>Child (bed) x1: PKR 7,729,333<br>Child (no bed) x1: PKR 3,751,000<br>Infant x1: PKR 1,891,000</td>
+      <td>PKR 30,194,000</td>
+      <td>PKR 30,194,000</td>
+      <td>PKR 30,194,000</td>
+      <td>OK</td>
+    </tr>
+  
+    <tr class="pass">
+      <td>PASS</td>
+      <td>International - mixed pax with transfer and tour</td>
+      <td>international</td>
+      <td>A:2, CWB:1, CNB:1, INF:1</td>
+      <td>Adult x2: PKR 9,093,333<br>Child (bed) x1: PKR 8,240,833<br>Child (no bed) x1: PKR 4,262,500<br>Infant x1: PKR 2,061,500</td>
+      <td>Adult x2: PKR 9,093,333<br>Child (bed) x1: PKR 8,240,833<br>Child (no bed) x1: PKR 4,262,500<br>Infant x1: PKR 2,061,500</td>
+      <td>PKR 32,751,500</td>
+      <td>PKR 32,751,500</td>
+      <td>PKR 32,751,500</td>
+      <td>OK</td>
+    </tr>
+  
+    <tr class="pass">
+      <td>PASS</td>
+      <td>Umrah - mixed pax with transfer</td>
+      <td>umrah</td>
+      <td>A:2, CWB:1, CNB:1, INF:1</td>
+      <td>Adult x2: PKR 1,328,983<br>Child (bed) x1: PKR 1,318,093<br>Child (no bed) x1: PKR 347,710<br>Infant x1: PKR 289,570</td>
+      <td>Adult x2: PKR 1,328,983<br>Child (bed) x1: PKR 1,318,093<br>Child (no bed) x1: PKR 347,710<br>Infant x1: PKR 289,570</td>
+      <td>PKR 4,613,340</td>
+      <td>PKR 4,613,339</td>
+      <td>PKR 4,613,340</td>
+      <td>OK</td>
+    </tr>
+  
+    <tr class="pass">
+      <td>PASS</td>
+      <td>Umrah - mixed pax without transfer</td>
+      <td>umrah</td>
+      <td>A:2, CWB:1, CNB:1, INF:1</td>
+      <td>Adult x2: PKR 1,242,083<br>Child (bed) x1: PKR 1,239,883<br>Child (no bed) x1: PKR 269,500<br>Infant x1: PKR 263,500</td>
+      <td>Adult x2: PKR 1,242,083<br>Child (bed) x1: PKR 1,239,883<br>Child (no bed) x1: PKR 269,500<br>Infant x1: PKR 263,500</td>
+      <td>PKR 4,257,050</td>
+      <td>PKR 4,257,049</td>
+      <td>PKR 4,257,050</td>
+      <td>OK</td>
+    </tr>
+  
+    <tr class="pass">
+      <td>PASS</td>
+      <td>Umrah - private transfer</td>
+      <td>umrah</td>
+      <td>A:2, CWB:1, CNB:1, INF:1</td>
+      <td>Adult x2: PKR 1,633,133<br>Child (bed) x1: PKR 1,239,883<br>Child (no bed) x1: PKR 269,500<br>Infant x1: PKR 263,500</td>
+      <td>Adult x2: PKR 1,633,133<br>Child (bed) x1: PKR 1,239,883<br>Child (no bed) x1: PKR 269,500<br>Infant x1: PKR 263,500</td>
+      <td>PKR 5,039,150</td>
+      <td>PKR 5,039,149</td>
+      <td>PKR 5,039,150</td>
+      <td>OK</td>
+    </tr>
+  
+    <tr class="pass">
+      <td>PASS</td>
+      <td>Umrah - per-person agent service charge</td>
+      <td>umrah</td>
+      <td>A:2, CWB:1, CNB:1, INF:1</td>
+      <td>Adult x2: PKR 1,242,783<br>Child (bed) x1: PKR 1,240,383<br>Child (no bed) x1: PKR 270,000<br>Infant x1: PKR 263,700</td>
+      <td>Adult x2: PKR 1,242,783<br>Child (bed) x1: PKR 1,240,383<br>Child (no bed) x1: PKR 270,000<br>Infant x1: PKR 263,700</td>
+      <td>PKR 4,259,650</td>
+      <td>PKR 4,259,649</td>
+      <td>PKR 4,259,650</td>
+      <td>OK</td>
+    </tr>
+  
+    <tr class="pass">
+      <td>PASS</td>
+      <td>Umrah - custom SAR exchange rate</td>
+      <td>umrah</td>
+      <td>A:2, CWB:1, CNB:1, INF:1</td>
+      <td>Adult x2: PKR 1,429,083<br>Child (bed) x1: PKR 1,417,533<br>Child (no bed) x1: PKR 373,450<br>Infant x1: PKR 311,350</td>
+      <td>Adult x2: PKR 1,429,083<br>Child (bed) x1: PKR 1,417,533<br>Child (no bed) x1: PKR 373,450<br>Infant x1: PKR 311,350</td>
+      <td>PKR 4,960,500</td>
+      <td>PKR 4,960,499</td>
+      <td>PKR 4,960,500</td>
+      <td>OK</td>
+    </tr>
+  
+    <tr class="pass">
+      <td>PASS</td>
+      <td>Umrah - add-ons extras</td>
+      <td>umrah</td>
+      <td>A:2, CWB:1, CNB:1, INF:1</td>
+      <td>Adult x2: PKR 1,242,083<br>Child (bed) x1: PKR 1,239,883<br>Child (no bed) x1: PKR 269,500<br>Infant x1: PKR 263,500</td>
+      <td>Adult x2: PKR 1,242,083<br>Child (bed) x1: PKR 1,239,883<br>Child (no bed) x1: PKR 269,500<br>Infant x1: PKR 263,500</td>
+      <td>PKR 4,285,846</td>
+      <td>PKR 4,285,845</td>
+      <td>PKR 4,285,846</td>
+      <td>OK</td>
+    </tr>
+  
+    <tr class="pass">
+      <td>PASS</td>
+      <td>Umrah - multiple Makkah and Madina hotels</td>
+      <td>umrah</td>
+      <td>A:2, CWB:1, CNB:1, INF:1</td>
+      <td>Adult x2: PKR 1,798,243<br>Child (bed) x1: PKR 1,787,353<br>Child (no bed) x1: PKR 347,710<br>Infant x1: PKR 289,570</td>
+      <td>Adult x2: PKR 1,798,243<br>Child (bed) x1: PKR 1,787,353<br>Child (no bed) x1: PKR 347,710<br>Infant x1: PKR 289,570</td>
+      <td>PKR 6,021,120</td>
+      <td>PKR 6,021,119</td>
+      <td>PKR 6,021,120</td>
+      <td>OK</td>
+    </tr>
+  
+    <tr class="pass">
+      <td>PASS</td>
+      <td>Domestic - mixed service currencies</td>
+      <td>domestic</td>
+      <td>A:3, CWB:1, CNB:0, INF:1</td>
+      <td>Adult x3: PKR 22,825<br>Child (bed) x1: PKR 20,075<br>Infant x1: PKR 3,350</td>
+      <td>Adult x3: PKR 22,825<br>Child (bed) x1: PKR 20,075<br>Infant x1: PKR 3,350</td>
+      <td>PKR 91,900</td>
+      <td>PKR 91,900</td>
+      <td>PKR 91,900</td>
+      <td>OK</td>
+    </tr>
+  
+    <tr class="pass">
+      <td>PASS</td>
+      <td>Domestic - private transfer and private tour</td>
+      <td>domestic</td>
+      <td>A:3, CWB:1, CNB:0, INF:1</td>
+      <td>Adult x3: PKR 28,325<br>Child (bed) x1: PKR 18,425<br>Infant x1: PKR 2,800</td>
+      <td>Adult x3: PKR 28,325<br>Child (bed) x1: PKR 18,425<br>Infant x1: PKR 2,800</td>
+      <td>PKR 106,200</td>
+      <td>PKR 106,200</td>
+      <td>PKR 106,200</td>
+      <td>OK</td>
+    </tr>
+  
+    <tr class="pass">
+      <td>PASS</td>
+      <td>Domestic - per-person agent service charge</td>
+      <td>domestic</td>
+      <td>A:3, CWB:1, CNB:0, INF:1</td>
+      <td>Adult x3: PKR 21,325<br>Child (bed) x1: PKR 18,925<br>Infant x1: PKR 3,000</td>
+      <td>Adult x3: PKR 21,325<br>Child (bed) x1: PKR 18,925<br>Infant x1: PKR 3,000</td>
+      <td>PKR 85,900</td>
+      <td>PKR 85,900</td>
+      <td>PKR 85,900</td>
+      <td>OK</td>
+    </tr>
+  
+    <tr class="pass">
+      <td>PASS</td>
+      <td>Domestic - add-ons extras</td>
+      <td>domestic</td>
+      <td>A:3, CWB:1, CNB:0, INF:1</td>
+      <td>Adult x3: PKR 20,625<br>Child (bed) x1: PKR 18,425<br>Infant x1: PKR 2,800</td>
+      <td>Adult x3: PKR 20,625<br>Child (bed) x1: PKR 18,425<br>Infant x1: PKR 2,800</td>
+      <td>PKR 167,470</td>
+      <td>PKR 167,470</td>
+      <td>PKR 167,470</td>
+      <td>OK</td>
+    </tr>
+  
+    <tr class="pass">
+      <td>PASS</td>
+      <td>Domestic - multiple hotels</td>
+      <td>domestic</td>
+      <td>A:3, CWB:1, CNB:0, INF:1</td>
+      <td>Adult x3: PKR 20,625<br>Child (bed) x1: PKR 18,425<br>Infant x1: PKR 2,800</td>
+      <td>Adult x3: PKR 20,625<br>Child (bed) x1: PKR 18,425<br>Infant x1: PKR 2,800</td>
+      <td>PKR 83,100</td>
+      <td>PKR 83,100</td>
+      <td>PKR 83,100</td>
+      <td>OK</td>
+    </tr>
+  
+    <tr class="pass">
+      <td>PASS</td>
+      <td>Domestic - family pax with transfer and tour</td>
+      <td>domestic</td>
+      <td>A:3, CWB:1, CNB:0, INF:1</td>
+      <td>Adult x3: PKR 22,825<br>Child (bed) x1: PKR 20,075<br>Infant x1: PKR 3,350</td>
+      <td>Adult x3: PKR 22,825<br>Child (bed) x1: PKR 20,075<br>Infant x1: PKR 3,350</td>
+      <td>PKR 91,900</td>
+      <td>PKR 91,900</td>
+      <td>PKR 91,900</td>
+      <td>OK</td>
+    </tr>
+  
+    <tr class="pass">
+      <td>PASS</td>
+      <td>Domestic - family pax without transfer and tour</td>
+      <td>domestic</td>
+      <td>A:3, CWB:1, CNB:0, INF:1</td>
+      <td>Adult x3: PKR 20,625<br>Child (bed) x1: PKR 18,425<br>Infant x1: PKR 2,800</td>
+      <td>Adult x3: PKR 20,625<br>Child (bed) x1: PKR 18,425<br>Infant x1: PKR 2,800</td>
+      <td>PKR 83,100</td>
+      <td>PKR 83,100</td>
+      <td>PKR 83,100</td>
+      <td>OK</td>
+    </tr>
+  
+    <tr class="pass">
+      <td>PASS</td>
+      <td>Domestic - adults only flight and hotel</td>
+      <td>domestic</td>
+      <td>A:2, CWB:0, CNB:0, INF:0</td>
+      <td>Adult x2: PKR 30,250</td>
+      <td>Adult x2: PKR 30,250</td>
+      <td>PKR 60,500</td>
+      <td>PKR 60,500</td>
+      <td>PKR 60,500</td>
+      <td>OK</td>
+    </tr>
+  
+    <tr class="pass">
+      <td>PASS</td>
+      <td>Saved quotation load, edit, recalculate, save again</td>
+      <td>workflow</td>
+      <td>A:-, CWB:-, CNB:-, INF:-</td>
+      <td>-</td>
+      <td>-</td>
+      <td>PKR 60,500</td>
+      <td>PKR 70,500</td>
+      <td>PKR 70,500</td>
+      <td>OK</td>
+    </tr>
+  
+    <tr class="pass">
+      <td>PASS</td>
+      <td>Public quotation link validation</td>
+      <td>workflow</td>
+      <td>A:-, CWB:-, CNB:-, INF:-</td>
+      <td>-</td>
+      <td>-</td>
+      <td>-</td>
+      <td>-</td>
+      <td>PKR 60,500</td>
+      <td>OK</td>
+    </tr>
+  
+    <tr class="pass">
+      <td>PASS</td>
+      <td>Voucher creation and voucher-view totals</td>
+      <td>workflow</td>
+      <td>A:-, CWB:-, CNB:-, INF:-</td>
+      <td>-</td>
+      <td>-</td>
+      <td>-</td>
+      <td>-</td>
+      <td>PKR 60,500</td>
+      <td>OK</td>
+    </tr>
+  
+    <tr class="pass">
+      <td>PASS</td>
+      <td>Validation/error cases</td>
+      <td>workflow</td>
+      <td>A:-, CWB:-, CNB:-, INF:-</td>
+      <td>-</td>
+      <td>-</td>
+      <td>-</td>
+      <td>-</td>
+      <td>-</td>
+      <td>OK</td>
+    </tr>
+  </tbody>
+    </table>
+  </div>
+  <div class="section">
+    <h2>Coverage</h2>
+    <ul>
+      <li>Multiple rooms with same room type</li>
+      <li>Multiple rooms with different room types</li>
+      <li>Different pax groups: adults, child with bed, child no bed, infants</li>
+      <li>Passenger package prices reconstructed from adult, child-with-bed, child-without-bed, and infant display lines</li>
+      <li>With-transfer/tour and without-transfer/tour scenarios</li>
+      <li>Calculation summary total compared with quotation preview total</li>
+      <li>Quotation save flow checked against saved local data</li>
+      <li>Saved quotation load/edit/recalculate/save regression</li>
+      <li>Public quotation link structure and snapshot validation</li>
+      <li>Voucher creation/publish link regression without live Firebase writes</li>
+      <li>Validation/error cases: missing reference, invalid dates, zero adults, insufficient room capacity</li>
+    </ul>
+  </div>
+</body>
+</html>

@@ -2286,7 +2286,8 @@ async function loadAllQuotations() {
 
  for (const userData of allUsersMap.values()) {
  if (!userData?.id) continue;
- const userQuotations = await loadQuotationsFromFirebase(userData);
+ const userOwnerId = userData.uid || userData.id;
+ const userQuotations = await loadQuotationsFromFirebase(userData, userOwnerId);
  const displayName = userData.fullName || userData.name || userData.email || userData.id;
  allUsersQuotations = allUsersQuotations.concat(
  (userQuotations.umrah || []).map(q => ({...q, type: 'umrah', agentId: userData.id, agentName: displayName})),
