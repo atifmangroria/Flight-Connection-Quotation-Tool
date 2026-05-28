@@ -680,15 +680,22 @@ async function renderDesktopVoucherCanvas(element, fixedWidth = 1020) {
  '#voucherContent > .agent-note',
  '#voucherContent > .card',
  '#voucherContent > .company-footer',
- '#voucherContent > div[style*="text-align:center"]'
+ '#voucherContent > div[style*="text-align:center"]',
+ 'table',
+ 'tr',
+ 'li',
+ 'p'
  ];
  const breakPoints = new Set();
  breakSelectors.forEach((selector) => {
  clone.querySelectorAll(selector).forEach((node) => {
  const top = node.offsetTop;
- if (top > 0 && top < clone.scrollHeight - 20) {
- breakPoints.add(Math.round(top * Math.min(4, Math.max(2, window.devicePixelRatio || 2))));
+ const bottom = top + node.offsetHeight;
+ [top, bottom].forEach((point) => {
+ if (point > 0 && point < clone.scrollHeight - 20) {
+ breakPoints.add(Math.round(point * Math.min(4, Math.max(2, window.devicePixelRatio || 2))));
  }
+ });
  });
  });
 
@@ -743,8 +750,10 @@ async function downloadPDF() {
  let pages = 0;
  for (let y = 0; y < cH;) {
  const naturalEnd = Math.min(y + pageH, cH);
- const minBreak = y + Math.max(180, Math.round(pageH * 0.58));
- const breakPoint = breakPoints.filter((point) => point >= minBreak && point < naturalEnd).pop();
+ const minBreak = y + Math.max(180, Math.round(pageH * 0.35));
+ const maxBreak = naturalEnd - Math.round(18 * pxPerMm);
+ const breakPoint = breakPoints.filter((point) => point >= minBreak && point <= maxBreak).pop()
+ || breakPoints.filter((point) => point >= y + Math.round(45 * pxPerMm) && point <= maxBreak).pop();
  const h = Math.max(1, Math.min((breakPoint || naturalEnd) - y, cH - y));
  const pg = document.createElement('canvas');
  pg.width = cW;

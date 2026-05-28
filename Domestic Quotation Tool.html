@@ -6860,6 +6860,19 @@ async function printQuotation() {
  height: renderHost.scrollHeight
  });
 
+ const canvasScale = canvas.width / renderHost.scrollWidth;
+ const hostRect = renderHost.getBoundingClientRect();
+ const safeBreakPoints = Array.from(renderHost.querySelectorAll('.compact-quotation > div, #itinerarySectionWrapper, table, tr, li, p'))
+ .flatMap((el) => {
+ const rect = el.getBoundingClientRect();
+ return [
+ Math.round((rect.top - hostRect.top) * canvasScale),
+ Math.round((rect.bottom - hostRect.top) * canvasScale)
+ ];
+ })
+ .filter((value) => Number.isFinite(value) && value > 0 && value < canvas.height)
+ .sort((a, b) => a - b);
+
  document.body.removeChild(renderHost);
 
  const { jsPDF } = window.jspdf;
@@ -6875,6 +6888,20 @@ async function printQuotation() {
  const findSafeSliceHeight = (startY, maxHeight) => {
  const remaining = canvas.height - startY;
  if (remaining <= maxHeight) return remaining;
+ const minHeight = Math.floor(maxHeight * 0.35);
+ const maxSafe = maxHeight - Math.floor(18 * pxPerMm);
+ for (let i = safeBreakPoints.length - 1; i >= 0; i -= 1) {
+ const relativeBreak = safeBreakPoints[i] - startY;
+ if (relativeBreak >= minHeight && relativeBreak <= maxSafe) {
+ return relativeBreak;
+ }
+ }
+ for (let i = safeBreakPoints.length - 1; i >= 0; i -= 1) {
+ const relativeBreak = safeBreakPoints[i] - startY;
+ if (relativeBreak >= Math.floor(45 * pxPerMm) && relativeBreak <= maxSafe) {
+ return relativeBreak;
+ }
+ }
  const ctx = canvas.getContext('2d');
  const searchStart = Math.max(80, maxHeight - 140);
  const searchEnd = Math.max(searchStart, maxHeight - 20);

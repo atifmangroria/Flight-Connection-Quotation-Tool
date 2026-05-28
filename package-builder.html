@@ -2086,7 +2086,7 @@ async function generatePDF() {
  const fmtPKR = (n) => `PKR ${Math.round(toNumber(n)).toLocaleString('en-PK')}`;
 
  const ensureSpace = (h = 8) => {
- if (y + h > pageHeight - 14) {
+ if (y + h > pageHeight - 24) {
  pdf.addPage();
  y = 14;
  }
