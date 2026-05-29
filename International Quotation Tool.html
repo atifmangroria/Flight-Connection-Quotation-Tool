@@ -49,7 +49,7 @@
  async getData(collection_name, docId) {
  try {
  const snapshot = await getDoc(doc(db, collection_name, docId));
- return snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null;
+ return snapshot.exists() ? { ...snapshot.data(), id: snapshot.id } : null;
  } catch (error) {
  console.error(`Error getting data from ${collection_name}:`, error);
  return null;
@@ -59,7 +59,7 @@
  async getAll(collection_name) {
  try {
  const snapshot = await getDocs(collection(db, collection_name));
- return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+ return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
  } catch (error) {
  console.error(`Error getting all from ${collection_name}:`, error);
  return [];

@@ -76,7 +76,7 @@
  try {
  console.log('Attempting to get all from Firebase:', collection_name); // Added logging
  const snapshot = await getDocs(collection(db, collection_name));
- const result = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+ const result = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
  console.log('Successfully retrieved all from Firebase:', collection_name, result); // Added logging
  return result;
  } catch (error) {
@@ -1385,6 +1385,7 @@ document.getElementById('packageForm').addEventListener('submit', async function
  let savedPackageId = currentPackageId;
  if (currentPackageId) {
  // Update existing package
+ packageData.id = currentPackageId;
  packageData.updatedAt = new Date().toISOString();
  success = await window.firebaseDB.saveData('packages', currentPackageId, packageData);
  if (success) {
@@ -1396,6 +1397,7 @@ document.getElementById('packageForm').addEventListener('submit', async function
  packageData.createdBy = packageAgent.id;
  packageData.createdByName = packageData.agentName;
  const packageId = packageData.name.replace(/\s+/g, '_').toLowerCase();
+ packageData.id = packageId;
  success = await window.firebaseDB.saveData('packages', packageId, packageData);
  if (success) {
  savedPackageId = packageId;
