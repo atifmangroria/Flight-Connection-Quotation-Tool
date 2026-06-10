@@ -4592,7 +4592,7 @@ function saveOwnerQuotationsToFirebase(ownerDocId, allQuotations, errorLabel = '
  syncUmrahQuotationLinks(ownerDocId, ownerQuotations);
  return Promise.resolve(false);
  }
- return window.firebaseDB.saveData('umrah_quotations', ownerDocId, {
+ const payload = {
  quotations: ownerQuotations,
  updatedAt: new Date(),
  agentId: ownerDocId,
@@ -4600,12 +4600,19 @@ function saveOwnerQuotationsToFirebase(ownerDocId, allQuotations, errorLabel = '
  agentName: ownerMetadata.agentName || '',
  agentPhone: ownerMetadata.agentPhone || '',
  ownerLabel: ownerMetadata.ownerLabel || ownerDocId
- }).then((ok) => {
+ };
+ if (!shouldSendOwnerSyncPayload('umrah_quotations', ownerDocId, payload)) {
+ updateLocalUmrahSyncStatus(ownerDocId, 'synced');
+ syncUmrahQuotationLinks(ownerDocId, ownerQuotations);
+ return Promise.resolve(true);
+ }
+ return window.firebaseDB.saveData('umrah_quotations', ownerDocId, payload).then((ok) => {
  if (ok === false) {
  updateLocalUmrahSyncStatus(ownerDocId, 'pending', 'Cloud sync failed');
  syncUmrahQuotationLinks(ownerDocId, ownerQuotations);
  return false;
  }
+ recordOwnerSyncPayloadHash('umrah_quotations', ownerDocId, payload);
  updateLocalUmrahSyncStatus(ownerDocId, 'synced');
  syncUmrahQuotationLinks(ownerDocId, ownerQuotations);
  return true;
@@ -4632,13 +4639,86 @@ function retryPendingUmrahQuotationSync(agent = getCurrentAgent()) {
  const ownerIds = new Set();
  pendingRows.forEach(q => getQuotationOwnerIds(q, agent).forEach(id => ownerIds.add(id)));
  ownerIds.forEach(ownerDocId => {
+ if (!shouldRetryOwnerSync(ownerDocId)) return;
+ recordOwnerSyncRetry(ownerDocId);
  saveOwnerQuotationsToFirebase(ownerDocId, rows, 'Pending Firebase sync error');
  });
 }
 
+const OWNER_SYNC_RETRY_KEY = 'quotationOwnerSyncRetryTimestamps';
+const OWNER_SYNC_PAYLOAD_HASH_KEY = 'quotationOwnerSyncPayloadHashes';
+const OWNER_SYNC_RETRY_WINDOW_MS = 5 * 60 * 1000;
 const PENDING_FIREBASE_WRITES_KEY = 'pendingFirebaseWrites';
 const PENDING_FIREBASE_QUEUE_WARN_BYTES = 3 * 1024 * 1024;
 const PENDING_FIREBASE_QUEUE_WARN_COUNT = 50;
+
+function stableStringifyObject(value) {
+ if (value === null || typeof value !== 'object') {
+ return JSON.stringify(value);
+ }
+ if (value instanceof Date) {
+ return JSON.stringify(value.toISOString());
+ }
+ if (Array.isArray(value)) {
+ return '[' + value.map(stableStringifyObject).join(',') + ']';
+ }
+ const keys = Object.keys(value).sort();
+ return '{' + keys.map(key => JSON.stringify(key) + ':' + stableStringifyObject(value[key])).join(',') + '}';
+}
+
+function getOwnerSyncRetryTimestamps() {
+ try {
+ return JSON.parse(localStorage.getItem(OWNER_SYNC_RETRY_KEY) || '{}');
+ } catch (error) {
+ return {};
+ }
+}
+
+function setOwnerSyncRetryTimestamps(data) {
+ localStorage.setItem(OWNER_SYNC_RETRY_KEY, JSON.stringify(data || {}));
+}
+
+function shouldRetryOwnerSync(ownerDocId) {
+ if (!ownerDocId) return false;
+ const timestamps = getOwnerSyncRetryTimestamps();
+ const lastAttempt = Number(timestamps[ownerDocId] || 0);
+ return Date.now() - lastAttempt >= OWNER_SYNC_RETRY_WINDOW_MS;
+}
+
+function recordOwnerSyncRetry(ownerDocId) {
+ if (!ownerDocId) return;
+ const timestamps = getOwnerSyncRetryTimestamps();
+ timestamps[ownerDocId] = Date.now();
+ setOwnerSyncRetryTimestamps(timestamps);
+}
+
+function getOwnerSyncPayloadHashes() {
+ try {
+ return JSON.parse(localStorage.getItem(OWNER_SYNC_PAYLOAD_HASH_KEY) || '{}');
+ } catch (error) {
+ return {};
+ }
+}
+
+function setOwnerSyncPayloadHashes(data) {
+ localStorage.setItem(OWNER_SYNC_PAYLOAD_HASH_KEY, JSON.stringify(data || {}));
+}
+
+function shouldSendOwnerSyncPayload(collectionName, ownerDocId, payload) {
+ if (!collectionName || !ownerDocId || !payload) return true;
+ const hashes = getOwnerSyncPayloadHashes();
+ const key = `${collectionName}/${ownerDocId}`;
+ const payloadHash = stableStringifyObject({ ...payload, updatedAt: null });
+ return hashes[key] !== payloadHash;
+}
+
+function recordOwnerSyncPayloadHash(collectionName, ownerDocId, payload) {
+ if (!collectionName || !ownerDocId || !payload) return;
+ const hashes = getOwnerSyncPayloadHashes();
+ const key = `${collectionName}/${ownerDocId}`;
+ hashes[key] = stableStringifyObject({ ...payload, updatedAt: null });
+ setOwnerSyncPayloadHashes(hashes);
+}
 
 function getPendingFirebaseWrites() {
  try {
