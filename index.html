@@ -4704,6 +4704,36 @@ function setOwnerSyncPayloadHashes(data) {
  localStorage.setItem(OWNER_SYNC_PAYLOAD_HASH_KEY, JSON.stringify(data || {}));
 }
 
+const QUOTATION_LINK_PAYLOAD_HASH_KEY = 'quotationLinkPayloadHashes';
+
+function getQuotationLinkPayloadHashes() {
+ try {
+ return JSON.parse(localStorage.getItem(QUOTATION_LINK_PAYLOAD_HASH_KEY) || '{}');
+ } catch (error) {
+ return {};
+ }
+}
+
+function setQuotationLinkPayloadHashes(data) {
+ localStorage.setItem(QUOTATION_LINK_PAYLOAD_HASH_KEY, JSON.stringify(data || {}));
+}
+
+function shouldSendQuotationLinkPayload(collectionName, docId, payload) {
+ if (collectionName !== 'quotation_links' || !docId || !payload) return true;
+ const hashes = getQuotationLinkPayloadHashes();
+ const key = `${collectionName}/${docId}`;
+ const payloadHash = stableStringifyObject(payload);
+ return hashes[key] !== payloadHash;
+}
+
+function recordQuotationLinkPayloadHash(collectionName, docId, payload) {
+ if (collectionName !== 'quotation_links' || !docId || !payload) return;
+ const hashes = getQuotationLinkPayloadHashes();
+ const key = `${collectionName}/${docId}`;
+ hashes[key] = stableStringifyObject(payload);
+ setQuotationLinkPayloadHashes(hashes);
+}
+
 function shouldSendOwnerSyncPayload(collectionName, ownerDocId, payload) {
  if (!collectionName || !ownerDocId || !payload) return true;
  const hashes = getOwnerSyncPayloadHashes();
@@ -4788,6 +4818,9 @@ async function flushPendingFirebaseWrites() {
 
 async function saveFirebaseDataWithRetry(collectionName, docId, data, errorLabel = 'Firebase save error') {
  if (!collectionName || !docId) return false;
+ if (collectionName === 'quotation_links' && !shouldSendQuotationLinkPayload(collectionName, docId, data)) {
+ return true;
+ }
  if (!window.firebaseDB) {
  queueFirebaseWrite(collectionName, docId, data);
  return false;
@@ -4797,6 +4830,9 @@ async function saveFirebaseDataWithRetry(collectionName, docId, data, errorLabel
  if (ok === false) {
  queueFirebaseWrite(collectionName, docId, data);
  return false;
+ }
+ if (collectionName === 'quotation_links') {
+ recordQuotationLinkPayloadHash(collectionName, docId, data);
  }
  return true;
  } catch (error) {

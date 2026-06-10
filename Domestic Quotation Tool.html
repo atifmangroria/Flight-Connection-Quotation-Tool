@@ -1798,15 +1798,45 @@ window.addEventListener('offline', () => updateSyncStatusDisplay());
  localStorage.setItem(OWNER_SYNC_PAYLOAD_HASH_KEY, JSON.stringify(data || {}));
  }
 
- function shouldSendOwnerSyncPayload(collectionName, ownerDocId, payload) {
+const QUOTATION_LINK_PAYLOAD_HASH_KEY = 'quotationLinkPayloadHashes';
+
+function getQuotationLinkPayloadHashes() {
+ try {
+ return JSON.parse(localStorage.getItem(QUOTATION_LINK_PAYLOAD_HASH_KEY) || '{}');
+ } catch (error) {
+ return {};
+ }
+}
+
+function setQuotationLinkPayloadHashes(data) {
+ localStorage.setItem(QUOTATION_LINK_PAYLOAD_HASH_KEY, JSON.stringify(data || {}));
+}
+
+function shouldSendQuotationLinkPayload(collectionName, docId, payload) {
+ if (collectionName !== 'quotation_links' || !docId || !payload) return true;
+ const hashes = getQuotationLinkPayloadHashes();
+ const key = `${collectionName}/${docId}`;
+ const payloadHash = stableStringifyObject(payload);
+ return hashes[key] !== payloadHash;
+}
+
+function recordQuotationLinkPayloadHash(collectionName, docId, payload) {
+ if (collectionName !== 'quotation_links' || !docId || !payload) return;
+ const hashes = getQuotationLinkPayloadHashes();
+ const key = `${collectionName}/${docId}`;
+ hashes[key] = stableStringifyObject(payload);
+ setQuotationLinkPayloadHashes(hashes);
+}
+
+function shouldSendOwnerSyncPayload(collectionName, ownerDocId, payload) {
  if (!collectionName || !ownerDocId || !payload) return true;
  const hashes = getOwnerSyncPayloadHashes();
  const key = `${collectionName}/${ownerDocId}`;
  const payloadHash = stableStringifyObject({ ...payload, updatedAt: null });
  return hashes[key] !== payloadHash;
- }
+}
 
- function recordOwnerSyncPayloadHash(collectionName, ownerDocId, payload) {
+function recordOwnerSyncPayloadHash(collectionName, ownerDocId, payload) {
  if (!collectionName || !ownerDocId || !payload) return;
  const hashes = getOwnerSyncPayloadHashes();
  const key = `${collectionName}/${ownerDocId}`;
@@ -1876,6 +1906,9 @@ window.addEventListener('offline', () => updateSyncStatusDisplay());
 
  async function saveFirebaseDataWithRetry(collectionName, docId, data, errorLabel = 'Firebase save error') {
  if (!collectionName || !docId) return false;
+ if (collectionName === 'quotation_links' && !shouldSendQuotationLinkPayload(collectionName, docId, data)) {
+ return true;
+ }
  if (!window.firebaseDB) {
  queueFirebaseWrite(collectionName, docId, data);
  return false;
@@ -1885,6 +1918,9 @@ window.addEventListener('offline', () => updateSyncStatusDisplay());
  if (ok === false) {
  queueFirebaseWrite(collectionName, docId, data);
  return false;
+ }
+ if (collectionName === 'quotation_links') {
+ recordQuotationLinkPayloadHash(collectionName, docId, data);
  }
  return true;
  } catch (error) {

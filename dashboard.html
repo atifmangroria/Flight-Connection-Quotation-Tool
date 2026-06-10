@@ -577,6 +577,7 @@
  <div class="filters-actions">
  <button onclick="applyFilter()">Apply</button>
  <button onclick="resetFilter()">Reset</button>
+ <button onclick="pushLocalQuotationsToFirebase()">Manual Sync</button>
  </div>
  </div>
  </div>
@@ -1574,6 +1575,30 @@ function saveLocalQuotationsSnapshot(umrahQuotations, internationalQuotations, d
  }
  if (Array.isArray(domesticQuotations)) {
  localStorage.setItem('savedQuotations_domestic', JSON.stringify(domesticQuotations));
+ }
+}
+
+async function pushLocalQuotationsToFirebase() {
+ const agent = checkAgentLogin();
+ if (!agent) return;
+ const localData = getLocalQuotationsSnapshot();
+ const totalLocal = (Array.isArray(localData.umrah) ? localData.umrah.length : 0)
+ + (Array.isArray(localData.international) ? localData.international.length : 0)
+ + (Array.isArray(localData.domestic) ? localData.domestic.length : 0);
+ if (!totalLocal) {
+ showNotification('No local quotations found to sync.', 'info');
+ return;
+ }
+ if (!isFirebaseAvailableForDashboard()) {
+ showNotification('Firebase is not available. Please login and ensure internet connection.', 'warning');
+ return;
+ }
+ showNotification('Starting manual Firebase sync...', 'info');
+ const success = await saveQuotationsToFirebase(agent, localData.umrah, localData.international, localData.domestic);
+ if (success) {
+ showNotification('Manual sync completed. Local quotations were pushed to Firebase.', 'success');
+ } else {
+ showNotification('Manual sync failed. Check your network and try again.', 'error');
  }
 }
 
