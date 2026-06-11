@@ -1613,12 +1613,25 @@ function getQuotationCollectionName(quotationType) {
 function normalizeQuotationOwnerFields(quotation, ownerId) {
  if (!quotation || typeof quotation !== 'object') return quotation;
  const normalizedAgentId = quotation.agentId || quotation.ownerId || quotation.userId || ownerId;
- return {
+ const normalized = {
  ...quotation,
  ownerId: quotation.ownerId || quotation.userId || normalizedAgentId || ownerId,
  agentId: normalizedAgentId || ownerId,
  userId: quotation.userId || normalizedAgentId || ownerId
  };
+
+ // Legacy transferred quotes may still have deleted=true from earlier code versions.
+ // Preserve them when they are now stored under the correct target owner.
+ if (normalized.deleted === true
+ && normalized.transferredTo
+ && String(normalized.transferredTo) === String(ownerId)
+ && String(normalized.ownerId) === String(ownerId)
+ && String(normalized.agentId) === String(ownerId)
+ && normalized.transferredAt) {
+ normalized.deleted = false;
+ }
+
+ return normalized;
 }
 
 async function retryTransaction(operation, maxAttempts = 3) {
