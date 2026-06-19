@@ -1432,7 +1432,8 @@ function clearSessionStorageKeys() {
  localStorage.removeItem("agentLoggedIn");
  localStorage.removeItem("loginTime");
  localStorage.removeItem("sessionExpiresAt");
- localStorage.removeItem("selectedQuotationId");
+ sessionStorage.removeItem("selectedQuotationId");
+ sessionStorage.removeItem("selectedQuotationOwnerId");
 }
 
 function showDashboardLoginRequired(message) {
@@ -1566,16 +1567,85 @@ function getLocalQuotationsSnapshot() {
  };
 }
 
+const LOCAL_QUOTATIONS_CACHE_MAX_CHARS = 2500000;
+const LOCAL_QUOTATIONS_CACHE_MAX_CHARS_PER_COLLECTION = 900000;
+
+function getQuotationSnapshotTimestamp(quotation) {
+ const timestamp = new Date(quotation?.updatedAt || quotation?.createdAt || 0).getTime();
+ return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function sortQuotationsByRecency(quotations) {
+ return [...quotations].sort((left, right) => getQuotationSnapshotTimestamp(right) - getQuotationSnapshotTimestamp(left));
+}
+
+function trimQuotationsToSizeBudget(quotations, maxChars) {
+ if (!Array.isArray(quotations) || quotations.length === 0) return [];
+
+ const sorted = sortQuotationsByRecency(quotations);
+ let low = 1;
+ let high = sorted.length;
+ let best = [];
+
+ while (low <= high) {
+  const middle = Math.floor((low + high) / 2);
+  const candidate = sorted.slice(0, middle);
+  const serializedLength = JSON.stringify(candidate).length;
+
+  if (serializedLength <= maxChars) {
+   best = candidate;
+   low = middle + 1;
+  } else {
+   high = middle - 1;
+  }
+ }
+
+ if (best.length) return best;
+
+ const firstItem = sorted.slice(0, 1);
+ return JSON.stringify(firstItem).length <= maxChars ? firstItem : [];
+}
+
+function prepareQuotationSnapshotsForStorage(umrahQuotations, internationalQuotations, domesticQuotations) {
+ const prepared = {
+  umrah: Array.isArray(umrahQuotations) ? [...umrahQuotations] : [],
+  international: Array.isArray(internationalQuotations) ? [...internationalQuotations] : [],
+  domestic: Array.isArray(domesticQuotations) ? [...domesticQuotations] : []
+ };
+
+ const totalSerializedLength = JSON.stringify(prepared.umrah).length
+ + JSON.stringify(prepared.international).length
+ + JSON.stringify(prepared.domestic).length;
+
+ if (totalSerializedLength <= LOCAL_QUOTATIONS_CACHE_MAX_CHARS) {
+  return prepared;
+ }
+
+ return {
+  umrah: trimQuotationsToSizeBudget(prepared.umrah, LOCAL_QUOTATIONS_CACHE_MAX_CHARS_PER_COLLECTION),
+  international: trimQuotationsToSizeBudget(prepared.international, LOCAL_QUOTATIONS_CACHE_MAX_CHARS_PER_COLLECTION),
+  domestic: trimQuotationsToSizeBudget(prepared.domestic, LOCAL_QUOTATIONS_CACHE_MAX_CHARS_PER_COLLECTION)
+ };
+}
+
+function saveLocalQuotationsSnapshotKey(storageKey, quotations) {
+ if (!Array.isArray(quotations)) return true;
+
+ try {
+  localStorage.setItem(storageKey, JSON.stringify(quotations));
+  return true;
+ } catch (error) {
+  const isQuotaError = error && (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED');
+  console.warn(`Unable to persist ${storageKey} to localStorage${isQuotaError ? ' because the quota was exceeded' : ''}.`, error);
+  return false;
+ }
+}
+
 function saveLocalQuotationsSnapshot(umrahQuotations, internationalQuotations, domesticQuotations) {
- if (Array.isArray(umrahQuotations)) {
- localStorage.setItem('savedQuotations', JSON.stringify(umrahQuotations));
- }
- if (Array.isArray(internationalQuotations)) {
- localStorage.setItem('savedQuotations_international', JSON.stringify(internationalQuotations));
- }
- if (Array.isArray(domesticQuotations)) {
- localStorage.setItem('savedQuotations_domestic', JSON.stringify(domesticQuotations));
- }
+ const cachedSnapshots = prepareQuotationSnapshotsForStorage(umrahQuotations, internationalQuotations, domesticQuotations);
+ saveLocalQuotationsSnapshotKey('savedQuotations', cachedSnapshots.umrah);
+ saveLocalQuotationsSnapshotKey('savedQuotations_international', cachedSnapshots.international);
+ saveLocalQuotationsSnapshotKey('savedQuotations_domestic', cachedSnapshots.domestic);
 }
 
 async function pushLocalQuotationsToFirebase() {
@@ -2229,20 +2299,20 @@ function closeQuotationTypeModal() {
 // Create Umrah quotation
 function createUmrahQuotation() {
  closeQuotationTypeModal();
- localStorage.removeItem('selectedQuotationId');
+ sessionStorage.removeItem('selectedQuotationId');
  window.open('index.html', '_blank');
 }
 
 // Create International quotation
 function createInternationalQuotation() {
  closeQuotationTypeModal();
- localStorage.removeItem('selectedQuotationId');
+ sessionStorage.removeItem('selectedQuotationId');
  window.open('International Quotation Tool.html', '_blank');
 }
 
 function createDomesticQuotation() {
  closeQuotationTypeModal();
- localStorage.removeItem('selectedQuotationId');
+ sessionStorage.removeItem('selectedQuotationId');
  window.open('Domestic Quotation Tool.html', '_blank');
 }
 
@@ -3081,11 +3151,11 @@ async function updateStatusFromTable(quotationId, quotationType, newStatus) {
 }
 
 function viewQuotation(quotationId, quotationType) {
- localStorage.setItem('selectedQuotationId', quotationId);
+ sessionStorage.setItem('selectedQuotationId', quotationId);
  const agent = checkAgentLogin();
  const ownerId = findQuotationOwnerId(quotationId, quotationType) || getOwnerId(agent);
  if (ownerId) {
- localStorage.setItem('selectedQuotationOwnerId', ownerId);
+ sessionStorage.setItem('selectedQuotationOwnerId', ownerId);
  }
  const ownerQuery = ownerId ? `&owner=${encodeURIComponent(ownerId)}` : '';
  
@@ -3099,11 +3169,11 @@ function viewQuotation(quotationId, quotationType) {
 }
 
 function editQuotation(quotationId, quotationType) {
- localStorage.setItem('selectedQuotationId', quotationId);
+ sessionStorage.setItem('selectedQuotationId', quotationId);
  const agent = checkAgentLogin();
  const ownerId = findQuotationOwnerId(quotationId, quotationType) || getOwnerId(agent);
  if (ownerId) {
- localStorage.setItem('selectedQuotationOwnerId', ownerId);
+ sessionStorage.setItem('selectedQuotationOwnerId', ownerId);
  }
  const ownerQuery = ownerId ? `&owner=${encodeURIComponent(ownerId)}` : '';
  

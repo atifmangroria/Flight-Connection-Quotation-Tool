@@ -1010,7 +1010,7 @@ async function loadQuotationRecord(id, ownerId) {
 
 async function init() {
  quotationId = getUrlParam('quotationId');
- const ownerId = getUrlParam('owner') || localStorage.getItem('selectedQuotationOwnerId') || '';
+ const ownerId = getUrlParam('owner') || sessionStorage.getItem('selectedQuotationOwnerId') || '';
  if (!quotationId) {
  document.getElementById('pageSubtitle').textContent = 'Error: No quotation ID in URL';
  return;

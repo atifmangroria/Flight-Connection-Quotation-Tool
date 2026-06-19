@@ -553,7 +553,7 @@ function openQuotationByType(type, quotationId) {
  if (t === 'international') url = 'International Quotation Tool.html?edit=' + encodeURIComponent(quotationId);
  if (t === 'domestic') url = 'Domestic Quotation Tool.html?edit=' + encodeURIComponent(quotationId);
  if (!url) return false;
- localStorage.setItem('selectedQuotationId', quotationId);
+ sessionStorage.setItem('selectedQuotationId', quotationId);
  window.open(url, '_blank');
  return true;
 }

@@ -391,7 +391,7 @@ function openQuotationView(voucherId) {
  const item = filteredVouchers.find(v => v.id === voucherId);
  if (!item) return;
  if (item.ownerId) {
- localStorage.setItem('selectedQuotationOwnerId', item.ownerId);
+ sessionStorage.setItem('selectedQuotationOwnerId', item.ownerId);
  }
  window.open(getQuotationViewUrl(item), '_blank');
 }

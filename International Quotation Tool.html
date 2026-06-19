@@ -2732,7 +2732,7 @@ function recordOwnerSyncPayloadHash(collectionName, ownerDocId, payload) {
  if (t === 'international') url = 'International Quotation Tool.html?edit=' + encodeURIComponent(quotationId);
  if (t === 'domestic') url = 'Domestic Quotation Tool.html?edit=' + encodeURIComponent(quotationId);
  if (!url) return;
- localStorage.setItem('selectedQuotationId', quotationId);
+ sessionStorage.setItem('selectedQuotationId', quotationId);
  window.open(url, '_blank');
  }
 
@@ -3269,7 +3269,7 @@ isValid = false;
  function checkDateChanges() {
  const newDates = { dateFrom: dateFrom.value, dateTo: dateTo.value };
  if (newDates.dateFrom !== lastSavedDates.dateFrom || newDates.dateTo !== lastSavedDates.dateTo) {
- const dateChangeMsg = "Travel dates have been modified. Updating sections accordingly.";
+ const dateChangeMsg = "Travel dates have been modified. Updating hotel, transfer, and tour sections accordingly.";
  showNotification(dateChangeMsg, 'info', 5000);
  updateHotelDates();
  lastSavedDates = newDates;
@@ -3890,11 +3890,18 @@ function removeHotel(index){
 // Update all hotel date ranges
 function updateHotelDates() {
  const clientData = getClientData();
+ const minDate = formatDate(clientData.dateFromObj);
+ const maxDate = formatDate(clientData.dateToObj);
  hotels.forEach(index => {
  const chkIn = document.getElementById(`hotelCheckIn_${index}`);
  const chkOut = document.getElementById(`hotelCheckOut_${index}`);
- if (chkIn) chkIn.setAttribute('min', formatDate(clientData.dateFromObj));
- if (chkOut) chkOut.setAttribute('max', formatDate(clientData.dateToObj));
+ if (chkIn) chkIn.setAttribute('min', minDate);
+ if (chkOut) chkOut.setAttribute('max', maxDate);
+ });
+
+ document.querySelectorAll('input[id^="tDate_"], input[id^="tReturnDate_"], input[id^="tourDate_"], input[id^="tourAddonDate_"]').forEach(input => {
+ input.setAttribute('min', minDate);
+ input.setAttribute('max', maxDate);
  });
 }
 
@@ -9699,18 +9706,18 @@ function handleUrlParameters() {
  const viewId = urlParams.get('view');
  const editId = urlParams.get('edit');
  const ownerIdFromUrl = urlParams.get('owner');
- const selectedId = localStorage.getItem('selectedQuotationId');
- const selectedOwnerId = ownerIdFromUrl || localStorage.getItem('selectedQuotationOwnerId');
+ const selectedId = sessionStorage.getItem('selectedQuotationId');
+ const selectedOwnerId = ownerIdFromUrl || sessionStorage.getItem('selectedQuotationOwnerId');
 
  if (ownerIdFromUrl) {
- localStorage.setItem('selectedQuotationOwnerId', ownerIdFromUrl);
+ sessionStorage.setItem('selectedQuotationOwnerId', ownerIdFromUrl);
  }
  
  // Use URL parameter first, then localStorage
  const quotationIdToLoad = viewId || editId || selectedId;
 
  if (!quotationIdToLoad) {
- localStorage.removeItem('selectedQuotationOwnerId');
+ sessionStorage.removeItem('selectedQuotationOwnerId');
  return;
  }
  
