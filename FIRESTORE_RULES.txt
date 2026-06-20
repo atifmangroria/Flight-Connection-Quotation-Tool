@@ -13,15 +13,22 @@ service cloud.firestore {
       allow read: if request.auth.uid == userId;
       
       // Users can create their own pending document during signup.
-      // Admin role/status must only be granted later by an existing admin.
-      allow create: if request.auth.uid == userId 
+      // Admins can also create approved user profiles directly from the admin console.
+      allow create: if (
+        request.auth.uid == userId 
         && request.resource.data.uid == userId
         && request.resource.data.status == 'pending'
         && !request.resource.data.keys().hasAny(['approvedAt', 'approvedBy'])
         && (
           !request.resource.data.keys().hasAny(['role'])
           || request.resource.data.role == 'agent'
-        );
+        )
+      ) || (
+        isAdmin()
+        && request.resource.data.uid == userId
+        && request.resource.data.status == 'approved'
+        && request.resource.data.approvedBy == request.auth.uid
+      );
       
       // Users can update only their own document (except status/role which only admin updates)
       allow update: if request.auth.uid == userId 
