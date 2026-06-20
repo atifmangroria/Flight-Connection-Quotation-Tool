@@ -103,6 +103,11 @@ button{padding:10px 18px;border:none;border-radius:6px;cursor:pointer;font-size:
 .qr-area{text-align:center;padding:10px}
 .qr-area .qr-box{display:inline-block;padding:8px;background:#fff;border:1px solid #dde8f6;border-radius:8px}
 .qr-area p{font-size:16px;color:var(--muted);margin-top:8px}
+.brand-footer{display:flex;align-items:center;gap:12px;padding:12px 0 2px;margin-top:6px;border-top:1px solid #e8f0fb}
+.brand-footer-logo{height:36px;flex:0 0 auto}
+.brand-footer-text{display:flex;flex-direction:column;gap:2px}
+.brand-footer-name{font-weight:700;color:var(--accent);font-size:15px;line-height:1.2}
+.brand-footer-meta{font-size:12px;color:var(--muted);line-height:1.35}
 .company-footer{text-align:center;padding:16px;color:var(--muted);font-size:16px;border-top:1px solid #e8f0fb;margin-top:14px}
 @media(max-width:600px){.grid{grid-template-columns:1fr}.grid-3{grid-template-columns:1fr}.header-card{flex-direction:column}.header-card .meta{text-align:left}}
 @media (max-width: 960px) {
@@ -182,7 +187,7 @@ button{padding:10px 18px;border:none;border-radius:6px;cursor:pointer;font-size:
  <div class="agent-note-text" id="agentNoteText"></div>
  </div>
 
- <div class="card">
+ <div class="card" id="clientInfoCard">
  <h3> Traveller Information</h3>
  <div class="grid">
  <div class="field"><div class="field-label">Client Name</div><div class="field-value" id="cdName"></div></div>
@@ -251,7 +256,7 @@ button{padding:10px 18px;border:none;border-radius:6px;cursor:pointer;font-size:
  <div id="voucherItineraryTable" style="display:none;margin-top:10px;"></div>
  </div>
 
- <div class="card">
+ <div class="card" id="instructionsCard">
  <h3> Travel Instructions</h3>
  <ul class="checklist" style="list-style:none;padding:0">
  <li>Reach departure point or airport well before reporting time</li>
@@ -279,8 +284,17 @@ button{padding:10px 18px;border:none;border-radius:6px;cursor:pointer;font-size:
  </div>
  </div>
 
+ <div class="brand-footer">
+ <img src="https://flightconnection.net.pk/wp-content/uploads/2018/09/cropped-cropped-Flight-Connection-Travel-1.png" crossorigin="anonymous" alt="Flight Connection" class="brand-footer-logo">
+ <div class="brand-footer-text">
+ <div class="brand-footer-name">Flight Connection Travel &amp; Tours</div>
+ <div class="brand-footer-meta">GL No. 3423 | IATA: 27319143</div>
+ <div class="brand-footer-meta">Email: muhammad.atif@flightconnection.net.pk | Website: www.flightconnection.net.pk</div>
+ <div class="brand-footer-meta">Mezzanine Floor, 17-E, Shahbaz Commercial, Phase 6, DHA</div>
+ </div>
+ </div>
+
  <div class="company-footer">
- Email: muhammad.atif@flightconnection.net.pk Website: www.flightconnection.net.pk<br>
  <span class="small" id="voucherIdFooter"></span>
  </div>
  </div>
@@ -591,6 +605,8 @@ function setupWhatsApp(vc) {
 
 async function renderDesktopVoucherCanvas(element, fixedWidth = 1020) {
  const clone = element.cloneNode(true);
+ const pdfContent = clone.querySelector('#voucherContent');
+ if (pdfContent) pdfContent.classList.add('pdf-layout');
  clone.style.width = fixedWidth + 'px';
  clone.style.maxWidth = fixedWidth + 'px';
  clone.style.boxSizing = 'border-box';
@@ -606,18 +622,88 @@ async function renderDesktopVoucherCanvas(element, fixedWidth = 1020) {
 
  const pdfStyle = document.createElement('style');
  pdfStyle.textContent = `
- .header-card h1 { font-size: 36px !important; }
- .header-card .sub, .header-card .meta .vid { font-size: 22px !important; }
- .header-card .meta .vdate, .update-badge, .company-footer, .qr-area p { font-size: 18px !important; }
- .card h3 { font-size: 24px !important; }
- .card h4 { font-size: 20px !important; }
- .field-label { font-size: 18px !important; }
- .field-value, .agent-note-text, .badge, .maps-link, .checklist li, .pax-table, .itinerary-table, .itinerary-table th, .itinerary-table td { font-size: 19px !important; }
- table[style*="font-size:14px"], div[style*="font-size:14px"], span[style*="font-size:14px"], p[style*="font-size:14px"] { font-size: 18px !important; }
- table[style*="font-size:16px"], div[style*="font-size:16px"], span[style*="font-size:16px"], p[style*="font-size:16px"] { font-size: 18px !important; }
- .pax-table th, .pax-table td, .itinerary-table th, .itinerary-table td { padding: 12px 14px !important; }
+ .pdf-layout {
+ display: grid !important;
+ grid-template-columns: repeat(2, minmax(0, 1fr));
+ gap: 10px 12px;
+ align-items: start;
+ }
+ .pdf-layout > * { margin-bottom: 0 !important; min-width: 0; }
+ .pdf-layout > .header-card,
+ .pdf-layout > .agent-note,
+ .pdf-layout > #cancelledBanner,
+ .pdf-layout > #clientInfoCard,
+ .pdf-layout > #paxCard,
+ .pdf-layout > #flightsCard,
+ .pdf-layout > #hotelCard,
+ .pdf-layout > #toursCard,
+ .pdf-layout > #transfersCard,
+ .pdf-layout > #itineraryCard,
+ .pdf-layout > #instructionsCard,
+ .pdf-layout > .company-footer,
+ .pdf-layout > .actions-bar,
+ .pdf-layout > .no-print {
+ grid-column: 1 / -1;
+ }
+ .pdf-layout > #emergCard,
+ .pdf-layout > #agentContactCard,
+ .pdf-layout > #qrCard {
+ grid-column: span 1;
+ }
+ .pdf-layout .card,
+ .pdf-layout .header-card,
+ .pdf-layout .agent-note,
+ .pdf-layout .cancelled-banner,
+ .pdf-layout .company-footer {
+ margin-bottom: 0;
+ padding: 14px 16px;
+ }
+ .pdf-layout .brand-footer {
+ display: flex !important;
+ align-items: center;
+ gap: 12px;
+ grid-column: 1 / -1;
+ padding: 8px 16px 0;
+ margin-top: 0;
+ border-top: 1px solid #dbe7f3;
+ }
+ .pdf-layout .brand-footer-logo { height: 34px !important; }
+ .pdf-layout .brand-footer-name { font-size: 13px !important; font-weight: 700; color: #0b76d1; }
+ .pdf-layout .brand-footer-meta { font-size: 10px !important; color: #475569; }
+ .pdf-layout .header-card { padding: 18px 20px; }
+ .pdf-layout .header-card h1 { font-size: 28px !important; }
+ .pdf-layout .header-card .sub, .pdf-layout .header-card .meta .vid { font-size: 16px !important; }
+ .pdf-layout .header-card .meta .vdate, .pdf-layout .update-badge, .pdf-layout .company-footer, .pdf-layout .qr-area p { font-size: 13px !important; }
+ .pdf-layout .card h3 { font-size: 17px !important; margin-bottom: 12px; padding-bottom: 8px; }
+ .pdf-layout .card h4 { font-size: 14px !important; margin-bottom: 10px; }
+ .pdf-layout .field-label { font-size: 11px !important; }
+ .pdf-layout .field-value, .pdf-layout .agent-note-text, .pdf-layout .badge, .pdf-layout .maps-link, .pdf-layout .checklist li, .pdf-layout .pax-table, .pdf-layout .itinerary-table, .pdf-layout .itinerary-table th, .pdf-layout .itinerary-table td { font-size: 12px !important; }
+ .pdf-layout .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+ .pdf-layout .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+ .pdf-layout table { width: 100% !important; table-layout: fixed; }
+ .pdf-layout th, .pdf-layout td { word-break: break-word; overflow-wrap: anywhere; vertical-align: middle; }
+ .pdf-layout .pax-table th, .pdf-layout .pax-table td, .pdf-layout .itinerary-table th, .pdf-layout .itinerary-table td { padding: 7px 8px !important; }
+ .pdf-layout .pax-table th, .pdf-layout .itinerary-table th { font-size: 11px !important; }
+ .pdf-layout .checklist li { padding: 3px 0; line-height: 1.35; }
+ .pdf-layout .section-divider { margin: 8px 0; }
+ .pdf-layout .qr-area { padding: 4px 0; }
+ .pdf-layout .qr-area .qr-box { padding: 4px; }
+ .pdf-layout #qrCard { display: grid; grid-template-columns: 165px minmax(0, 1fr); gap: 12px; align-items: center; }
+ .pdf-layout #qrCard h3 { grid-column: 1 / -1; }
+ .pdf-layout #voucherUrlDisplay { font-size: 11px !important; }
+ .pdf-layout table[style*="font-size:14px"], .pdf-layout div[style*="font-size:14px"], .pdf-layout span[style*="font-size:14px"], .pdf-layout p[style*="font-size:14px"] { font-size: 12px !important; }
+ .pdf-layout table[style*="font-size:16px"], .pdf-layout div[style*="font-size:16px"], .pdf-layout span[style*="font-size:16px"], .pdf-layout p[style*="font-size:16px"] { font-size: 12px !important; }
+ .pdf-layout .company-footer { text-align: left; }
  `;
  clone.prepend(pdfStyle);
+
+ clone.querySelectorAll('.field-value').forEach((valueNode) => {
+ const text = valueNode.textContent.trim();
+ if (!text || text === 'TBA') {
+ const fieldNode = valueNode.closest('.field');
+ if (fieldNode) fieldNode.remove();
+ }
+ });
 
  clone.querySelectorAll('h1, h2, h3, h4, h5, h6, p, span, div, li, td, th, label, small').forEach((node) => {
  const computed = window.getComputedStyle(node);
