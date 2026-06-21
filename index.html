@@ -5769,7 +5769,7 @@ async function performCalculation(event) {
 
  const payingPax = numAdult + numChildBed;
  let perPersonTextHotel = '';
- if (hotel.rooms.length > 1 && getHotelPriceMode() === 'actual') {
+ if (hotel.rooms.length > 0 && getHotelPriceMode() === 'actual') {
  perPersonTextHotel = hotel.rooms.map(rb =>
  `${rb.roomType} (${rb.count} room${rb.count > 1 ? 's' : ''}): PKR ${fmt(rb.perPerson)} x ${rb.totalRoomPax}`
  ).join(', ');
