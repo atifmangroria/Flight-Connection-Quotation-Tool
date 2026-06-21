@@ -582,6 +582,11 @@ function generateQR(url) {
  if (urlDisplay) urlDisplay.value = url;
 }
 
+function getVoucherViewUrl(id, includePdf = false) {
+ const base = window.location.href.split('?')[0];
+ return base + '?id=' + encodeURIComponent(id) + (includePdf ? '&pdf=1' : '');
+}
+
 async function waitForImages(container) {
  const imgs = Array.from(container.querySelectorAll('img'));
  if (!imgs.length) return;
@@ -596,10 +601,10 @@ function setupWhatsApp(vc) {
  const btn = document.getElementById('btnWAShare');
  if (!btn) return;
  btn.addEventListener('click', () => {
- const phone = (vc.clientData?.phone || '').replace(/\D/g, '').replace(/^0/, '');
- const url = window.location.href.split('?')[0] + '?id=' + encodeURIComponent(vc.id);
- const msg = `Dear ${vc.clientData?.name || 'Customer'},\n\nYour Domestic travel voucher is ready:\n${url}\n\nRegards,\n${vc.agentData?.name || 'Flight Connection'}\n${vc.agentData?.phone || ''}`;
- window.open('https://wa.me/92' + phone + '?text=' + encodeURIComponent(msg), '_blank');
+  const phone = (vc.clientData?.phone || '').replace(/\D/g, '').replace(/^0/, '');
+  const url = getVoucherViewUrl(vc.id);
+  const msg = `Dear ${vc.clientData?.name || 'Customer'},\n\nYour Domestic travel voucher is ready:\n${url}\n\nRegards,\n${vc.agentData?.name || 'Flight Connection'}\n${vc.agentData?.phone || ''}`;
+  window.open('https://wa.me/92' + phone + '?text=' + encodeURIComponent(msg), '_blank');
  });
 }
 
@@ -848,14 +853,15 @@ function renderVoucher(vc) {
  renderTransfers(vc);
  renderItinerarySection(vc);
  }
- const url = window.location.href.split('?')[0] + '?id=' + encodeURIComponent(vc.id);
+ const url = getVoucherViewUrl(vc.id);
  generateQR(url);
  setupWhatsApp(vc);
 }
-
 async function init() {
  const params = new URLSearchParams(window.location.search);
  const id = params.get('id');
+ const pdfMode = params.get('pdf') === '1';
+ document.body.classList.toggle('pdf-mode', pdfMode);
  if (!id) {
  document.getElementById('loadingState').style.display = 'none';
  document.getElementById('errorState').style.display = 'block';
@@ -874,6 +880,9 @@ async function init() {
  document.getElementById('loadingState').style.display = 'none';
  document.getElementById('voucherContent').style.display = 'block';
  renderVoucher(vc);
+ if (pdfMode) {
+ setTimeout(() => downloadPDF(), 250);
+ }
  } catch (e) {
  console.error('Load error:', e);
  document.getElementById('loadingState').style.display = 'none';

@@ -616,6 +616,11 @@ async function renderItinerarySection(vc) {
 }
 
 // ===== QR Code =====
+function getVoucherViewUrl(id, includePdf = false) {
+ const base = window.location.href.split('?')[0];
+ return base + '?id=' + encodeURIComponent(id) + (includePdf ? '&pdf=1' : '');
+}
+
 function generateQR(url) {
  const el = document.getElementById('qrcode');
  if (!el) return;
@@ -640,10 +645,10 @@ function setupWhatsApp(vc) {
  const btn = document.getElementById('btnWAShare');
  if (!btn) return;
  btn.addEventListener('click', () => {
- const phone = (vc.clientData?.phone || '').replace(/\D/g, '').replace(/^0/, '');
- const url = window.location.href.split('?')[0] + '?id=' + encodeURIComponent(vc.id);
- const msg = `Dear ${vc.clientData?.name || 'Customer'},\n\nYour Umrah travel voucher is ready:\n${url}\n\nRegards,\n${vc.agentData?.name || 'Flight Connection'}\n${vc.agentData?.phone || ''}`;
- window.open('https://wa.me/92' + phone + '?text=' + encodeURIComponent(msg), '_blank');
+  const phone = (vc.clientData?.phone || '').replace(/\D/g, '').replace(/^0/, '');
+  const url = getVoucherViewUrl(vc.id);
+  const msg = `Dear ${vc.clientData?.name || 'Customer'},\n\nYour Umrah travel voucher is ready:\n${url}\n\nRegards,\n${vc.agentData?.name || 'Flight Connection'}\n${vc.agentData?.phone || ''}`;
+  window.open('https://wa.me/92' + phone + '?text=' + encodeURIComponent(msg), '_blank');
  });
 }
 
@@ -914,8 +919,8 @@ function renderVoucher(vc) {
  renderItinerarySection(vc).catch((err) => console.error('Itinerary render failed:', err));
  }
 
- // QR code
- const url = window.location.href.split('?')[0] + '?id=' + encodeURIComponent(vc.id);
+// QR code
+ const url = getVoucherViewUrl(vc.id);
  generateQR(url);
 
  setupWhatsApp(vc);
@@ -925,6 +930,9 @@ function renderVoucher(vc) {
 async function init() {
  const params = new URLSearchParams(window.location.search);
  const id = params.get('id');
+ const pdfMode = params.get('pdf') === '1';
+
+ document.body.classList.toggle('pdf-mode', pdfMode);
 
  if (!id) {
  document.getElementById('loadingState').style.display = 'none';
@@ -950,6 +958,10 @@ async function init() {
  document.getElementById('voucherContent').style.display = 'block';
 
  renderVoucher(vc);
+
+ if (pdfMode) {
+ setTimeout(() => downloadPDF(), 250);
+ }
  } catch (e) {
  console.error('Load error:', e);
  document.getElementById('loadingState').style.display = 'none';
