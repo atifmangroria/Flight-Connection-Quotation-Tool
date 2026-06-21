@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
 <title>Travel Voucher - Flight Connection</title>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -665,9 +668,10 @@ async function renderItinerarySection(vc) {
 }
 
 // ===== QR Code =====
+const VOUCHER_VIEW_VERSION = '20260621-2';
 function getVoucherViewUrl(id, includePdf = false) {
  const base = window.location.href.split('?')[0];
- return base + '?id=' + encodeURIComponent(id) + (includePdf ? '&pdf=1' : '');
+ return base + '?id=' + encodeURIComponent(id) + (includePdf ? '&pdf=1' : '') + '&v=' + VOUCHER_VIEW_VERSION;
 }
 
 function generateQR(url) {

@@ -259,9 +259,10 @@ function normalizeVoucher(v, type) {
 }
 
 function getVoucherViewUrl(v) {
- if (v.type === 'umrah') return 'voucher-view.html?id=' + encodeURIComponent(v.id);
- if (v.type === 'domestic') return 'domestic-voucher-view.html?id=' + encodeURIComponent(v.id);
- return 'int-voucher-view.html?id=' + encodeURIComponent(v.id);
+ const version = '&v=20260621-2';
+ if (v.type === 'umrah') return 'voucher-view.html?id=' + encodeURIComponent(v.id) + version;
+ if (v.type === 'domestic') return 'domestic-voucher-view.html?id=' + encodeURIComponent(v.id) + version;
+ return 'int-voucher-view.html?id=' + encodeURIComponent(v.id) + version;
 }
 
 function getQuotationViewUrl(v) {
