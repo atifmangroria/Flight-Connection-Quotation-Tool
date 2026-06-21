@@ -110,6 +110,53 @@ button{padding:10px 18px;border:none;border-radius:6px;cursor:pointer;font-size:
 .brand-footer-meta{font-size:12px;color:var(--muted);line-height:1.35}
 .company-footer{text-align:center;padding:16px;color:var(--muted);font-size:16px;border-top:1px solid #e8f0fb;margin-top:14px}
 @media(max-width:600px){.grid{grid-template-columns:1fr}.grid-3{grid-template-columns:1fr}.header-card{flex-direction:column}.header-card .meta{text-align:left}}
+body.modern-voucher #voucherContent{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 12px;align-items:start}
+body.modern-voucher #voucherContent > *{margin-bottom:0!important;min-width:0}
+body.modern-voucher #voucherContent > .header-card,
+body.modern-voucher #voucherContent > .agent-note,
+body.modern-voucher #voucherContent > #cancelledBanner,
+body.modern-voucher #voucherContent > #clientInfoCard,
+body.modern-voucher #voucherContent > #paxCard,
+body.modern-voucher #voucherContent > #flightsCard,
+body.modern-voucher #voucherContent > #hotelCard,
+body.modern-voucher #voucherContent > #toursCard,
+body.modern-voucher #voucherContent > #transfersCard,
+body.modern-voucher #voucherContent > #itineraryCard,
+body.modern-voucher #voucherContent > #instructionsCard,
+body.modern-voucher #voucherContent > .company-footer,
+body.modern-voucher #voucherContent > .actions-bar,
+body.modern-voucher #voucherContent > .no-print{grid-column:1/-1}
+body.modern-voucher #voucherContent > #emergCard,
+body.modern-voucher #voucherContent > #agentContactCard,
+body.modern-voucher #voucherContent > #qrCard{grid-column:span 1}
+body.modern-voucher .card,body.modern-voucher .header-card,body.modern-voucher .agent-note,body.modern-voucher .cancelled-banner,body.modern-voucher .company-footer{margin-bottom:0;padding:14px 16px}
+body.modern-voucher .brand-footer{display:flex!important;align-items:center;gap:12px;grid-column:1/-1;padding:8px 16px 0;margin-top:0;border-top:1px solid #dbe7f3}
+body.modern-voucher .brand-footer-logo{height:34px!important}
+body.modern-voucher .brand-footer-name{font-size:13px!important;font-weight:700;color:#0b76d1}
+body.modern-voucher .brand-footer-meta{font-size:10px!important;color:#475569}
+body.modern-voucher .header-card{padding:18px 20px}
+body.modern-voucher .header-card h1{font-size:28px!important}
+body.modern-voucher .header-card .sub,body.modern-voucher .header-card .meta .vid{font-size:16px!important}
+body.modern-voucher .header-card .meta .vdate,body.modern-voucher .update-badge,body.modern-voucher .company-footer,body.modern-voucher .qr-area p{font-size:13px!important}
+body.modern-voucher .card h3{font-size:17px!important;margin-bottom:12px;padding-bottom:8px}
+body.modern-voucher .card h4{font-size:14px!important;margin-bottom:10px}
+body.modern-voucher .field-label{font-size:11px!important}
+body.modern-voucher .field-value,body.modern-voucher .agent-note-text,body.modern-voucher .badge,body.modern-voucher .maps-link,body.modern-voucher .checklist li,body.modern-voucher .pax-table,body.modern-voucher .itinerary-table,body.modern-voucher .itinerary-table th,body.modern-voucher .itinerary-table td{font-size:12px!important}
+body.modern-voucher .grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+body.modern-voucher .grid-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+body.modern-voucher table{width:100%!important;table-layout:fixed}
+body.modern-voucher th,body.modern-voucher td{word-break:break-word;overflow-wrap:anywhere;vertical-align:middle}
+body.modern-voucher .pax-table th,body.modern-voucher .pax-table td,body.modern-voucher .itinerary-table th,body.modern-voucher .itinerary-table td{padding:7px 8px!important}
+body.modern-voucher .pax-table th,body.modern-voucher .itinerary-table th{font-size:11px!important}
+body.modern-voucher .checklist li{padding:3px 0;line-height:1.35}
+body.modern-voucher .section-divider{margin:8px 0}
+body.modern-voucher .qr-area{padding:4px 0}
+body.modern-voucher .qr-area .qr-box{padding:4px}
+body.modern-voucher #qrCard{display:grid;grid-template-columns:165px minmax(0,1fr);gap:12px;align-items:center}
+body.modern-voucher #qrCard h3{grid-column:1/-1}
+body.modern-voucher #voucherUrlDisplay{font-size:11px!important}
+body.modern-voucher .company-footer{text-align:left}
+@media(max-width:900px){body.modern-voucher #voucherContent{grid-template-columns:1fr}body.modern-voucher .grid,body.modern-voucher .grid-3{grid-template-columns:1fr}}
 @media (max-width: 960px) {
  .wrap { padding: 14px; margin: 0 auto; border-radius: 0; }
  .grid, .grid-2, .grid-3, .grid-4, .card, .section, .info-bar, .actions-bar, .service-box, .itinerary-table-wrapper, .header-card, .search-container, .addon-panel, .section-entry, .progress-bar { grid-template-columns: 1fr !important; }
@@ -925,6 +972,7 @@ async function init() {
  const id = params.get("id");
  const pdfMode = params.get("pdf") === "1";
 
+ document.body.classList.add("modern-voucher");
  document.body.classList.toggle("pdf-mode", pdfMode);
 
  if (!id) {
