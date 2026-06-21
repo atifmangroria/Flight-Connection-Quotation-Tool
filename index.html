@@ -3043,20 +3043,22 @@ function validateHotelCapacity(hotelIndex, city) {
 // ===== STAGE 3: HOTEL PRICING MODE =====
 let hotelPricingMode = localStorage.getItem('hotelPricingMode') || 'average';
 
-async function setHotelPricingMode(mode) {
+async function setHotelPricingMode(mode, options = {}) {
  hotelPricingMode = mode === 'actual' ? 'actual' : 'average';
  localStorage.setItem('hotelPricingMode', hotelPricingMode);
  document.querySelectorAll('input[name="hotelPriceMode"]').forEach(input => {
  input.checked = input.value === hotelPricingMode;
  });
 
- if (typeof performCalculation === 'function') {
+ if (!options.skipRecalc && typeof performCalculation === 'function') {
  await performCalculation();
  }
 
+ if (!options.skipRecalc) {
  const quotationModal = document.getElementById('quotationModal');
  if (quotationModal?.classList.contains('visible') && typeof showQuotationModal === 'function') {
  withCalculationSummaryAvailable(() => showQuotationModal());
+ }
  }
 }
 
@@ -3098,7 +3100,7 @@ function showHotelPricingModeDialog() {
  document.body.appendChild(overlay);
 
  const closeWith = (mode) => {
- setHotelPricingMode(mode);
+ setHotelPricingMode(mode, { skipRecalc: true });
  overlay.remove();
  resolve(mode);
  };
