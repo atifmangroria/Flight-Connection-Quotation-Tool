@@ -3043,15 +3043,20 @@ function validateHotelCapacity(hotelIndex, city) {
 // ===== STAGE 3: HOTEL PRICING MODE =====
 let hotelPricingMode = localStorage.getItem('hotelPricingMode') || 'average';
 
-function setHotelPricingMode(mode) {
+async function setHotelPricingMode(mode) {
  hotelPricingMode = mode === 'actual' ? 'actual' : 'average';
  localStorage.setItem('hotelPricingMode', hotelPricingMode);
  document.querySelectorAll('input[name="hotelPriceMode"]').forEach(input => {
  input.checked = input.value === hotelPricingMode;
  });
 
- if (typeof performCalculation === 'function' && document.getElementById('calcSummarySection')?.style.display === 'block') {
- performCalculation();
+ if (typeof performCalculation === 'function') {
+ await performCalculation();
+ }
+
+ const quotationModal = document.getElementById('quotationModal');
+ if (quotationModal?.classList.contains('visible') && typeof showQuotationModal === 'function') {
+ withCalculationSummaryAvailable(() => showQuotationModal());
  }
 }
 
@@ -4525,7 +4530,7 @@ function buildQuotationLinkPayload(quotation, quotationType, ownerDocId) {
 }
 
 function stripLocalSyncFields(quotation) {
- const { syncStatus, lastSyncedAt, syncError, ...cloudQuotation } = quotation || {};
+ const { syncStatus, lastSyncedAt, syncError, publicQuotationHtml, publicQuotationSnapshotAt, ...cloudQuotation } = quotation || {};
  return enrichQuotationForFirebase(cloudQuotation, 'umrah', getQuotationOwnerDocId(cloudQuotation));
 }
 
