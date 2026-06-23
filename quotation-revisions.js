@@ -149,7 +149,7 @@
  return match ? Number(match[1]) : 0;
  }
 
- function normalizeQuotationVersions(rows) {
+function normalizeQuotationVersions(rows) {
  return (rows || []).map(row => {
  if (!row || !row.id) return row;
  const rootQuotationId = getRootId(row);
@@ -162,7 +162,24 @@
  isCurrent: row.isCurrent === false || status === "superseded" ? false : true
  };
  });
+}
+
+function getRevisionRowTimestamp(row) {
+ const timestamp = new Date(row?.updatedAt || row?.revisedAt || row?.createdAt || 0).getTime();
+ return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function mergeRevisionRowsById(serverRows, localRows) {
+ const byId = new Map();
+ [...(serverRows || []), ...(localRows || [])].forEach(row => {
+ if (!row || !row.id) return;
+ const existing = byId.get(row.id);
+ if (!existing || getRevisionRowTimestamp(row) >= getRevisionRowTimestamp(existing)) {
+ byId.set(row.id, row);
  }
+ });
+ return Array.from(byId.values());
+}
 
  function getCurrentQuotation() {
  const id = getCurrentId();
@@ -265,21 +282,40 @@
  await window.firebaseDB.saveData("quotation_links", quotation.shareLinkId, payload).catch(err => console.error("Revision share link update error:", err));
  }
 
- async function persistRevisionRows(rows, ownerQuotation) {
+async function persistRevisionRows(rows, ownerQuotation) {
  const normalized = setAllQuotations(rows);
  const ownerId = getOwnerId(ownerQuotation);
  if (ownerId && window.firebaseDB) {
- await window.firebaseDB.saveData(config.firebaseCollection, ownerId, {
- quotations: normalized.filter(row => getOwnerIds(row).includes(ownerId)),
+ const ownerRows = normalized.filter(row => getOwnerIds(row).includes(ownerId));
+ const payload = {
+ quotations: ownerRows,
  updatedAt: new Date(),
  agentId: ownerId,
  userId: ownerId,
  agentName: ownerQuotation?.agentData?.name || ownerQuotation?.agentName || "",
  firebaseLabel: [config.type, "quotations", ownerQuotation?.agentData?.name || ownerQuotation?.agentName || ownerId].filter(Boolean).join(" | ")
- }).catch(err => console.error("Revision Firebase save error:", err));
+ };
+ if (window.db && window.runTransaction && typeof window.doc === "function") {
+ try {
+ const ref = window.doc(window.db, config.firebaseCollection, ownerId);
+ await window.runTransaction(window.db, async (transaction) => {
+ const snap = await transaction.get(ref);
+ const snapData = typeof snap?.data === "function" ? snap.data() : (snap?.data || {});
+ const serverRows = snap && (typeof snap.exists === "function" ? snap.exists() : snap.exists)
+ ? (Array.isArray(snapData?.quotations) ? snapData.quotations : [])
+ : [];
+ const mergedRows = mergeRevisionRowsById(serverRows, ownerRows);
+ transaction.set(ref, { ...payload, quotations: mergedRows, updatedAt: new Date() }, { merge: true });
+ });
+ } catch (err) {
+ console.error("Revision Firebase save error:", err);
+ }
+ } else {
+ await window.firebaseDB.saveData(config.firebaseCollection, ownerId, payload).catch(err => console.error("Revision Firebase save error:", err));
+ }
  }
  return normalized;
- }
+}
 
  function notify(message, type = "info") {
  if (typeof showNotification === "function") {

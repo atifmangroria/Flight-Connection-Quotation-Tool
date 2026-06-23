@@ -15,7 +15,7 @@
 <script type="module">
  // Import the functions you need from the SDKs you need
  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
- import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, runTransaction } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
  // Your web app's Firebase configuration
  const firebaseConfig = {
@@ -32,6 +32,7 @@
  const auth = getAuth(app);
 
  // Make db and auth global
+ window.db = db;
  window.auth = auth;
 
  // ========== Firebase Cloud Storage Utility Functions ==========
@@ -87,11 +88,51 @@
  }
  };
 
- // Make collection functions available
- window.collection = collection;
- window.doc = doc;
- window.deleteDoc = deleteDoc;
- window.updateDoc = updateDoc;
+// Make collection functions available
+window.collection = collection;
+window.doc = doc;
+window.deleteDoc = deleteDoc;
+window.updateDoc = updateDoc;
+window.runTransaction = runTransaction;
+
+const TAB_STORAGE_NAMESPACE_KEY = '__quotationTabStorageNamespace';
+function getTabStorageNamespace() {
+ try {
+ let namespace = sessionStorage.getItem(TAB_STORAGE_NAMESPACE_KEY);
+ if (!namespace) {
+ namespace = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+ sessionStorage.setItem(TAB_STORAGE_NAMESPACE_KEY, namespace);
+ }
+ return namespace;
+ } catch (error) {
+ return 'default';
+ }
+}
+
+function isIsolatedDraftKey(key) {
+ return typeof key === 'string' && /^(savedClientData|savedClientData_domestic|savedClientData_international|customTerms|customTerms_domestic|customTerms_international|section1Content_domestic|section1Content_international|section2Content_domestic|section2Content_international|sectionDisabled_1|sectionDisabled_2|hotelPricingMode)$/.test(key);
+}
+
+function mapIsolatedDraftKey(key) {
+ return `${key}__tab_${getTabStorageNamespace()}`;
+}
+
+const localStorageGetItemOriginal = localStorage.getItem.bind(localStorage);
+const localStorageSetItemOriginal = localStorage.setItem.bind(localStorage);
+const localStorageRemoveItemOriginal = localStorage.removeItem.bind(localStorage);
+
+localStorage.getItem = function(key) {
+ const rawKey = String(key);
+ return localStorageGetItemOriginal(isIsolatedDraftKey(rawKey) ? mapIsolatedDraftKey(rawKey) : rawKey);
+};
+localStorage.setItem = function(key, value) {
+ const rawKey = String(key);
+ return localStorageSetItemOriginal(isIsolatedDraftKey(rawKey) ? mapIsolatedDraftKey(rawKey) : rawKey, value);
+};
+localStorage.removeItem = function(key) {
+ const rawKey = String(key);
+ return localStorageRemoveItemOriginal(isIsolatedDraftKey(rawKey) ? mapIsolatedDraftKey(rawKey) : rawKey);
+};
 </script>
 
 <style>
@@ -1194,7 +1235,7 @@ async function updateQuotationStatus() {
 
  const agent = getCurrentAgent();
  const ownerDocId = getQuotationOwnerDocId(allQuotations[idx], agent);
- saveInternationalOwnerQuotationsToFirebase(ownerDocId, allQuotations, 'Firebase status update error');
+ await saveInternationalOwnerQuotationsToFirebase(ownerDocId, allQuotations, 'Firebase status update error');
 
  showNotification('Status updated to: ' + newStatus, 'success');
  showStatusSection();
@@ -1417,7 +1458,7 @@ function handleGenerateQuotationLink(options = {}) {
  if (typeof options.onComplete === 'function') options.onComplete();
 }
 
-function handleApproveCustomer() {
+async function handleApproveCustomer() {
  const agent = getCurrentAgent();
  let allQuotations = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
  const quotation = allQuotations.find(q => q.id === currentQuotationId);
@@ -1440,7 +1481,7 @@ function handleApproveCustomer() {
 
  const ownerDocId = getQuotationOwnerDocId(quotation, getCurrentAgent());
  if (ownerDocId && window.firebaseDB) {
- saveInternationalOwnerQuotationsToFirebase(ownerDocId, allQuotations, 'Firebase update error');
+ await saveInternationalOwnerQuotationsToFirebase(ownerDocId, allQuotations, 'Firebase update error');
  if (quotation.shareLinkId) {
  saveFirebaseDataWithRetry('quotation_links', quotation.shareLinkId, buildQuotationLinkPayload(quotation, 'international', ownerDocId), 'Firebase share link update error');
  }
@@ -1450,7 +1491,7 @@ function handleApproveCustomer() {
  showStatusSection();
 }
 
-function handleSelfBook() {
+async function handleSelfBook() {
  const agent = getCurrentAgent();
  let allQuotations = JSON.parse(localStorage.getItem('savedQuotations_international')) || [];
  const quotation = allQuotations.find(q => q.id === currentQuotationId);
@@ -1473,7 +1514,7 @@ function handleSelfBook() {
 
  const ownerDocId = getQuotationOwnerDocId(quotation, getCurrentAgent());
  if (ownerDocId && window.firebaseDB) {
- saveInternationalOwnerQuotationsToFirebase(ownerDocId, allQuotations, 'Firebase update error');
+ await saveInternationalOwnerQuotationsToFirebase(ownerDocId, allQuotations, 'Firebase update error');
  if (quotation.shareLinkId) {
  saveFirebaseDataWithRetry('quotation_links', quotation.shareLinkId, buildQuotationLinkPayload(quotation, 'international', ownerDocId), 'Firebase share link update error');
  }
@@ -2371,12 +2412,12 @@ window.addEventListener('offline', () => updateSyncStatusDisplay());
  el.title = data.title;
  }
 
- function saveInternationalOwnerQuotationsToFirebase(ownerDocId, allQuotations, errorLabel = 'Firebase save error') {
+ async function saveInternationalOwnerQuotationsToFirebase(ownerDocId, allQuotations, errorLabel = 'Firebase save error') {
  if (!ownerDocId) return Promise.resolve(false);
  updateLocalInternationalSyncStatus(ownerDocId, 'pending');
  const ownerQuotations = getOwnerQuotations(allQuotations, ownerDocId).map(stripLocalSyncFields);
  const ownerMetadata = ownerQuotations[0] ? getReadableQuotationMetadata(ownerQuotations[0], 'international', ownerDocId) : {};
- if (!window.firebaseDB) {
+ if (!window.firebaseDB || !window.db || !window.runTransaction) {
  syncInternationalQuotationLinks(ownerDocId, ownerQuotations);
  return Promise.resolve(false);
  }
@@ -2394,23 +2435,33 @@ window.addEventListener('offline', () => updateSyncStatusDisplay());
  syncInternationalQuotationLinks(ownerDocId, ownerQuotations);
  return Promise.resolve(true);
  }
- return window.firebaseDB.saveData(INTERNATIONAL_COLLECTION, ownerDocId, payload).then((ok) => {
- if (ok === false) {
- updateLocalInternationalSyncStatus(ownerDocId, 'pending', 'Cloud sync failed');
- syncInternationalQuotationLinks(ownerDocId, ownerQuotations);
- return false;
- }
- recordOwnerSyncPayloadHash(INTERNATIONAL_COLLECTION, ownerDocId, payload);
+ try {
+ const ref = window.doc(window.db, INTERNATIONAL_COLLECTION, ownerDocId);
+ await window.runTransaction(window.db, async (transaction) => {
+ const snap = await transaction.get(ref);
+ const snapData = typeof snap?.data === 'function' ? snap.data() : (snap?.data || {});
+ const serverQuotations = snap && (typeof snap.exists === 'function' ? snap.exists() : snap.exists)
+ ? (Array.isArray(snapData?.quotations) ? snapData.quotations : [])
+ : [];
+ const mergedQuotations = mergeQuotationsById(serverQuotations, ownerQuotations);
+ const mergedPayload = {
+ ...payload,
+ quotations: mergedQuotations,
+ updatedAt: new Date()
+ };
+ transaction.set(ref, mergedPayload, { merge: true });
+ recordOwnerSyncPayloadHash(INTERNATIONAL_COLLECTION, ownerDocId, mergedPayload);
+ });
  updateLocalInternationalSyncStatus(ownerDocId, 'synced');
  syncInternationalQuotationLinks(ownerDocId, ownerQuotations);
  return true;
- }).catch(err => {
+ } catch (err) {
  updateLocalInternationalSyncStatus(ownerDocId, 'pending', err?.message || 'Cloud sync failed');
  syncInternationalQuotationLinks(ownerDocId, ownerQuotations);
  console.error(`${errorLabel}:`, err);
  return false;
- });
  }
+}
 
  function syncInternationalQuotationLinks(ownerDocId, ownerQuotations) {
  if (!ownerDocId || !Array.isArray(ownerQuotations)) return;
@@ -6769,7 +6820,7 @@ async function updateQuotationStatus(quotationId, newStatus) {
  
  // Also save to Firebase
  const ownerDocId = getQuotationOwnerDocId(savedQuotations[quotationIndex], getCurrentAgent());
- saveInternationalOwnerQuotationsToFirebase(ownerDocId, savedQuotations, 'Firebase update error');
+ await saveInternationalOwnerQuotationsToFirebase(ownerDocId, savedQuotations, 'Firebase update error');
  
  // Trigger dashboard refresh
  sessionStorage.setItem('refreshDashboard_international', 'true');
@@ -8491,7 +8542,7 @@ async function upsertCustomerFromQuotation(clientData, quotationMeta) {
  }
 }
 
-function saveQuotation() {
+async function saveQuotation() {
  try {
  if (isLoadingQuotation) {
  return;
@@ -8933,12 +8984,12 @@ const customSectionsData = {
  }
  
  // Save to Firebase
- saveInternationalOwnerQuotationsToFirebase(ownerDocId, allQuotations, 'Firebase save error');
+ const cloudSaved = ownerDocId ? await saveInternationalOwnerQuotationsToFirebase(ownerDocId, allQuotations, 'Firebase save error') : false;
  
  // Update the global variable
  savedQuotations = allQuotations;
  
- showNotification("Quotation saved successfully!", "success");
+ showNotification(cloudSaved ? "Quotation saved and synced to Firestore." : "Quotation saved locally, but Firestore sync failed. Check connection or permissions.", cloudSaved ? "success" : "warning");
  if (bookedMovedToPendingByEdit) {
  showNotification('Booked quotation moved to Pending due to edits. New acceptance would be required.', 'warning');
  }

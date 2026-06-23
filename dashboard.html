@@ -1941,12 +1941,15 @@ async function saveQuotationsToFirebase(agent, umrahQuotations, internationalQuo
 
  const txnSave = async (collectionName, clientList, options = {}) => {
  if (!Array.isArray(clientList)) return true;
- 
+
  const ref = window.doc(window.db, collectionName, ownerId);
  let blocked = false;
  const success = await window.runTransaction(window.db, async (transaction) => {
  const snap = await transaction.get(ref);
- const serverList = snap.exists ? (snap.data().quotations || []) : [];
+ const snapData = typeof snap?.data === 'function' ? snap.data() : (snap?.data || {});
+ const serverList = snap && (typeof snap.exists === 'function' ? snap.exists() : snap.exists)
+ ? (Array.isArray(snapData?.quotations) ? snapData.quotations : [])
+ : [];
 
  if (clientList.length === 0) {
  if (serverList.length === 0) {
@@ -1958,30 +1961,7 @@ async function saveQuotationsToFirebase(agent, umrahQuotations, internationalQuo
  }
  }
 
- const clientMap = new Map();
- const mergedMap = new Map();
- 
- clientList.forEach(q => { if (q && q.id) clientMap.set(q.id, q); });
- 
- serverList.forEach(q => {
- if (!q || !q.id) return;
- if (!clientMap.has(q.id)) {
- return;
- }
- const clientItem = clientMap.get(q.id);
- const existingTime = Math.max(parseTime(q.updatedAt), parseTime(q.transferredAt), parseTime(q.createdAt));
- const clientTime = Math.max(parseTime(clientItem.updatedAt), parseTime(clientItem.transferredAt), parseTime(clientItem.createdAt));
- mergedMap.set(q.id, clientTime >= existingTime ? clientItem : q);
- });
- 
- clientList.forEach(q => {
- if (!q || !q.id) return;
- if (!mergedMap.has(q.id)) {
- mergedMap.set(q.id, q);
- }
- });
-
- const merged = Array.from(mergedMap.values());
+ const merged = mergeQuotationRowsById(serverList, clientList);
  transaction.set(ref, {
  quotations: merged,
  updatedAt: new Date(),
@@ -2052,9 +2032,16 @@ async function loadQuotationsFromFirebase(agent, explicitOwnerId = null) {
  domestic: mergeQuotationRowsById(loaded.domestic)
  };
 
- saveLocalQuotationsSnapshot(result.umrah, result.international, result.domestic);
- 
- return result;
+ const localSnapshot = getLocalQuotationsSnapshot();
+ const mergedResult = {
+ umrah: mergeQuotationRowsById(localSnapshot.umrah, result.umrah),
+ international: mergeQuotationRowsById(localSnapshot.international, result.international),
+ domestic: mergeQuotationRowsById(localSnapshot.domestic, result.domestic)
+ };
+
+ saveLocalQuotationsSnapshot(mergedResult.umrah, mergedResult.international, mergedResult.domestic);
+
+ return mergedResult;
  } catch (error) {
  console.error('Error loading quotations from Firebase:', error);
  if (isFirebaseAvailableForDashboard()) {

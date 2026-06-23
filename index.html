@@ -15,7 +15,7 @@
 <script type="module">
  // Import the functions you need from the SDKs you need
  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
- import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, runTransaction } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
  // Your web app's Firebase configuration
  const firebaseConfig = {
@@ -32,6 +32,7 @@
  const auth = getAuth(app);
 
  // Make db and auth global
+ window.db = db;
  window.auth = auth;
 
  // ========== Firebase Cloud Storage Utility Functions ==========
@@ -92,6 +93,46 @@
  window.doc = doc;
  window.deleteDoc = deleteDoc;
  window.updateDoc = updateDoc;
+ window.runTransaction = runTransaction;
+
+ const TAB_STORAGE_NAMESPACE_KEY = '__quotationTabStorageNamespace';
+ function getTabStorageNamespace() {
+ try {
+ let namespace = sessionStorage.getItem(TAB_STORAGE_NAMESPACE_KEY);
+ if (!namespace) {
+ namespace = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+ sessionStorage.setItem(TAB_STORAGE_NAMESPACE_KEY, namespace);
+ }
+ return namespace;
+ } catch (error) {
+ return 'default';
+ }
+ }
+
+ function isIsolatedDraftKey(key) {
+ return typeof key === 'string' && /^(savedClientData|savedClientData_domestic|savedClientData_international|customTerms|customTerms_domestic|customTerms_international|section1Content_domestic|section1Content_international|section2Content_domestic|section2Content_international|sectionDisabled_1|sectionDisabled_2|hotelPricingMode)$/.test(key);
+ }
+
+ function mapIsolatedDraftKey(key) {
+ return `${key}__tab_${getTabStorageNamespace()}`;
+ }
+
+ const localStorageGetItemOriginal = localStorage.getItem.bind(localStorage);
+ const localStorageSetItemOriginal = localStorage.setItem.bind(localStorage);
+ const localStorageRemoveItemOriginal = localStorage.removeItem.bind(localStorage);
+
+ localStorage.getItem = function(key) {
+ const rawKey = String(key);
+ return localStorageGetItemOriginal(isIsolatedDraftKey(rawKey) ? mapIsolatedDraftKey(rawKey) : rawKey);
+ };
+ localStorage.setItem = function(key, value) {
+ const rawKey = String(key);
+ return localStorageSetItemOriginal(isIsolatedDraftKey(rawKey) ? mapIsolatedDraftKey(rawKey) : rawKey, value);
+ };
+ localStorage.removeItem = function(key) {
+ const rawKey = String(key);
+ return localStorageRemoveItemOriginal(isIsolatedDraftKey(rawKey) ? mapIsolatedDraftKey(rawKey) : rawKey);
+ };
 </script>
 
 <style>
@@ -4597,12 +4638,12 @@ function updateSyncStatusDisplay(storageKey = 'savedQuotations') {
  el.title = data.title;
 }
 
-function saveOwnerQuotationsToFirebase(ownerDocId, allQuotations, errorLabel = 'Firebase save error') {
+async function saveOwnerQuotationsToFirebase(ownerDocId, allQuotations, errorLabel = 'Firebase save error') {
  if (!ownerDocId) return Promise.resolve(false);
  updateLocalUmrahSyncStatus(ownerDocId, 'pending');
  const ownerQuotations = getOwnerQuotations(allQuotations, ownerDocId).map(stripLocalSyncFields);
  const ownerMetadata = ownerQuotations[0] ? getReadableQuotationMetadata(ownerQuotations[0], 'umrah', ownerDocId) : {};
- if (!window.firebaseDB) {
+ if (!window.firebaseDB || !window.db || !window.runTransaction) {
  syncUmrahQuotationLinks(ownerDocId, ownerQuotations);
  return Promise.resolve(false);
  }
@@ -4620,22 +4661,32 @@ function saveOwnerQuotationsToFirebase(ownerDocId, allQuotations, errorLabel = '
  syncUmrahQuotationLinks(ownerDocId, ownerQuotations);
  return Promise.resolve(true);
  }
- return window.firebaseDB.saveData('umrah_quotations', ownerDocId, payload).then((ok) => {
- if (ok === false) {
- updateLocalUmrahSyncStatus(ownerDocId, 'pending', 'Cloud sync failed');
- syncUmrahQuotationLinks(ownerDocId, ownerQuotations);
- return false;
- }
- recordOwnerSyncPayloadHash('umrah_quotations', ownerDocId, payload);
+ try {
+ const ref = window.doc(window.db, 'umrah_quotations', ownerDocId);
+ await window.runTransaction(window.db, async (transaction) => {
+ const snap = await transaction.get(ref);
+ const snapData = typeof snap?.data === 'function' ? snap.data() : (snap?.data || {});
+ const serverQuotations = snap && (typeof snap.exists === 'function' ? snap.exists() : snap.exists)
+ ? (Array.isArray(snapData?.quotations) ? snapData.quotations : [])
+ : [];
+ const mergedQuotations = mergeQuotationsById(serverQuotations, ownerQuotations);
+ const mergedPayload = {
+ ...payload,
+ quotations: mergedQuotations,
+ updatedAt: new Date()
+ };
+ transaction.set(ref, mergedPayload, { merge: true });
+ recordOwnerSyncPayloadHash('umrah_quotations', ownerDocId, mergedPayload);
+ });
  updateLocalUmrahSyncStatus(ownerDocId, 'synced');
  syncUmrahQuotationLinks(ownerDocId, ownerQuotations);
  return true;
- }).catch(err => {
+ } catch (err) {
  updateLocalUmrahSyncStatus(ownerDocId, 'pending', err?.message || 'Cloud sync failed');
  syncUmrahQuotationLinks(ownerDocId, ownerQuotations);
  console.error(`${errorLabel}:`, err);
  return false;
- });
+ }
 }
 
 function syncUmrahQuotationLinks(ownerDocId, ownerQuotations) {
@@ -8154,7 +8205,7 @@ function calculateUmrahAddonTotalAmount(quotation) {
  return addonTotalPKR;
 }
 
-function saveQuotation() {
+async function saveQuotation() {
  try {
  // Check if client data is saved
  if (!isClientDataSaved) {
@@ -8560,14 +8611,18 @@ function saveQuotation() {
  }
  
  // Save to Firebase
+ let cloudSaved = false;
  if (ownerDocId) {
- saveOwnerQuotationsToFirebase(ownerDocId, allQuotations, 'Firebase save error');
+ cloudSaved = await saveOwnerQuotationsToFirebase(ownerDocId, allQuotations, 'Firebase save error');
  }
  
  // Update the global variable
  savedQuotations = allQuotations;
  
- showNotification("Quotation saved successfully!", "success");
+ showNotification(
+ cloudSaved ? "Quotation saved and synced to Firestore." : (ownerDocId ? "Quotation saved locally, but Firestore sync failed. Check connection or permissions." : "Quotation saved locally, but no owner ID was available for Firestore sync."),
+ cloudSaved ? "success" : "warning"
+ );
  if (bookedMovedToPendingByEdit) {
  showNotification('Booked quotation moved to Pending due to edits. New acceptance would be required.', 'warning');
  }
@@ -9997,7 +10052,7 @@ async function updateQuotationStatus(quotationId, newStatus) {
  
  // Save to Firebase
  const ownerDocId = getQuotationOwnerDocId(quotation, getCurrentAgent());
- saveOwnerQuotationsToFirebase(ownerDocId, savedQuotations, 'Firebase update error');
+ await saveOwnerQuotationsToFirebase(ownerDocId, savedQuotations, 'Firebase update error');
  
  // Trigger dashboard refresh
  sessionStorage.setItem('refreshDashboard_umrah', 'true');
@@ -10473,7 +10528,7 @@ btnSubmitAgentApprove?.addEventListener('click', () => {
  closeAgentApprovalModal();
 });
 
-function handleApproveCustomer(requireTermsCheck = false) {
+async function handleApproveCustomer(requireTermsCheck = false) {
  if (requireTermsCheck && !agentAcceptCheck?.checked) {
  alert('Please confirm that you have read and accept the terms and conditions.');
  return;
@@ -10501,7 +10556,7 @@ function handleApproveCustomer(requireTermsCheck = false) {
  const owner = getCurrentAgent();
  const ownerDocId = getQuotationOwnerDocId(quotation, owner) || null;
  if (ownerDocId && window.firebaseDB) {
- saveOwnerQuotationsToFirebase(ownerDocId, allQuotations, 'Firebase update error');
+ await saveOwnerQuotationsToFirebase(ownerDocId, allQuotations, 'Firebase update error');
  if (quotation.shareLinkId) {
  saveFirebaseDataWithRetry('quotation_links', quotation.shareLinkId, buildQuotationLinkPayload(quotation, 'umrah', ownerDocId), 'Firebase share link update error');
  }
@@ -10511,7 +10566,7 @@ function handleApproveCustomer(requireTermsCheck = false) {
  showStatusSection();
 }
 
-function handleSelfBook(requireTermsCheck = false) {
+async function handleSelfBook(requireTermsCheck = false) {
  if (requireTermsCheck && !agentAcceptCheck?.checked) {
  alert('Please confirm that you have read and accept the terms and conditions.');
  return;
@@ -10539,7 +10594,7 @@ function handleSelfBook(requireTermsCheck = false) {
  const owner = getCurrentAgent();
  const ownerDocId = getQuotationOwnerDocId(quotation, owner) || null;
  if (ownerDocId && window.firebaseDB) {
- saveOwnerQuotationsToFirebase(ownerDocId, allQuotations, 'Firebase update error');
+ await saveOwnerQuotationsToFirebase(ownerDocId, allQuotations, 'Firebase update error');
  if (quotation.shareLinkId) {
  saveFirebaseDataWithRetry('quotation_links', quotation.shareLinkId, buildQuotationLinkPayload(quotation, 'umrah', ownerDocId), 'Firebase share link update error');
  }
